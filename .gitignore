@@ -1,0 +1,5 @@
+node_modules/
+data/
+packages/web/dist/
+*.log
+.DS_Store
