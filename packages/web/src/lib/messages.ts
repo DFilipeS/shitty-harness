@@ -1,0 +1,137 @@
+import type { AssistantMessage, ToolResultMessage, Usage, UserMessage } from "@earendil-works/pi-ai";
+import type { AgentEvent, EntryRecord } from "@harness/protocol";
+
+/** A content block of the assistant message currently being streamed. */
+export type LiveBlock =
+	| { type: "text"; text: string }
+	| { type: "thinking"; thinking: string }
+	| { type: "toolCall"; id: string; name: string; argumentsText: string };
+
+/** The in-flight assistant message, built from `message_start`/`message_update` events. */
+export type LiveMessage = {
+	blocks: LiveBlock[];
+	usage?: Usage;
+};
+
+type MessageChanges = Extract<AgentEvent, { type: "message_update" }>["changes"];
+type AssistantBlock = AssistantMessage["content"][number];
+
+export function toLiveBlock(block: AssistantBlock): LiveBlock {
+	switch (block.type) {
+		case "text":
+			return { type: "text", text: block.text };
+		case "thinking":
+			return { type: "thinking", thinking: block.thinking };
+		case "toolCall":
+			return { type: "toolCall", id: block.id, name: block.name, argumentsText: JSON.stringify(block.arguments) };
+	}
+}
+
+export function fromAssistantMessage(message: AssistantMessage): LiveMessage {
+	return { blocks: message.content.map(toLiveBlock), usage: message.usage };
+}
+
+function setBlock(blocks: LiveBlock[], index: number, block: LiveBlock): LiveBlock[] {
+	const next = [...blocks];
+	while (next.length < index) next.push({ type: "text", text: "" });
+	next[index] = block;
+	return next;
+}
+
+function updateBlock(blocks: LiveBlock[], index: number, change: (block: LiveBlock) => LiveBlock): LiveBlock[] {
+	const existing = blocks[index];
+	if (existing === undefined) return blocks;
+	const next = [...blocks];
+	next[index] = change(existing);
+	return next;
+}
+
+/** Apply one `message_update` batch to the live message. */
+export function applyMessageChanges(live: LiveMessage, usage: Usage, changes: MessageChanges): LiveMessage {
+	let blocks = live.blocks;
+	for (const change of changes) {
+		switch (change.type) {
+			case "message":
+				blocks = change.message.content.map(toLiveBlock);
+				break;
+			case "text_start": {
+				const block = change.block;
+				if (block.type === "text") blocks = setBlock(blocks, change.contentIndex, { type: "text", text: block.text });
+				break;
+			}
+			case "thinking_start": {
+				const block = change.block;
+				if (block.type === "thinking") blocks = setBlock(blocks, change.contentIndex, { type: "thinking", thinking: block.thinking });
+				break;
+			}
+			case "toolcall_start": {
+				const block = change.block;
+				if (block.type === "toolCall") {
+					blocks = setBlock(blocks, change.contentIndex, {
+						type: "toolCall",
+						id: block.id,
+						name: block.name,
+						argumentsText: JSON.stringify(block.arguments),
+					});
+				}
+				break;
+			}
+			case "text_delta":
+				blocks = updateBlock(blocks, change.contentIndex, (block) =>
+					block.type === "text" ? { ...block, text: block.text + change.delta } : block,
+				);
+				break;
+			case "thinking_delta":
+				blocks = updateBlock(blocks, change.contentIndex, (block) =>
+					block.type === "thinking" ? { ...block, thinking: block.thinking + change.delta } : block,
+				);
+				break;
+			case "toolcall_delta":
+				blocks = updateBlock(blocks, change.contentIndex, (block) =>
+					block.type === "toolCall" ? { ...block, argumentsText: block.argumentsText + change.delta } : block,
+				);
+				break;
+			case "block":
+				blocks = setBlock(blocks, change.contentIndex, toLiveBlock(change.block));
+				break;
+		}
+	}
+	return { blocks, usage };
+}
+
+export function userMessageOf(entry: EntryRecord): UserMessage | undefined {
+	if (entry.kind !== "pi.user") return undefined;
+	const message = entry.model?.[0];
+	return message?.role === "user" ? message : undefined;
+}
+
+export function assistantMessageOf(entry: EntryRecord): AssistantMessage | undefined {
+	if (entry.kind !== "pi.assistant") return undefined;
+	const message = entry.model?.[0];
+	return message?.role === "assistant" ? message : undefined;
+}
+
+export function toolResultOf(entry: EntryRecord): ToolResultMessage | undefined {
+	if (entry.kind !== "pi.tool-result") return undefined;
+	const message = entry.model?.[0];
+	return message?.role === "toolResult" ? message : undefined;
+}
+
+export function userText(message: UserMessage): string {
+	if (typeof message.content === "string") return message.content;
+	return message.content
+		.map((part) => (part.type === "text" ? part.text : part.type === "image" ? "[image]" : ""))
+		.join("\n");
+}
+
+export function toolResultText(message: ToolResultMessage): string {
+	return message.content
+		.map((part) => (part.type === "text" ? part.text : part.type === "image" ? "[image]" : ""))
+		.join("\n");
+}
+
+export function formatTokens(count: number): string {
+	if (count < 1_000) return String(count);
+	if (count < 1_000_000) return `${(count / 1_000).toFixed(count < 10_000 ? 1 : 0)}k`;
+	return `${(count / 1_000_000).toFixed(1)}M`;
+}
