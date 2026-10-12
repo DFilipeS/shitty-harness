@@ -1,5 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
@@ -13,11 +11,10 @@ import {
 	type ConversationId,
 	type DocumentWatch,
 	type SnapshotEvent,
+	type Storage,
 } from "@earendil-works/pi-durable";
-import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import type { ModelInfo, ModelRef, ProviderInfo, SessionSummary } from "@harness/protocol";
-import { loadConfig } from "./config.ts";
-import { ProviderManager } from "./providers.ts";
+import type { Providers } from "./providers.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 
 const NEW_SESSION_TITLE = "New session";
@@ -73,8 +70,9 @@ type SessionSubscription = {
 	listeners: Set<(events: readonly AgentEvent[]) => void>;
 };
 
-export type HarnessServiceOptions = {
-	dataDir: string;
+export type HarnessServiceDependencies = {
+	storage: Storage;
+	providers: Providers;
 };
 
 /**
@@ -83,27 +81,25 @@ export type HarnessServiceOptions = {
  */
 export class HarnessService {
 	readonly #harness: Harness;
-	readonly #providers: ProviderManager;
+	readonly #providers: Providers;
 	readonly #subscriptions = new Map<ConversationId, Promise<SessionSubscription>>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
 	#indexWatch: DocumentWatch<SessionIndexState> | undefined;
 	#closed = false;
 
-	private constructor(harness: Harness, providers: ProviderManager) {
+	private constructor(harness: Harness, providers: Providers) {
 		this.#harness = harness;
 		this.#providers = providers;
 	}
 
-	static async open(options: HarnessServiceOptions): Promise<HarnessService> {
-		const dataDir = options.dataDir;
-		await mkdir(dataDir, { recursive: true });
-
-		const configPath = join(dataDir, "config.json");
-		const providers = new ProviderManager(configPath, join(dataDir, "models.json"), await loadConfig(configPath));
-
-		const storage = await openNodeSqliteStorage(join(dataDir, "sessions.sqlite"));
+	/**
+	 * Open the harness over the given storage and providers. Callers supply the adapters;
+	 * `openHarnessService` in `./node.ts` wires the Node ones for production.
+	 */
+	static async create(dependencies: HarnessServiceDependencies): Promise<HarnessService> {
+		const { providers } = dependencies;
 		const harness = await Harness.open(
-			storage,
+			dependencies.storage,
 			{
 				models: providers.models,
 				registry: createRegistry(),

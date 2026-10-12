@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HarnessService } from "@harness/core";
+import { openHarnessService } from "@harness/core/node";
 import { startServer } from "./server.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -8,7 +8,7 @@ const dataDir = process.env.HARNESS_DATA_DIR ?? resolve(here, "../../../data");
 const port = Number(process.env.PORT ?? 8787);
 const webRoot = process.env.NODE_ENV === "production" ? resolve(here, "../../web/dist") : undefined;
 
-const service = await HarnessService.open({ dataDir });
+const service = await openHarnessService({ dataDir });
 const server = await startServer({ service, port, webRoot });
 
 console.log(`[server] listening on http://localhost:${server.port} (data: ${dataDir})`);

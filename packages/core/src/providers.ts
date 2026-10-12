@@ -1,4 +1,4 @@
-import { getSupportedThinkingLevels, type MutableModels } from "@earendil-works/pi-ai";
+import { getSupportedThinkingLevels, type Models, type MutableModels } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type { ModelInfo, ProviderInfo } from "@harness/protocol";
 import { saveConfig, type AppConfig } from "./config.ts";
@@ -6,10 +6,22 @@ import { ConfigCredentialStore } from "./credentials.ts";
 import { FileModelsStore } from "./models-store.ts";
 
 /**
+ * The providers module the harness depends on: the pi-ai model catalog plus the provider
+ * settings the settings UI reads and writes. `ProviderManager` is the production adapter.
+ */
+export interface Providers {
+	readonly models: Models;
+	listProviders(): Promise<ProviderInfo[]>;
+	listModels(): Promise<ModelInfo[]>;
+	setApiKey(providerId: string, apiKey: string | null): Promise<void>;
+	refresh(providerId?: string): Promise<void>;
+}
+
+/**
  * Owns the pi-ai model catalog and the provider credentials in `config.json`. All writes are
  * serialized and persisted before they resolve, so the settings UI always sees what is on disk.
  */
-export class ProviderManager {
+export class ProviderManager implements Providers {
 	readonly models: MutableModels;
 	readonly #configPath: string;
 	#config: AppConfig;
