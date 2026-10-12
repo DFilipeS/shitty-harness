@@ -23,14 +23,6 @@ import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./
 const NEW_SESSION_TITLE = "New session";
 const TITLE_MAX_LENGTH = 48;
 
-/**
- * How often streamed answer text and tool output are committed. Durable defaults to 100 ms; with
- * local SQLite we can commit much more often, so text arrives in smaller, smoother batches. Lower
- * values mean more storage writes and a smaller window lost on a crash.
- */
-const DEFAULT_PARTIAL_INTERVAL_MS = 15;
-const DEFAULT_OUTPUT_INTERVAL_MS = 15;
-
 function deriveTitle(text: string): string {
 	const singleLine = text.replace(/\s+/g, " ").trim();
 	if (singleLine.length <= TITLE_MAX_LENGTH) return singleLine;
@@ -83,11 +75,6 @@ type SessionSubscription = {
 
 export type HarnessServiceOptions = {
 	dataDir: string;
-	/** Progress commit intervals; omitted fields use the defaults above. */
-	progress?: {
-		partialIntervalMs?: number;
-		outputIntervalMs?: number;
-	};
 };
 
 /**
@@ -120,12 +107,6 @@ export class HarnessService {
 			{
 				models: providers.models,
 				registry: createRegistry(),
-				settings: {
-					progress: {
-						partialIntervalMs: options.progress?.partialIntervalMs ?? DEFAULT_PARTIAL_INTERVAL_MS,
-						outputIntervalMs: options.progress?.outputIntervalMs ?? DEFAULT_OUTPUT_INTERVAL_MS,
-					},
-				},
 				conversationCreated: async (tx, conversation) => {
 					if (conversation.owner !== undefined) return;
 					const index = await tx.doc(SessionIndex);

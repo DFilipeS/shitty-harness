@@ -8,20 +8,7 @@ const dataDir = process.env.HARNESS_DATA_DIR ?? resolve(here, "../../../data");
 const port = Number(process.env.PORT ?? 8787);
 const webRoot = process.env.NODE_ENV === "production" ? resolve(here, "../../web/dist") : undefined;
 
-function positiveNumberFromEnv(name: string): number | undefined {
-	const raw = process.env[name];
-	if (raw === undefined) return undefined;
-	const parsed = Number(raw);
-	return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-const service = await HarnessService.open({
-	dataDir,
-	progress: {
-		partialIntervalMs: positiveNumberFromEnv("HARNESS_PARTIAL_INTERVAL_MS"),
-		outputIntervalMs: positiveNumberFromEnv("HARNESS_OUTPUT_INTERVAL_MS"),
-	},
-});
+const service = await HarnessService.open({ dataDir });
 const server = await startServer({ service, port, webRoot });
 
 console.log(`[server] listening on http://localhost:${server.port} (data: ${dataDir})`);

@@ -56,20 +56,14 @@ npm run typecheck                    # all four packages
 node scripts/smoke.mjs               # protocol smoke test against a running server
 node scripts/e2e.mjs                 # create a session, prompt a real model, print the answer
 node scripts/ui-check.mjs http://localhost:8787/   # headless Chrome check of the rendered UI
-node scripts/measure-stream.mjs      # per-batch stream timing (tune the intervals below)
+node scripts/measure-stream.mjs      # per-batch stream timing
 ```
 
-### Streaming granularity
+### Streaming
 
-pi-durable commits streamed text and tool output on an interval, and one event batch is emitted per commit. The durable default is 100 ms, which arrives as chunky text. This app commits every 15 ms instead, so text lands in small token-sized batches at the cost of more SQLite writes. Tune it per server run:
+pi-durable commits streamed text and tool output every 100 ms (its default), and one event batch is emitted per commit, so raw batches arrive chunky. The web client hides that: it buffers whatever arrives and reveals it with a typing animation (`packages/web/src/components/LiveMessage.tsx`). Each text and thinking block reveals on its own; the rate follows that block's backlog with a small target lag (~0.25 s), so batches of any size appear as smooth typing, and the committed entry stays hidden until the reveal catches up. `prefers-reduced-motion` skips the animation.
 
-```bash
-HARNESS_PARTIAL_INTERVAL_MS=10 HARNESS_OUTPUT_INTERVAL_MS=10 npm start
-```
-
-Lower is smoother and loses less on a crash; higher writes less to disk. `scripts/measure-stream.mjs` prints the actual gap and batch size while a model streams.
-
-On top of that, the web client buffers whatever arrives and reveals it with a typing animation (`packages/web/src/components/LiveMessage.tsx`). Each text and thinking block reveals on its own; the rate follows that block's backlog with a small target lag (~0.25 s), so batches of any size appear as smooth typing, and the committed entry stays hidden until the reveal catches up. `prefers-reduced-motion` skips the animation.
+`scripts/measure-stream.mjs` prints the actual gap and batch size while a model streams.
 
 ## Using it
 
