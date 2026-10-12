@@ -1,4 +1,12 @@
-import { createModels, createProvider, getSupportedThinkingLevels, type Model } from "@earendil-works/pi-ai";
+import {
+	createModels,
+	createProvider,
+	fauxAssistantMessage,
+	fauxProvider,
+	getSupportedThinkingLevels,
+	type FauxProviderHandle,
+	type Model,
+} from "@earendil-works/pi-ai";
 import type { ModelInfo, ProviderInfo } from "@harness/protocol";
 import type { Providers } from "../../src/providers.ts";
 
@@ -18,39 +26,14 @@ const FAKE_MODEL = {
 	maxTokens: 1_000,
 } satisfies Model<string>;
 
+type Models = ReturnType<typeof createModels>;
+
 export type FakeProvidersOptions = {
 	apiKey?: string;
 };
 
-/**
- * In-memory `Providers` adapter for tests: a real pi-ai catalog with one static model whose API-key
- * auth is a closure variable. Streaming is not implemented, so prompt tests configure no model.
- */
-export function createFakeProviders(options: FakeProvidersOptions = {}): Providers {
-	let apiKey = options.apiKey;
-	const models = createModels();
-	models.setProvider(
-		createProvider({
-			id: FAKE_PROVIDER_ID,
-			name: "Fake Provider",
-			auth: {
-				apiKey: {
-					name: "Fake API key",
-					resolve: async () => (apiKey === undefined ? undefined : { auth: { apiKey } }),
-				},
-			},
-			models: [FAKE_MODEL],
-			api: {
-				stream: () => {
-					throw new Error("Fake provider streaming is not implemented");
-				},
-				streamSimple: () => {
-					throw new Error("Fake provider streaming is not implemented");
-				},
-			},
-		}),
-	);
-
+/** Catalog reads shared by the in-memory adapters below. */
+function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Providers {
 	return {
 		models,
 		async listProviders(): Promise<ProviderInfo[]> {
@@ -81,10 +64,57 @@ export function createFakeProviders(options: FakeProvidersOptions = {}): Provide
 				thinkingLevels: getSupportedThinkingLevels(model),
 			}));
 		},
-		async setApiKey(providerId: string, key: string | null): Promise<void> {
-			if (providerId !== FAKE_PROVIDER_ID) return;
-			apiKey = key ?? undefined;
-		},
+		setApiKey,
 		async refresh(): Promise<void> {},
 	};
+}
+
+/**
+ * In-memory `Providers` adapter for tests: a real pi-ai catalog with one static model whose API-key
+ * auth is a closure variable. Streaming is not implemented, so prompt tests configure no model.
+ */
+export function createFakeProviders(options: FakeProvidersOptions = {}): Providers {
+	let apiKey = options.apiKey;
+	const models = createModels();
+	models.setProvider(
+		createProvider({
+			id: FAKE_PROVIDER_ID,
+			name: "Fake Provider",
+			auth: {
+				apiKey: {
+					name: "Fake API key",
+					resolve: async () => (apiKey === undefined ? undefined : { auth: { apiKey } }),
+				},
+			},
+			models: [FAKE_MODEL],
+			api: {
+				stream: () => {
+					throw new Error("Fake provider streaming is not implemented");
+				},
+				streamSimple: () => {
+					throw new Error("Fake provider streaming is not implemented");
+				},
+			},
+		}),
+	);
+
+	return providersFor(models, async (providerId, key) => {
+		if (providerId !== FAKE_PROVIDER_ID) return;
+		apiKey = key ?? undefined;
+	});
+}
+
+/**
+ * Streaming `Providers` adapter built on pi-ai's faux provider. The scripted answer streams at
+ * `tokensPerSecond`, so tests can observe a run while it is in flight.
+ */
+export function createFauxProviders(options: { text?: string; tokensPerSecond?: number } = {}): {
+	providers: Providers;
+	faux: FauxProviderHandle;
+} {
+	const models = createModels();
+	const faux = fauxProvider({ tokensPerSecond: options.tokensPerSecond ?? 20 });
+	models.setProvider(faux.provider);
+	faux.setResponses([fauxAssistantMessage(options.text ?? "The faux model is answering this prompt.")]);
+	return { providers: providersFor(models, async () => {}), faux };
 }

@@ -12,6 +12,8 @@ import {
 	type DocumentWatch,
 	type SnapshotEvent,
 	type Storage,
+	type TaskGraph,
+	type TaskGraphWatch,
 } from "@earendil-works/pi-durable";
 import type { ModelInfo, ModelRef, ProviderInfo, SessionSummary } from "@harness/protocol";
 import type { Providers } from "./providers.ts";
@@ -24,6 +26,13 @@ function deriveTitle(text: string): string {
 	const singleLine = text.replace(/\s+/g, " ").trim();
 	if (singleLine.length <= TITLE_MAX_LENGTH) return singleLine;
 	return `${singleLine.slice(0, TITLE_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+/** Set equality for the small conversation-ID sets tracked below. */
+function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+	if (a.size !== b.size) return false;
+	for (const id of a) if (!b.has(id)) return false;
+	return true;
 }
 
 /** Conversation IDs are branded numbers; the protocol carries them as strings. */
@@ -85,6 +94,8 @@ export class HarnessService {
 	readonly #subscriptions = new Map<ConversationId, Promise<SessionSubscription>>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
 	#indexWatch: DocumentWatch<SessionIndexState> | undefined;
+	#taskGraphWatch: TaskGraphWatch | undefined;
+	#working = new Set<string>();
 	#closed = false;
 
 	private constructor(harness: Harness, providers: Providers) {
@@ -125,6 +136,7 @@ export class HarnessService {
 
 		const service = new HarnessService(harness, providers);
 		await service.#watchSessionIndex();
+		await service.#watchTaskGraph();
 		void service.#refreshProviders().catch((error: unknown) => {
 			console.warn("[core] model refresh failed:", error);
 		});
@@ -151,6 +163,24 @@ export class HarnessService {
 		});
 	}
 
+	/**
+	 * Track which sessions have live work so clients can show a working indicator, including for
+	 * sessions they are not attached to. The task graph is one small watch over every live task;
+	 * only the set of conversations changes the session list, so phase updates are ignored.
+	 */
+	async #watchTaskGraph(): Promise<void> {
+		const watch = await this.#harness.watchTaskGraph(BACKGROUND_CONTEXT);
+		this.#taskGraphWatch = watch;
+		const sync = async (graph: TaskGraph): Promise<void> => {
+			const next = new Set(Object.values(graph.tasks).map((task) => String(task.conversationId)));
+			if (sameIds(next, this.#working)) return;
+			this.#working = next;
+			this.#emit({ type: "sessions", sessions: await this.listSessions() });
+		};
+		await sync(watch.value);
+		watch.start(sync);
+	}
+
 	async listSessions(): Promise<SessionSummary[]> {
 		const index = await this.#harness.snapshot(SessionIndex, BACKGROUND_CONTEXT);
 		return (index?.sessions ?? [])
@@ -159,6 +189,7 @@ export class HarnessService {
 				title: entry.title,
 				createdAt: entry.createdAt,
 				updatedAt: entry.updatedAt,
+				working: this.#working.has(entry.id),
 			}))
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	}
@@ -315,6 +346,11 @@ export class HarnessService {
 			await this.#indexWatch?.stop();
 		} catch (error) {
 			console.warn("[core] stopping session index watch failed:", error);
+		}
+		try {
+			await this.#taskGraphWatch?.stop();
+		} catch (error) {
+			console.warn("[core] stopping task graph watch failed:", error);
 		}
 		const pending = [...this.#subscriptions.values()];
 		this.#subscriptions.clear();

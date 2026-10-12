@@ -15,6 +15,8 @@ export type SessionSummary = {
 	title: string;
 	createdAt: number;
 	updatedAt: number;
+	/** True while the durable harness has live work for this session. */
+	working: boolean;
 };
 
 /** A model the client may offer for selection. */

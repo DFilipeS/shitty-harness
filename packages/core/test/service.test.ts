@@ -1,7 +1,7 @@
 import { MemoryStorage } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vitest";
 import { HarnessService, type HarnessServiceDependencies } from "../src/index.ts";
-import { createFakeProviders, FAKE_MODEL_ID, FAKE_PROVIDER_ID } from "./helpers/fake-providers.ts";
+import { createFakeProviders, createFauxProviders, FAKE_MODEL_ID, FAKE_PROVIDER_ID } from "./helpers/fake-providers.ts";
 
 type OpenOptions = {
 	apiKey?: string;
@@ -21,6 +21,16 @@ async function withService(run: (service: HarnessService) => Promise<void>, opti
 		await run(service);
 	} finally {
 		await service.close();
+	}
+}
+
+/** Poll a predicate until it holds or `timeoutMs` passes. */
+async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 10_000): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	for (;;) {
+		if (await predicate()) return true;
+		if (Date.now() >= deadline) return false;
+		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 }
 
@@ -99,5 +109,27 @@ describe("HarnessService", () => {
 			},
 			{ apiKey: "test-key" },
 		);
+	});
+
+	it("marks a session as working while a run is active", async () => {
+		const { providers } = createFauxProviders({ tokensPerSecond: 10 });
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			expect(session.working).toBe(false);
+
+			const observed: boolean[] = [];
+			service.on((event) => {
+				if (event.type === "sessions") observed.push(...event.sessions.map((candidate) => candidate.working));
+			});
+
+			await service.prompt(session.id, "Are you working?", "request-working");
+			const started = await waitFor(async () => (await service.listSessions())[0]?.working === true);
+			const finished = await waitFor(async () => (await service.listSessions())[0]?.working === false);
+			expect({ started, finished }).toEqual({ started: true, finished: true });
+			expect(observed).toContain(true);
+		} finally {
+			await service.close();
+		}
 	});
 });
