@@ -73,6 +73,8 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 3. Create a session, pick a provider, model, and thinking level in the header.
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
 
+While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
+
 Deleting a session removes it from the app index, so it disappears from the sidebar and cannot be resumed. Durable storage is append-only and has no public delete API, so the underlying records stay in `sessions.sqlite`.
 
 Provider credentials can also come from environment variables (for example `OPENAI_API_KEY`); pi-ai resolves those the same way it does in Pi. The settings UI shows `authSource` when a credential comes from the environment.

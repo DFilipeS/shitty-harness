@@ -118,7 +118,17 @@ export function Sidebar() {
 										className="min-w-0 flex-1 text-left"
 									>
 										<div className="truncate text-sm">{session.title}</div>
-										<div className="text-[11px] text-zinc-500">{relativeTime(session.updatedAt)}</div>
+										{session.working ? (
+											<div className="flex items-center gap-1.5 text-[11px] text-amber-400/90">
+												<span
+													aria-hidden="true"
+													className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-zinc-700 border-t-amber-400 motion-safe:animate-spin"
+												/>
+												Working…
+											</div>
+										) : (
+											<div className="text-[11px] text-zinc-500">{relativeTime(session.updatedAt)}</div>
+										)}
 									</button>
 									<button
 										type="button"
