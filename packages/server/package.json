@@ -1,0 +1,20 @@
+{
+	"name": "@harness/server",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"dev": "node --watch src/index.ts",
+		"start": "node src/index.ts"
+	},
+	"dependencies": {
+		"@harness/core": "*",
+		"@harness/protocol": "*",
+		"ws": "^8.22.0"
+	},
+	"devDependencies": {
+		"@types/ws": "^8.18.2"
+	}
+}
