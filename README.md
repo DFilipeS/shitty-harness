@@ -14,7 +14,7 @@ packages/
   web/        React + Vite + Tailwind UI
 ```
 
-- `core` has no HTTP knowledge. A different client (TUI, CLI, mobile) can reuse it as is.
+- `core` has no HTTP knowledge. A different client (TUI, CLI, mobile) can reuse it as is. It takes its storage and providers as dependencies; `@harness/core/node` wires the SQLite and config-file adapters for production.
 - `server` translates protocol messages into `core` calls and forwards push events.
 - `web` is one client. It only knows the protocol.
 
@@ -53,6 +53,7 @@ Other scripts:
 
 ```bash
 npm run typecheck                    # all four packages
+npm test                             # core unit tests (Vitest, in-process)
 node scripts/smoke.mjs               # protocol smoke test against a running server
 node scripts/e2e.mjs                 # create a session, prompt a real model, print the answer
 node scripts/ui-check.mjs http://localhost:8787/   # headless Chrome check of the rendered UI
