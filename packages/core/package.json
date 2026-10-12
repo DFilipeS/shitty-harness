@@ -6,10 +6,16 @@
 		".": "./src/index.ts",
 		"./node": "./src/node.ts"
 	},
+	"scripts": {
+		"test": "vitest run"
+	},
 	"dependencies": {
 		"@earendil-works/chord": "^1.1.0",
 		"@earendil-works/pi-ai": "^1.1.0",
 		"@earendil-works/pi-durable": "^1.1.0",
 		"@harness/protocol": "*"
+	},
+	"devDependencies": {
+		"vitest": "^5.0.4"
 	}
 }
