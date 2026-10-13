@@ -83,6 +83,23 @@ Messages render Markdown (GFM tables, task lists, strikethrough) with syntax-hig
 
 Deleting a session removes it from the app index, so it disappears from the sidebar and cannot be resumed. Durable storage is append-only and has no public delete API, so the underlying records stay in `sessions.sqlite`.
 
+## Keyboard
+
+The app is keyboard-first. Press `⌘K` (or `Ctrl+K`) anywhere to open the command palette:
+type to filter, `↑`/`↓` to move, `↵` to run. Commands come from the page you are on, so the
+chat page also offers session commands (change model, rename, delete, …). Some commands open
+a nested list (`Change model…`, `Switch session…`) or ask for a value
+(`Rename current session…`); `⌫` on an empty search goes back one level.
+
+| Shortcut | Action |
+| --- | --- |
+| `⌘K` | Open the command palette |
+| `⌘B` | Toggle the sessions sidebar |
+| `?` | Show the shortcut list |
+| `↵` | Send the message |
+| `⇧↵` | New line in the message |
+| `esc` | Close the palette or a dialog |
+
 Provider credentials can also come from environment variables (for example `OPENAI_API_KEY`); pi-ai resolves those the same way it does in Pi. The settings UI shows `authSource` when a credential comes from the environment.
 
 ## How a message flows
