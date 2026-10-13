@@ -4,7 +4,9 @@ import { relativeTime } from "../lib/format.ts";
 import { useProviderPalette } from "../lib/provider-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
 import { useTheme } from "../lib/theme.tsx";
-import { MoonIcon, PencilIcon, PlusIcon, SettingsIcon, SunIcon, TrashIcon } from "./icons.tsx";
+import { formatKeys, useCommandPalette } from "../lib/commands.tsx";
+import { SHORTCUTS } from "../lib/shortcuts.ts";
+import { CommandIcon, MoonIcon, PencilIcon, PlusIcon, SunIcon, TrashIcon } from "./icons.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 
 export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
@@ -20,6 +22,7 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
 	} = useHarness();
 	const { theme, toggleTheme } = useTheme();
 	const providersPalette = useProviderPalette();
+	const { open: openPalette } = useCommandPalette();
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
@@ -59,11 +62,11 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
 					</button>
 					<button
 						type="button"
-						onClick={providersPalette.open}
-						title="Model providers"
+						onClick={openPalette}
+						title={`Command palette (${formatKeys(SHORTCUTS.palette)})`}
 						className="rounded-md p-1.5 text-fg-muted hover:bg-raised hover:text-fg pointer-coarse:p-2.5"
 					>
-						<SettingsIcon />
+						<CommandIcon />
 					</button>
 				</div>
 			</div>

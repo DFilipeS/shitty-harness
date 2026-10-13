@@ -68,7 +68,7 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 
 ## Using it
 
-1. Press `⌘K` and run **Configure model providers…** (or click the gear in the sidebar).
+1. Press `⌘K` and run **Configure model providers…** (or use the palette button in the sidebar).
 2. Pick a provider, choose **Set API key…**, paste the key, and press `↵`.
 3. Create a session. The model and thinking level live under the message box; click either one to pick from the palette.
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
