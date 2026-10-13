@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { formatTokens, type LiveBlock, type LiveMessage } from "../lib/messages.ts";
+import { formatTokens } from "../lib/format.ts";
+import type { LiveBlock, LiveMessage } from "../lib/messages.ts";
 import { BrainIcon, ChevronDownIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 
