@@ -18,9 +18,15 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 	useLayoutEffect(() => {
 		const element = textareaRef.current;
 		if (element === null) return;
-		element.style.height = "auto";
-		element.style.height = `${Math.min(element.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
-		element.style.overflowY = element.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
+		const resize = () => {
+			element.style.height = "auto";
+			element.style.height = `${Math.min(element.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+			element.style.overflowY = element.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
+		};
+		resize();
+		// The line height changes between the mobile and desktop font sizes, so remeasure on resize.
+		window.addEventListener("resize", resize);
+		return () => window.removeEventListener("resize", resize);
 	}, [text]);
 
 	const submit = async () => {
@@ -47,7 +53,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 						The agent is working. Sending another message queues it as a follow-up.
 					</p>
 				)}
-				<div className="flex items-center gap-2 rounded-2xl border border-line bg-panel p-2 shadow-lg shadow-black/5 focus-within:border-line-strong dark:shadow-black/40">
+				<div className="flex items-end gap-2 rounded-2xl border border-line bg-panel p-2 shadow-lg shadow-black/5 focus-within:border-line-strong dark:shadow-black/40">
 					<textarea
 						ref={textareaRef}
 						value={text}
@@ -67,7 +73,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 							type="button"
 							onClick={() => void abortSession()}
 							title="Stop"
-							className="rounded-lg bg-red-500/90 p-2 text-white hover:bg-red-500 pointer-coarse:p-2.5"
+							className="mb-0.5 rounded-lg bg-red-500/90 p-2 text-white hover:bg-red-500 pointer-coarse:p-2.5"
 						>
 							<StopIcon />
 						</button>
@@ -77,7 +83,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 							onClick={() => void submit()}
 							disabled={!canSend}
 							title="Send"
-							className="rounded-lg bg-fg p-2 text-canvas hover:bg-fg/90 disabled:opacity-30 disabled:hover:bg-fg pointer-coarse:p-2.5"
+							className="mb-0.5 rounded-lg bg-fg p-2 text-canvas hover:bg-fg/90 disabled:opacity-30 disabled:hover:bg-fg pointer-coarse:p-2.5"
 						>
 							<SendIcon />
 						</button>
