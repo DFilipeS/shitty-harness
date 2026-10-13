@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel.tsx";
 import { ErrorToast } from "./components/ErrorToast.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
@@ -30,25 +30,63 @@ export function App() {
 	);
 }
 
-function AppShell() {
-	const [sidebarOpen, setSidebarOpen] = useState(false);
-	useGlobalCommands(setSidebarOpen);
+/** Matches Tailwind's `lg` breakpoint, where the sidebar stops being a drawer. */
+function isDesktop(): boolean {
+	return window.matchMedia("(min-width: 64rem)").matches;
+}
 
-	// Cmd/Ctrl+B toggles the sessions drawer (it is a drawer below lg).
+const SIDEBAR_STORAGE_KEY = "harness-sidebar";
+
+/** The sidebar starts open on desktop and closed on phones; desktop remembers the choice. */
+function initialSidebarOpen(): boolean {
+	if (!isDesktop()) return false;
+	try {
+		return localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "closed";
+	} catch {
+		return true;
+	}
+}
+
+function AppShell() {
+	const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
+
+	const toggleSidebar = useCallback(() => {
+		setSidebarOpen((current) => {
+			const next = !current;
+			if (isDesktop()) {
+				try {
+					localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "open" : "closed");
+				} catch {
+					// Storage can be unavailable; the choice then lasts for this page only.
+				}
+			}
+			return next;
+		});
+	}, []);
+
+	useGlobalCommands(toggleSidebar);
+
+	// Cmd/Ctrl+B toggles the sidebar (a drawer below lg, a collapsible column above).
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "b") {
 				event.preventDefault();
-				setSidebarOpen((current) => !current);
+				toggleSidebar();
 			}
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, []);
+	}, [toggleSidebar]);
 
 	return (
 		<div className="flex h-full overflow-hidden">
-			<Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+			{/* Selecting a session only closes the drawer on phones; on desktop the column stays. */}
+			<Sidebar
+				open={sidebarOpen}
+				onNavigate={() => {
+					if (!isDesktop()) setSidebarOpen(false);
+				}}
+			/>
 			{sidebarOpen && (
 				<div
 					className="fixed inset-0 z-30 bg-black/60 lg:hidden"
@@ -56,14 +94,14 @@ function AppShell() {
 					aria-hidden="true"
 				/>
 			)}
-			<ChatPanel onOpenSidebar={() => setSidebarOpen(true)} />
+			<ChatPanel onToggleSidebar={toggleSidebar} />
 			<ErrorToast />
 		</div>
 	);
 }
 
 /** Commands that make sense anywhere in the app, regardless of the open session. */
-function useGlobalCommands(setSidebarOpen: Dispatch<SetStateAction<boolean>>) {
+function useGlobalCommands(toggleSidebar: () => void) {
 	const { sessions, activeSessionId, createSession, selectSession, refreshProviders } = useHarness();
 	const { theme, toggleTheme } = useTheme();
 	const providersPalette = useProviderPalette();
@@ -130,7 +168,7 @@ function useGlobalCommands(setSidebarOpen: Dispatch<SetStateAction<boolean>>) {
 			keywords: ["panel", "show", "hide", "drawer"],
 			icon: <MenuIcon />,
 			shortcut: "⌘B",
-			run: () => setSidebarOpen((current) => !current),
+			run: () => toggleSidebar(),
 		},
 		{
 			id: "help.shortcuts",

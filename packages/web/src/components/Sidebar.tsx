@@ -7,7 +7,7 @@ import { useTheme } from "../lib/theme.tsx";
 import { MoonIcon, PencilIcon, PlusIcon, SettingsIcon, SunIcon, TrashIcon } from "./icons.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 
-export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
 	const {
 		sessions,
 		sessionsLoaded,
@@ -39,8 +39,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
 	return (
 		<aside
-			className={`fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r border-line bg-panel transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
-				open ? "translate-x-0" : "-translate-x-full"
+			className={`fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r border-line bg-panel transition-[transform,margin-left] duration-200 lg:static lg:z-auto lg:translate-x-0 ${
+				open ? "translate-x-0 lg:ml-0" : "-translate-x-full lg:-ml-72"
 			}`}
 		>
 			<div className="flex items-center justify-between px-3 py-3">
@@ -73,7 +73,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 					type="button"
 					onClick={() => {
 						void createSession();
-						onClose();
+						onNavigate();
 					}}
 					className="flex w-full items-center justify-center gap-1.5 rounded-md bg-fg px-3 py-1.5 text-sm font-medium text-canvas hover:bg-fg/90 pointer-coarse:py-2.5"
 				>
@@ -136,7 +136,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 										type="button"
 										onClick={() => {
 											selectSession(session.id);
-											onClose();
+											onNavigate();
 										}}
 										onDoubleClick={() => startRename(session)}
 										className="min-w-0 flex-1 text-left"
