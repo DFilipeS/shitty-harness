@@ -20,7 +20,7 @@ export function Composer() {
 	};
 
 	return (
-		<div className="border-t border-zinc-800 px-4 py-3">
+		<div className="border-t border-zinc-800 px-3 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-3">
 			<div className="mx-auto flex max-w-3xl flex-col gap-2">
 				{model === undefined && (
 					<p className="text-xs text-amber-400">
@@ -40,14 +40,14 @@ export function Composer() {
 								void submit();
 							}
 						}}
-						className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-zinc-600"
+						className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-base outline-none placeholder:text-zinc-600 sm:text-sm"
 					/>
 					{runActive ? (
 						<button
 							type="button"
 							onClick={() => void abortSession()}
 							title="Stop"
-							className="rounded-lg bg-red-500/90 p-2 text-white hover:bg-red-500"
+							className="rounded-lg bg-red-500/90 p-2 text-white hover:bg-red-500 pointer-coarse:p-2.5"
 						>
 							<StopIcon />
 						</button>
@@ -57,7 +57,7 @@ export function Composer() {
 							onClick={() => void submit()}
 							disabled={!canSend}
 							title="Send"
-							className="rounded-lg bg-zinc-100 p-2 text-zinc-900 hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100"
+							className="rounded-lg bg-zinc-100 p-2 text-zinc-900 hover:bg-white disabled:opacity-30 disabled:hover:bg-zinc-100 pointer-coarse:p-2.5"
 						>
 							<SendIcon />
 						</button>

@@ -18,14 +18,14 @@ export function ProviderDialog() {
 
 	return (
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+			className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
 			onClick={closeProviderDialog}
 		>
 			<div
-				className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-xl border border-zinc-800 bg-zinc-900 shadow-2xl"
+				className="flex h-full w-full flex-col bg-zinc-900 sm:h-auto sm:max-h-[85vh] sm:max-w-xl sm:rounded-xl sm:border sm:border-zinc-800 sm:shadow-2xl"
 				onClick={(event) => event.stopPropagation()}
 			>
-				<div className="flex items-start justify-between border-b border-zinc-800 px-4 py-3">
+				<div className="flex items-start justify-between border-b border-zinc-800 px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 sm:pt-3">
 					<div>
 						<h2 className="text-sm font-semibold">Model providers</h2>
 						<p className="mt-0.5 text-[11px] text-zinc-500">
@@ -57,11 +57,11 @@ export function ProviderDialog() {
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 						placeholder="Search providers…"
-						className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-600"
+						className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-base outline-none placeholder:text-zinc-600 focus:border-zinc-600 sm:text-sm"
 					/>
 				</div>
 
-				<div className="flex-1 overflow-y-auto">
+				<div className="flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)] sm:pb-0">
 					{filtered.map((provider) => (
 						<ProviderRow key={provider.id} provider={provider} />
 					))}
@@ -109,7 +109,7 @@ function ProviderRow({ provider }: { provider: ProviderInfo }) {
 				<button
 					type="button"
 					onClick={() => setEditing((value) => !value)}
-					className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+					className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-zinc-500 pointer-coarse:py-2"
 				>
 					{editing ? "Cancel" : provider.configured ? "Edit" : "Connect"}
 				</button>
@@ -125,13 +125,13 @@ function ProviderRow({ provider }: { provider: ProviderInfo }) {
 							if (event.key === "Enter") void save();
 						}}
 						placeholder={provider.configured ? "New API key (empty removes it)" : "API key"}
-						className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
+						className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-base outline-none placeholder:text-zinc-600 focus:border-zinc-500 sm:text-sm"
 					/>
 					<button
 						type="button"
 						onClick={() => void save()}
 						disabled={saving}
-						className="rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white disabled:opacity-40"
+						className="rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900 hover:bg-white disabled:opacity-40 pointer-coarse:py-2"
 					>
 						{saving ? "Saving…" : "Save"}
 					</button>

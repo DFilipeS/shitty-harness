@@ -29,6 +29,14 @@ export function PlusIcon({ className }: IconProps) {
 	);
 }
 
+export function MenuIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<path d="M4 6h16M4 12h16M4 18h16" />
+		</Svg>
+	);
+}
+
 export function SettingsIcon({ className }: IconProps) {
 	return (
 		<Svg className={className}>

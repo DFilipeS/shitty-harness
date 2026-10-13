@@ -4,7 +4,7 @@ import { relativeTime } from "../lib/format.ts";
 import { useHarness } from "../lib/store.tsx";
 import { PencilIcon, PlusIcon, SettingsIcon, TrashIcon } from "./icons.tsx";
 
-export function Sidebar() {
+export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 	const {
 		sessions,
 		sessionsLoaded,
@@ -34,7 +34,11 @@ export function Sidebar() {
 	};
 
 	return (
-		<aside className="flex w-72 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/40">
+		<aside
+			className={`fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/95 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:bg-zinc-900/40 ${
+				open ? "translate-x-0" : "-translate-x-full"
+			}`}
+		>
 			<div className="flex items-center justify-between px-3 py-3">
 				<div>
 					<div className="text-sm font-semibold">Shitty Harness</div>
@@ -44,7 +48,7 @@ export function Sidebar() {
 					type="button"
 					onClick={openProviderDialog}
 					title="Model providers"
-					className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+					className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 pointer-coarse:p-2.5"
 				>
 					<SettingsIcon />
 				</button>
@@ -53,8 +57,11 @@ export function Sidebar() {
 			<div className="px-3 pb-2">
 				<button
 					type="button"
-					onClick={() => void createSession()}
-					className="flex w-full items-center justify-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white"
+					onClick={() => {
+						void createSession();
+						onClose();
+					}}
+					className="flex w-full items-center justify-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white pointer-coarse:py-2.5"
 				>
 					<PlusIcon />
 					New session
@@ -75,14 +82,14 @@ export function Sidebar() {
 											setDeletingId(null);
 											void deleteSession(session.id);
 										}}
-										className="rounded bg-red-500/90 px-2 py-0.5 text-xs text-white hover:bg-red-500"
+										className="rounded bg-red-500/90 px-2 py-0.5 text-xs text-white hover:bg-red-500 pointer-coarse:py-1.5"
 									>
 										Delete
 									</button>
 									<button
 										type="button"
 										onClick={() => setDeletingId(null)}
-										className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:border-zinc-500"
+										className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:border-zinc-500 pointer-coarse:py-1.5"
 									>
 										Cancel
 									</button>
@@ -93,7 +100,7 @@ export function Sidebar() {
 					return (
 						<div
 							key={session.id}
-							className={`group flex items-center gap-1 rounded-md px-2 py-1.5 ${
+							className={`group flex items-center gap-1 rounded-md px-2 py-1.5 pointer-coarse:py-2.5 ${
 								active ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
 							}`}
 						>
@@ -107,13 +114,16 @@ export function Sidebar() {
 										if (event.key === "Enter") void commitRename();
 										if (event.key === "Escape") setRenamingId(null);
 									}}
-									className="w-full rounded border border-zinc-600 bg-zinc-900 px-1 py-0.5 text-sm outline-none"
+									className="w-full rounded border border-zinc-600 bg-zinc-900 px-1 py-0.5 text-base outline-none sm:text-sm"
 								/>
 							) : (
 								<>
 									<button
 										type="button"
-										onClick={() => selectSession(session.id)}
+										onClick={() => {
+											selectSession(session.id);
+											onClose();
+										}}
 										onDoubleClick={() => startRename(session)}
 										className="min-w-0 flex-1 text-left"
 									>
@@ -134,7 +144,7 @@ export function Sidebar() {
 										type="button"
 										onClick={() => startRename(session)}
 										title="Rename session"
-										className="hidden rounded p-1 text-zinc-500 hover:text-zinc-200 group-hover:block"
+										className="hidden rounded p-1 text-zinc-500 hover:text-zinc-200 group-hover:block pointer-coarse:block pointer-coarse:p-2"
 									>
 										<PencilIcon className="h-3.5 w-3.5" />
 									</button>
@@ -142,7 +152,7 @@ export function Sidebar() {
 										type="button"
 										onClick={() => setDeletingId(session.id)}
 										title="Delete session"
-										className="hidden rounded p-1 text-zinc-500 hover:text-red-400 group-hover:block"
+										className="hidden rounded p-1 text-zinc-500 hover:text-red-400 group-hover:block pointer-coarse:block pointer-coarse:p-2"
 									>
 										<TrashIcon className="h-3.5 w-3.5" />
 									</button>
@@ -156,7 +166,7 @@ export function Sidebar() {
 				)}
 			</nav>
 
-			<div className="border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
+			<div className="border-t border-zinc-800 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-[11px] text-zinc-500 lg:pb-2">
 				<span
 					className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${
 						status === "connected" ? "bg-emerald-500" : status === "connecting" ? "bg-amber-500" : "bg-red-500"

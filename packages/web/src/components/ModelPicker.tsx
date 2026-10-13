@@ -2,7 +2,7 @@ import type { ModelThinkingLevel } from "@harness/protocol";
 import { useHarness } from "../lib/store.tsx";
 
 const selectClass =
-	"max-w-52 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 outline-none hover:border-zinc-700 focus:border-zinc-500";
+	"max-w-52 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-base text-zinc-300 outline-none hover:border-zinc-700 focus:border-zinc-500 sm:text-xs";
 
 export function ModelPicker() {
 	const { providers, models, activeSession, configureModel, configureThinkingLevel, openProviderDialog } = useHarness();
@@ -32,7 +32,7 @@ export function ModelPicker() {
 	const thinkingLevel = activeSession?.agent.thinkingLevel ?? "off";
 
 	return (
-		<div className="flex items-center gap-1.5">
+		<div className="flex items-center gap-1.5 overflow-x-auto">
 			<select
 				className={selectClass}
 				value={providerId}

@@ -75,6 +75,8 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 
 While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
 
+On a narrow screen the sidebar becomes a drawer behind the menu button in the header.
+
 Deleting a session removes it from the app index, so it disappears from the sidebar and cannot be resumed. Durable storage is append-only and has no public delete API, so the underlying records stay in `sessions.sqlite`.
 
 Provider credentials can also come from environment variables (for example `OPENAI_API_KEY`); pi-ai resolves those the same way it does in Pi. The settings UI shows `authSource` when a credential comes from the environment.
