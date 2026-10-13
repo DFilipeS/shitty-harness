@@ -48,15 +48,15 @@ export function SessionStats() {
 			{context !== undefined && (
 				<>
 					<span className="hidden text-fg-faint sm:inline">·</span>
-					<span className={`hidden items-center gap-1 sm:inline-flex ${contextClass}`}>
-						<ProgressRing percent={context.percent} />
+					<span className="hidden items-center gap-1 sm:inline-flex">
+						<ProgressRing percent={context.percent} className={contextClass} />
 						{context.percent}% context
 					</span>
 				</>
 			)}
 			<span className="hidden text-fg-faint sm:inline">·</span>
-			<span className={`hidden items-center gap-1 sm:inline-flex ${cached === 0 ? "" : "text-ok"}`}>
-				<ProgressRing percent={percent} />
+			<span className="hidden items-center gap-1 sm:inline-flex">
+				<ProgressRing percent={percent} className={cached === 0 ? "" : "text-ok"} />
 				{percent}% cache
 			</span>
 		</div>

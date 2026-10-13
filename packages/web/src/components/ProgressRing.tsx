@@ -7,7 +7,13 @@ export function ProgressRing({ percent, className }: { percent: number; classNam
 	const circumference = 2 * Math.PI * radius;
 	const filled = Math.max(0, Math.min(100, percent));
 	return (
-		<svg viewBox="0 0 12 12" className={className ?? "h-3 w-3 shrink-0"} aria-hidden="true" fill="none" strokeWidth="2">
+		<svg
+			viewBox="0 0 12 12"
+			className={`h-3 w-3 shrink-0 ${className ?? ""}`}
+			aria-hidden="true"
+			fill="none"
+			strokeWidth="2"
+		>
 			<circle cx="6" cy="6" r={radius} className="stroke-current opacity-20" />
 			{filled > 0 && (
 				<circle

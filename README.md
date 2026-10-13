@@ -74,8 +74,9 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
 
 The header keeps a running tally for the open session on the right: cost, tokens, context use,
-and cache hit rate. The context and cache percentages each get a small ring that fills to the
-value; the context share turns amber past 80% and red past 95%. The cache rate stays at 0% until
+and cache hit rate. Each percentage gets a small ring that fills to the value; the context ring
+turns amber past 80% and red past 95%, and the cache ring turns green once a call hits the cache.
+The cache rate stays at 0% until
 a call reuses a cached prefix, which needs a repeated prompt of roughly a thousand tokens. Hover
 the tally for the input/output, context, and cache read/write breakdown. On a phone only the cost
 stays visible.
