@@ -15,6 +15,7 @@ import {
 import { CommandPaletteProvider, useRegisterCommands, type Command } from "./lib/commands.tsx";
 import { relativeTime } from "./lib/format.ts";
 import { useProviderPalette } from "./lib/provider-commands.tsx";
+import { SHORTCUTS } from "./lib/shortcuts.ts";
 import { HarnessProvider, useHarness } from "./lib/store.tsx";
 import { ThemeProvider, useTheme } from "./lib/theme.tsx";
 
@@ -65,18 +66,6 @@ function AppShell() {
 	}, []);
 
 	useGlobalCommands(toggleSidebar);
-
-	// Cmd/Ctrl+B toggles the sidebar (a drawer below lg, a collapsible column above).
-	useEffect(() => {
-		const onKeyDown = (event: KeyboardEvent) => {
-			if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "b") {
-				event.preventDefault();
-				toggleSidebar();
-			}
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [toggleSidebar]);
 
 	return (
 		<div className="flex h-full overflow-hidden">
@@ -167,7 +156,7 @@ function useGlobalCommands(toggleSidebar: () => void) {
 			group: "App",
 			keywords: ["panel", "show", "hide", "drawer"],
 			icon: <MenuIcon />,
-			shortcut: "⌘B",
+			keys: SHORTCUTS.sidebar,
 			run: () => toggleSidebar(),
 		},
 		{

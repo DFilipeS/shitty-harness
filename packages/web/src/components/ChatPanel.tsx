@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { useRegisterCommands, type Command } from "../lib/commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
+import { SHORTCUTS } from "../lib/shortcuts.ts";
 import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
@@ -142,6 +143,7 @@ function useChatCommands() {
 			group: "Session",
 			keywords: ["provider", "llm", "switch"],
 			icon: <SparklesIcon />,
+			keys: SHORTCUTS.model,
 			when: () => hasSession() && models.length > 0,
 			run: ({ pushPage }) => pushPage(modelPalette.page()),
 		},
@@ -151,6 +153,7 @@ function useChatCommands() {
 			group: "Session",
 			keywords: ["reasoning", "effort"],
 			icon: <BrainIcon />,
+			keys: SHORTCUTS.thinking,
 			when: () => hasSession() && thinkingPalette.levels.length > 1,
 			run: ({ pushPage }) => pushPage(thinkingPalette.page()),
 		},

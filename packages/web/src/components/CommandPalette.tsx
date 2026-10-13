@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
 	collectCommands,
+	formatKeys,
 	type Command,
 	type CommandContext,
 	type CommandPage,
@@ -8,16 +9,19 @@ import {
 	type PaletteStart,
 	type PromptOptions,
 } from "../lib/commands.tsx";
+import { SHORTCUTS } from "../lib/shortcuts.ts";
 import { ArrowLeftIcon, CheckIcon, SearchIcon } from "./icons.tsx";
 
-const SHORTCUTS: { keys: string; label: string }[] = [
-	{ keys: "⌘K", label: "Open the command palette" },
-	{ keys: "⌘B", label: "Toggle the sessions sidebar" },
-	{ keys: "?", label: "Show the shortcut list" },
-	{ keys: "↵", label: "Send the message" },
-	{ keys: "⇧↵", label: "New line in the message" },
-	{ keys: "↑↓", label: "Move through the palette list" },
-	{ keys: "esc", label: "Close the palette or a dialog" },
+const HELP: { keys: string; label: string }[] = [
+	{ keys: SHORTCUTS.palette, label: "Open the command palette" },
+	{ keys: SHORTCUTS.sidebar, label: "Toggle the sessions sidebar" },
+	{ keys: SHORTCUTS.model, label: "Change the model" },
+	{ keys: SHORTCUTS.thinking, label: "Change the thinking level" },
+	{ keys: SHORTCUTS.help, label: "Show the shortcut list" },
+	{ keys: "enter", label: "Send the message" },
+	{ keys: "shift+enter", label: "New line in the message" },
+	{ keys: "up+down", label: "Move through the palette list" },
+	{ keys: "escape", label: "Close the palette or a dialog" },
 ];
 
 type State = {
@@ -100,7 +104,9 @@ export function CommandPalette({
 			],
 			query: "",
 			selected: 0,
-			promptValue: "",
+			...(initial.kind === "prompt"
+				? { prompt: initial.options, promptValue: initial.options.initialValue ?? "" }
+				: { promptValue: "" }),
 		});
 		inputRef.current?.focus();
 	}, [open, initial, registry]);
@@ -117,7 +123,7 @@ export function CommandPalette({
 	const groups = groupCommands(items);
 	const shortcuts =
 		state.prompt === undefined && page?.kind === "shortcuts"
-			? SHORTCUTS.filter((shortcut) => shortcut.label.toLowerCase().includes(state.query.trim().toLowerCase()))
+			? HELP.filter((shortcut) => shortcut.label.toLowerCase().includes(state.query.trim().toLowerCase()))
 			: [];
 	const selected = items.length === 0 ? -1 : Math.min(state.selected, items.length - 1);
 	// Only the plain command list shows a count; a page opened directly shows its own title.
@@ -280,7 +286,7 @@ export function CommandPalette({
 									<li key={shortcut.keys} className="flex items-center justify-between gap-3 px-3 py-1.5">
 										<span className="text-sm text-fg-soft">{shortcut.label}</span>
 										<kbd className="shrink-0 rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] text-fg-subtle">
-											{shortcut.keys}
+											{formatKeys(shortcut.keys)}
 										</kbd>
 									</li>
 								))}
@@ -318,9 +324,9 @@ export function CommandPalette({
 											</span>
 										)}
 										{command.current === true && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-ok" />}
-										{command.shortcut !== undefined && (
+										{command.keys !== undefined && (
 											<kbd className="shrink-0 rounded border border-line bg-surface px-1.5 py-0.5 text-[10px] text-fg-subtle">
-												{command.shortcut}
+												{formatKeys(command.keys)}
 											</kbd>
 										)}
 									</button>

@@ -14,8 +14,8 @@ export type Command = {
 	keywords?: string[];
 	/** Small text shown at the right of the row. */
 	detail?: string;
-	/** Display-only shortcut hint, e.g. "⌘B". */
-	shortcut?: string;
+	/** Keyboard binding that runs the command from anywhere, e.g. "mod+shift+m". */
+	keys?: string;
 	icon?: ReactNode;
 	/** Hides the command while this returns false. */
 	when?: () => boolean;
@@ -55,7 +55,51 @@ export type PromptOptions = {
 export type PaletteStart =
 	| { kind: "commands" }
 	| { kind: "shortcuts" }
-	| { kind: "page"; page: CommandPage }; 
+	| { kind: "page"; page: CommandPage }
+	| { kind: "prompt"; options: PromptOptions };
+
+const isMac = /mac|iphone|ipad/i.test(navigator.userAgent);
+
+const KEY_LABELS: Record<string, string> = {
+	enter: "↵",
+	escape: "esc",
+	up: "↑",
+	down: "↓",
+	left: "←",
+	right: "→",
+	"?": "?",
+};
+
+/** Turns a binding like "mod+shift+m" into a label like "⌘⇧M" or "Ctrl+Shift+M". */
+export function formatKeys(keys: string): string {
+	return keys
+		.split("+")
+		.map((part) => {
+			const token = part.toLowerCase();
+			if (token === "mod") return isMac ? "⌘" : "Ctrl";
+			if (token === "shift") return isMac ? "⇧" : "Shift";
+			if (token === "alt") return isMac ? "⌥" : "Alt";
+			if (token === "ctrl") return isMac ? "⌃" : "Ctrl";
+			if (token === "meta") return "⌘";
+			if (KEY_LABELS[token] !== undefined) return KEY_LABELS[token];
+			return part.length === 1 ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1);
+		})
+		.join(isMac ? "" : "+");
+}
+
+/** True when the event matches the binding exactly, extra modifiers included. */
+function eventMatches(keys: string, event: KeyboardEvent): boolean {
+	const parts = keys.toLowerCase().split("+");
+	const key = parts.pop();
+	if (key === undefined || key !== event.key.toLowerCase()) return false;
+	const mod = parts.includes("mod");
+	return (
+		event.ctrlKey === (parts.includes("ctrl") || (mod && !isMac)) &&
+		event.metaKey === (parts.includes("meta") || (mod && isMac)) &&
+		event.altKey === parts.includes("alt") &&
+		event.shiftKey === parts.includes("shift")
+	);
+}
 
 type Registration = { priority: number; commands: Command[] };
 
@@ -89,6 +133,8 @@ type PaletteControls = {
 	openShortcuts(): void;
 	/** Opens the palette directly on `page`, e.g. from an "Add a provider" button. */
 	openPage(page: CommandPage): void;
+	/** Opens the palette asking for one line of text. */
+	openPrompt(options: PromptOptions): void;
 };
 
 const PaletteContext = createContext<PaletteControls | undefined>(undefined);
@@ -128,6 +174,10 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 				setInitial({ kind: "page", page });
 				setOpen(true);
 			},
+			openPrompt: (options) => {
+				setInitial({ kind: "prompt", options });
+				setOpen(true);
+			},
 		}),
 		[],
 	);
@@ -143,7 +193,19 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 			if (!mod && !event.altKey && event.key === "?" && !isTypingTarget(event.target)) {
 				event.preventDefault();
 				controls.openShortcuts();
+				return;
 			}
+			// Commands can declare a binding; the first match wins.
+			const command = collectCommands(registry.current).find(
+				(candidate) => candidate.keys !== undefined && eventMatches(candidate.keys, event),
+			);
+			if (command === undefined) return;
+			event.preventDefault();
+			void command.run({
+				pushPage: (page) => controls.openPage(page),
+				prompt: (options) => controls.openPrompt(options),
+				close: () => undefined,
+			});
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
