@@ -15,8 +15,6 @@ import { ArrowLeftIcon, CheckIcon, SearchIcon } from "./icons.tsx";
 const HELP: { keys: string; label: string }[] = [
 	{ keys: SHORTCUTS.palette, label: "Open the command palette" },
 	{ keys: SHORTCUTS.sidebar, label: "Toggle the sessions sidebar" },
-	{ keys: SHORTCUTS.model, label: "Change the model" },
-	{ keys: SHORTCUTS.thinking, label: "Change the thinking level" },
 	{ keys: SHORTCUTS.help, label: "Show the shortcut list" },
 	{ keys: "enter", label: "Send the message" },
 	{ keys: "shift+enter", label: "New line in the message" },

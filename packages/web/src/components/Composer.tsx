@@ -1,8 +1,6 @@
 import { useLayoutEffect, useRef, useState, type Ref } from "react";
-import { formatKeys } from "../lib/commands.tsx";
 import { useProviderPalette } from "../lib/provider-commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
-import { SHORTCUTS } from "../lib/shortcuts.ts";
 import { useHarness } from "../lib/store.tsx";
 import { BrainIcon, CpuIcon, SendIcon, StopIcon } from "./icons.tsx";
 
@@ -111,7 +109,7 @@ function ModelChip() {
 			type="button"
 			data-model-chip
 			onClick={() => (configured ? modelPalette.open() : providersPalette.open())}
-			title={`Change model (${formatKeys(SHORTCUTS.model)})`}
+			title={info === undefined ? "Choose a model" : `Model: ${info.providerName} · ${info.name}`}
 			className={`flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] hover:bg-raised ${
 				info === undefined ? "text-warn" : "text-fg-subtle hover:text-fg"
 			}`}
@@ -132,7 +130,7 @@ function ThinkingChip() {
 			type="button"
 			data-thinking-chip
 			onClick={thinkingPalette.open}
-			title={`Change thinking level (${formatKeys(SHORTCUTS.thinking)})`}
+			title="Change thinking level"
 			className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-fg-subtle hover:bg-raised hover:text-fg"
 		>
 			<BrainIcon className="h-3.5 w-3.5 shrink-0" />
