@@ -5,6 +5,7 @@ import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 import { MessageList } from "./MessageList.tsx";
+import { SessionStats } from "./SessionStats.tsx";
 import {
 	BrainIcon,
 	ChevronDownIcon,
@@ -208,6 +209,7 @@ function ChatHeader({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 			<h1 className="min-w-0 flex-1 truncate text-sm font-medium">
 				{session === undefined ? "Session" : <MarkdownInline text={session.title} />}
 			</h1>
+			<SessionStats />
 		</header>
 	);
 }
