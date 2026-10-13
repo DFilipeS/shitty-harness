@@ -73,10 +73,11 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 3. Create a session. The model and thinking level live under the message box; click either one to pick from the palette.
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
 
-The header keeps a running tally for the open session on the right: cost, tokens, and cache hit
-rate. The rate stays at 0% until a call reuses a cached prefix, which needs a repeated prompt of
-roughly a thousand tokens; hover the tally for the input/output and cache read/write breakdown.
-On a phone only the cost stays visible.
+The header keeps a running tally for the open session on the right: cost, tokens, context use,
+and cache hit rate. The context share turns amber past 80% and red past 95%; the cache rate stays
+at 0% until a call reuses a cached prefix, which needs a repeated prompt of roughly a thousand
+tokens. Hover the tally for the input/output, context, and cache read/write breakdown. On a phone
+only the cost stays visible.
 
 While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
 

@@ -1,10 +1,10 @@
 import { formatCost, formatTokens } from "../lib/format.ts";
 import { useHarness } from "../lib/store.tsx";
-import { cacheHitRate, usageTotals } from "../lib/usage.ts";
+import { cacheHitRate, contextTokens, usageTotals } from "../lib/usage.ts";
 
-/** Session spend and token stats for the chat header. Hidden until the first model call. */
+/** Session spend, tokens, context use, and cache stats for the chat header. */
 export function SessionStats() {
-	const { activeSession } = useHarness();
+	const { activeSession, models } = useHarness();
 	const totals = usageTotals(activeSession?.usage);
 	if (totals === undefined) return null;
 
@@ -14,13 +14,27 @@ export function SessionStats() {
 	const percent = Math.round((rate ?? 0) * 100);
 	const cached = totals.cacheRead + totals.cacheWrite;
 	const exactCost = totals.cost > 0 && totals.cost < 0.01 ? `$${totals.cost.toFixed(6)}` : formatCost(totals.cost);
+
+	const model = activeSession?.agent.model;
+	const info = models.find((candidate) => candidate.provider === model?.provider && candidate.id === model.modelId);
+	const used = contextTokens(activeSession);
+	const context =
+		info !== undefined && info.contextWindow > 0 && used !== undefined
+			? { used, window: info.contextWindow, percent: Math.round((used / info.contextWindow) * 100) }
+			: undefined;
+	const contextClass =
+		context === undefined ? "" : context.percent >= 95 ? "text-red-500" : context.percent >= 80 ? "text-warn" : "";
+
 	const details = [
 		`${totals.tokens.toLocaleString()} tokens (${totals.input.toLocaleString()} in, ${totals.output.toLocaleString()} out)`,
+		context === undefined
+			? undefined
+			: `Context: ${context.used.toLocaleString()} / ${context.window.toLocaleString()} tokens (${context.percent}%)`,
 		cached === 0
 			? "Cache: no cache hits yet"
 			: `Cache: ${totals.cacheRead.toLocaleString()} read, ${totals.cacheWrite.toLocaleString()} written (${percent}%)`,
 		`Cost: ${exactCost}`,
-	];
+	].filter((line): line is string => line !== undefined);
 
 	return (
 		<div
@@ -31,6 +45,12 @@ export function SessionStats() {
 			<span>{formatCost(totals.cost)}</span>
 			<span className="hidden text-fg-faint sm:inline">·</span>
 			<span className="hidden sm:inline">{formatTokens(totals.tokens)} tokens</span>
+			{context !== undefined && (
+				<>
+					<span className="hidden text-fg-faint sm:inline">·</span>
+					<span className={`hidden sm:inline ${contextClass}`}>{context.percent}% context</span>
+				</>
+			)}
 			<span className="hidden text-fg-faint sm:inline">·</span>
 			<span className="hidden sm:inline">{percent}% cache</span>
 		</div>

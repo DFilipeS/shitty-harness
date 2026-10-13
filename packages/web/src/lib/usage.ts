@@ -1,4 +1,6 @@
-import type { UsageState } from "@harness/protocol";
+import type { Usage } from "@earendil-works/pi-ai";
+import type { EntryRecord, UsageState } from "@harness/protocol";
+import { assistantMessageOf } from "./messages.ts";
 
 export type UsageTotals = {
 	tokens: number;
@@ -37,4 +39,26 @@ export function cacheHitRate(totals: UsageTotals): number | undefined {
 	const cacheable = totals.input + cached;
 	if (cached === 0 || cacheable === 0) return undefined;
 	return totals.cacheRead / cacheable;
+}
+
+/**
+ * Tokens the next request will roughly carry: the last turn's input plus its output. While a turn
+ * streams, its usage is the freshest estimate; once it is committed the entry wins, because some
+ * providers only report usage on the final chunk and the live copy can still read zero.
+ */
+export function contextTokens(
+	session: { live?: { usage?: Usage; entryId?: unknown }; entries: readonly EntryRecord[] } | undefined,
+): number | undefined {
+	if (session === undefined) return undefined;
+	const live = session.live;
+	if (live?.entryId === undefined && live?.usage !== undefined && live.usage.totalTokens > 0) {
+		return live.usage.totalTokens;
+	}
+	for (let index = session.entries.length - 1; index >= 0; index -= 1) {
+		const entry = session.entries[index];
+		if (entry === undefined) continue;
+		const message = assistantMessageOf(entry);
+		if (message !== undefined) return message.usage.totalTokens;
+	}
+	return undefined;
 }
