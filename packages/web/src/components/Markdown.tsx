@@ -4,7 +4,7 @@ import rehypeHighlight from "rehype-highlight";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
-export type MarkdownVariant = "dark" | "light";
+export type MarkdownVariant = "assistant" | "user";
 
 type MarkdownPalette = {
 	text: string;
@@ -18,27 +18,31 @@ type MarkdownPalette = {
 	checkbox: string;
 };
 
+/**
+ * Assistant text follows the theme tokens, so it flips with light and dark. The user bubble keeps
+ * a light background in both themes, so its palette stays fixed. Code blocks are dark in both.
+ */
 const PALETTES: Record<MarkdownVariant, MarkdownPalette> = {
-	dark: {
-		text: "text-zinc-100",
-		link: "text-sky-400 underline decoration-sky-400/40 underline-offset-2 hover:decoration-sky-400",
-		blockquote: "border-zinc-700 text-zinc-400",
-		hr: "border-zinc-800",
-		tableHead: "border-zinc-700",
-		tableHeaderCell: "text-zinc-300",
-		tableCell: "border-zinc-800/70",
-		code: "bg-zinc-800/70 text-zinc-200",
-		checkbox: "accent-zinc-400",
+	assistant: {
+		text: "text-fg",
+		link: "text-link underline decoration-link/40 underline-offset-2 hover:decoration-link",
+		blockquote: "border-line-strong text-fg-muted",
+		hr: "border-line",
+		tableHead: "border-line-strong",
+		tableHeaderCell: "text-fg-muted",
+		tableCell: "border-line",
+		code: "bg-raised text-fg",
+		checkbox: "accent-fg-muted",
 	},
-	light: {
-		text: "text-zinc-900",
+	user: {
+		text: "text-user-fg",
 		link: "text-sky-700 underline decoration-sky-700/40 underline-offset-2 hover:decoration-sky-700",
-		blockquote: "border-zinc-300 text-zinc-600",
-		hr: "border-zinc-300",
-		tableHead: "border-zinc-300",
+		blockquote: "border-user-line text-zinc-600",
+		hr: "border-user-line",
+		tableHead: "border-user-line",
 		tableHeaderCell: "text-zinc-600",
-		tableCell: "border-zinc-300/80",
-		code: "bg-zinc-900/10 text-zinc-800",
+		tableCell: "border-user-line",
+		code: "bg-user-raised text-user-fg",
 		checkbox: "accent-zinc-600",
 	},
 };
@@ -46,8 +50,7 @@ const PALETTES: Record<MarkdownVariant, MarkdownPalette> = {
 /**
  * Markdown for message text. Raw HTML is not enabled, so model output cannot inject markup; links
  * open in a new tab. `remark-breaks` keeps single newlines visible, matching how chat UIs treat
- * model output. `rehype-highlight` adds `hljs-*` classes, styled in `index.css`. Code blocks stay
- * dark in both variants, so the token colors are the same everywhere.
+ * model output. `rehype-highlight` adds `hljs-*` classes, styled in `index.css`.
  */
 function componentsFor(palette: MarkdownPalette): Components {
 	return {
@@ -102,13 +105,13 @@ function componentsFor(palette: MarkdownPalette): Components {
 }
 
 const COMPONENTS: Record<MarkdownVariant, Components> = {
-	dark: componentsFor(PALETTES.dark),
-	light: componentsFor(PALETTES.light),
+	assistant: componentsFor(PALETTES.assistant),
+	user: componentsFor(PALETTES.user),
 };
 
 export const Markdown = memo(function Markdown({
 	text,
-	variant = "dark",
+	variant = "assistant",
 }: {
 	text: string;
 	variant?: MarkdownVariant;
@@ -149,7 +152,7 @@ const inlineComponents: Components = {
 		<span className="underline decoration-current/40 underline-offset-2">{children}</span>
 	),
 	code: ({ className, children }) => (
-		<code className={`rounded bg-zinc-700/50 px-1 py-0.5 font-mono text-[0.85em] ${className ?? ""}`}>
+		<code className={`rounded bg-raised px-1 py-0.5 font-mono text-[0.85em] ${className ?? ""}`}>
 			{children}
 		</code>
 	),

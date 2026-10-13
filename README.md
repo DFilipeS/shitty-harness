@@ -77,6 +77,8 @@ While a run is in flight, the sidebar shows a spinner and "Working…" under tha
 
 On a narrow screen the sidebar becomes a drawer behind the menu button in the header.
 
+The sidebar also has a light/dark toggle. The first visit follows your system preference; the choice is saved in the browser.
+
 Messages render Markdown (GFM tables, task lists, strikethrough) with syntax-highlighted code blocks. Raw HTML is not enabled, and links open in a new tab. Session titles render inline formatting (bold, italic, code) while staying single-line.
 
 Deleting a session removes it from the app index, so it disappears from the sidebar and cannot be resumed. Durable storage is append-only and has no public delete API, so the underlying records stay in `sessions.sqlite`.

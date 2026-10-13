@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { SessionSummary } from "@harness/protocol";
 import { relativeTime } from "../lib/format.ts";
 import { useHarness } from "../lib/store.tsx";
-import { PencilIcon, PlusIcon, SettingsIcon, TrashIcon } from "./icons.tsx";
+import { useTheme } from "../lib/theme.ts";
+import { MoonIcon, PencilIcon, PlusIcon, SettingsIcon, SunIcon, TrashIcon } from "./icons.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -17,6 +18,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 		deleteSession,
 		openProviderDialog,
 	} = useHarness();
+	const { theme, toggleTheme } = useTheme();
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
@@ -36,23 +38,33 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
 	return (
 		<aside
-			className={`fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/95 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:bg-zinc-900/40 ${
+			className={`fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r border-line bg-panel transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
 				open ? "translate-x-0" : "-translate-x-full"
 			}`}
 		>
 			<div className="flex items-center justify-between px-3 py-3">
 				<div>
 					<div className="text-sm font-semibold">Shitty Harness</div>
-					<div className="text-[11px] text-zinc-500">pi-durable agent</div>
+					<div className="text-[11px] text-fg-subtle">pi-durable agent</div>
 				</div>
-				<button
-					type="button"
-					onClick={openProviderDialog}
-					title="Model providers"
-					className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 pointer-coarse:p-2.5"
-				>
-					<SettingsIcon />
-				</button>
+				<div className="flex items-center gap-1">
+					<button
+						type="button"
+						onClick={toggleTheme}
+						title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+						className="rounded-md p-1.5 text-fg-muted hover:bg-raised hover:text-fg pointer-coarse:p-2.5"
+					>
+						{theme === "dark" ? <SunIcon /> : <MoonIcon />}
+					</button>
+					<button
+						type="button"
+						onClick={openProviderDialog}
+						title="Model providers"
+						className="rounded-md p-1.5 text-fg-muted hover:bg-raised hover:text-fg pointer-coarse:p-2.5"
+					>
+						<SettingsIcon />
+					</button>
+				</div>
 			</div>
 
 			<div className="px-3 pb-2">
@@ -62,7 +74,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 						void createSession();
 						onClose();
 					}}
-					className="flex w-full items-center justify-center gap-1.5 rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white pointer-coarse:py-2.5"
+					className="flex w-full items-center justify-center gap-1.5 rounded-md bg-fg px-3 py-1.5 text-sm font-medium text-canvas hover:bg-fg/90 pointer-coarse:py-2.5"
 				>
 					<PlusIcon />
 					New session
@@ -74,8 +86,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 					const active = session.id === activeSessionId;
 					if (deletingId === session.id) {
 						return (
-							<div key={session.id} className="rounded-md bg-red-950/30 px-2 py-1.5">
-								<p className="truncate text-xs text-red-300">Delete “{session.title}”?</p>
+							<div key={session.id} className="rounded-md bg-red-500/10 px-2 py-1.5">
+								<p className="truncate text-xs text-red-700 dark:text-red-300">Delete “{session.title}”?</p>
 								<div className="mt-1.5 flex gap-1.5">
 									<button
 										type="button"
@@ -90,7 +102,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 									<button
 										type="button"
 										onClick={() => setDeletingId(null)}
-										className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:border-zinc-500 pointer-coarse:py-1.5"
+										className="rounded border border-line-strong px-2 py-0.5 text-xs text-fg-soft hover:border-fg-subtle pointer-coarse:py-1.5"
 									>
 										Cancel
 									</button>
@@ -102,7 +114,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 						<div
 							key={session.id}
 							className={`group flex items-center gap-1 rounded-md px-2 py-1.5 pointer-coarse:py-2.5 ${
-								active ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
+								active ? "bg-raised text-fg" : "text-fg-muted hover:bg-raised/60 hover:text-fg"
 							}`}
 						>
 							{renamingId === session.id ? (
@@ -115,7 +127,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 										if (event.key === "Enter") void commitRename();
 										if (event.key === "Escape") setRenamingId(null);
 									}}
-									className="w-full rounded border border-zinc-600 bg-zinc-900 px-1 py-0.5 text-base outline-none sm:text-sm"
+									className="w-full rounded border border-line-strong bg-panel px-1 py-0.5 text-base outline-none sm:text-sm"
 								/>
 							) : (
 								<>
@@ -132,22 +144,22 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 											<MarkdownInline text={session.title} />
 										</div>
 										{session.working ? (
-											<div className="flex items-center gap-1.5 text-[11px] text-amber-400/90">
+											<div className="flex items-center gap-1.5 text-[11px] text-warn">
 												<span
 													aria-hidden="true"
-													className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-zinc-700 border-t-amber-400 motion-safe:animate-spin"
+													className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-warn motion-safe:animate-spin"
 												/>
 												Working…
 											</div>
 										) : (
-											<div className="text-[11px] text-zinc-500">{relativeTime(session.updatedAt)}</div>
+											<div className="text-[11px] text-fg-subtle">{relativeTime(session.updatedAt)}</div>
 										)}
 									</button>
 									<button
 										type="button"
 										onClick={() => startRename(session)}
 										title="Rename session"
-										className="hidden rounded p-1 text-zinc-500 hover:text-zinc-200 group-hover:block pointer-coarse:block pointer-coarse:p-2"
+										className="hidden rounded p-1 text-fg-subtle hover:text-fg group-hover:block pointer-coarse:block pointer-coarse:p-2"
 									>
 										<PencilIcon className="h-3.5 w-3.5" />
 									</button>
@@ -155,7 +167,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 										type="button"
 										onClick={() => setDeletingId(session.id)}
 										title="Delete session"
-										className="hidden rounded p-1 text-zinc-500 hover:text-red-400 group-hover:block pointer-coarse:block pointer-coarse:p-2"
+										className="hidden rounded p-1 text-fg-subtle hover:text-red-500 group-hover:block pointer-coarse:block pointer-coarse:p-2"
 									>
 										<TrashIcon className="h-3.5 w-3.5" />
 									</button>
@@ -165,14 +177,14 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 					);
 				})}
 				{sessionsLoaded && sessions.length === 0 && (
-					<p className="px-2 py-6 text-center text-xs text-zinc-500">No sessions yet.</p>
+					<p className="px-2 py-6 text-center text-xs text-fg-subtle">No sessions yet.</p>
 				)}
 			</nav>
 
-			<div className="border-t border-zinc-800 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-[11px] text-zinc-500 lg:pb-2">
+			<div className="border-t border-line px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-[11px] text-fg-subtle lg:pb-2">
 				<span
 					className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${
-						status === "connected" ? "bg-emerald-500" : status === "connecting" ? "bg-amber-500" : "bg-red-500"
+						status === "connected" ? "bg-ok" : status === "connecting" ? "bg-warn" : "bg-red-500"
 					}`}
 				/>
 				{status === "connected" ? "Connected" : status === "connecting" ? "Connecting…" : "Disconnected"}

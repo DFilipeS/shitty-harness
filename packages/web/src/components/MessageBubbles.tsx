@@ -12,8 +12,8 @@ const thinkingOpenState = new Map<string, boolean>();
 export function UserBubble({ text }: { text: string }) {
 	return (
 		<div className="flex justify-end">
-			<div className="min-w-0 max-w-[85%] rounded-2xl rounded-br-sm bg-zinc-100 px-3.5 py-2">
-				<Markdown text={text} variant="light" />
+			<div className="min-w-0 max-w-[85%] rounded-2xl rounded-br-sm bg-user-bubble px-3.5 py-2">
+				<Markdown text={text} variant="user" />
 			</div>
 		</div>
 	);
@@ -43,9 +43,9 @@ export function AssistantBubble({
 				if (block.type === "thinking" && block.thinking === "") return null;
 				return <BlockView key={index} block={block} stateKey={`${messageKey}:${index}`} />;
 			})}
-			{streaming && <span className="inline-block h-4 w-2 animate-pulse rounded-sm bg-zinc-500" />}
+			{streaming && <span className="inline-block h-4 w-2 animate-pulse rounded-sm bg-fg-subtle" />}
 			{usage !== undefined && usage.input + usage.output > 0 && (
-				<div className="text-[11px] text-zinc-600">
+				<div className="text-[11px] text-fg-faint">
 					{formatTokens(usage.input)} in · {formatTokens(usage.output)} out
 				</div>
 			)}
@@ -59,7 +59,7 @@ function BlockView({ block, stateKey }: { block: LiveBlock; stateKey: string }) 
 	}
 	if (block.type === "toolCall") {
 		return (
-			<div className="rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 font-mono text-xs text-zinc-400">
+			<div className="rounded-md border border-line bg-panel/50 px-3 py-2 font-mono text-xs text-fg-muted">
 				{block.name}({block.argumentsText})
 			</div>
 		);
@@ -77,7 +77,7 @@ function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: str
 				thinkingOpenState.set(stateKey, next);
 				setOpen(next);
 			}}
-			className="rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400"
+			className="rounded-md border border-line bg-panel/50 px-3 py-2 text-xs text-fg-muted"
 		>
 			<summary className="cursor-pointer select-none">Thinking</summary>
 			<div className="mt-1.5 whitespace-pre-wrap italic">{thinking}</div>
@@ -89,7 +89,9 @@ export function ToolResultBubble({ text, isError }: { text: string; isError: boo
 	return (
 		<details
 			className={`rounded-md border px-3 py-2 text-xs ${
-				isError ? "border-red-500/30 bg-red-950/20 text-red-300" : "border-zinc-800 bg-zinc-900/40 text-zinc-400"
+				isError
+					? "border-red-500/30 bg-red-500/10 text-red-700 dark:bg-red-950/20 dark:text-red-300"
+					: "border-line bg-panel/50 text-fg-muted"
 			}`}
 		>
 			<summary className="cursor-pointer select-none">{isError ? "Tool error" : "Tool result"}</summary>
@@ -100,10 +102,10 @@ export function ToolResultBubble({ text, isError }: { text: string; isError: boo
 
 export function Divider({ label }: { label: string }) {
 	return (
-		<div className="flex items-center gap-3 py-1 text-[11px] tracking-wide text-zinc-600 uppercase">
-			<div className="h-px flex-1 bg-zinc-800" />
+		<div className="flex items-center gap-3 py-1 text-[11px] tracking-wide text-fg-faint uppercase">
+			<div className="h-px flex-1 bg-line" />
 			{label}
-			<div className="h-px flex-1 bg-zinc-800" />
+			<div className="h-px flex-1 bg-line" />
 		</div>
 	);
 }

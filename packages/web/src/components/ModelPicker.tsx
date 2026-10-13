@@ -2,7 +2,7 @@ import type { ModelThinkingLevel } from "@harness/protocol";
 import { useHarness } from "../lib/store.tsx";
 
 const selectClass =
-	"max-w-52 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-base text-zinc-300 outline-none hover:border-zinc-700 focus:border-zinc-500 sm:text-xs";
+	"max-w-52 rounded-md border border-line bg-panel px-2 py-1 text-base text-fg-soft outline-none hover:border-line-strong focus:border-fg-subtle sm:text-xs";
 
 export function ModelPicker() {
 	const { providers, models, activeSession, configureModel, configureThinkingLevel, openProviderDialog } = useHarness();
@@ -16,7 +16,7 @@ export function ModelPicker() {
 			<button
 				type="button"
 				onClick={openProviderDialog}
-				className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+				className="rounded-md border border-line-strong px-2.5 py-1 text-xs text-fg-soft hover:border-fg-subtle"
 			>
 				Add a provider
 			</button>

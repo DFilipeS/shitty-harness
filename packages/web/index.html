@@ -7,6 +7,18 @@
 			content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
 		/>
 		<title>Shitty Harness</title>
+		<script>
+			// Apply the saved theme before the app renders, so there is no flash of the wrong theme.
+			(() => {
+				try {
+					const stored = localStorage.getItem("harness-theme");
+					const dark = stored === "dark" || (stored === null && matchMedia("(prefers-color-scheme: dark)").matches);
+					document.documentElement.classList.toggle("dark", dark);
+				} catch {
+					// Storage can be unavailable; fall back to the light theme.
+				}
+			})();
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

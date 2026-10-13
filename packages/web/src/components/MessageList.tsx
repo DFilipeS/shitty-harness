@@ -52,7 +52,7 @@ export function MessageList() {
 					<LiveMessage key={live.key} sessionId={activeSession.id} message={live} onReveal={handleReveal} />
 				)}
 				{entries.length === 0 && live === undefined && (
-					<p className="py-10 text-center text-sm text-zinc-500">Send a message to start the conversation.</p>
+					<p className="py-10 text-center text-sm text-fg-subtle">Send a message to start the conversation.</p>
 				)}
 				<div ref={bottomRef} />
 			</div>

@@ -1,5 +1,80 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Semantic colors. Components only use these tokens, so light and dark are one set of classes.
+ * Values are Tailwind's zinc palette plus accent shades; `.dark` is toggled on <html>.
+ */
+:root {
+	color-scheme: light;
+	--canvas: oklch(98.5% 0 none);
+	--panel: oklch(100% 0 0);
+	--surface: oklch(96.7% 0.001 286.375);
+	--raised: oklch(92% 0.004 286.32);
+	--fg: oklch(21% 0.006 285.885);
+	--fg-soft: oklch(37% 0.013 285.805);
+	--fg-muted: oklch(44.2% 0.017 285.786);
+	--fg-subtle: oklch(55.2% 0.016 285.938);
+	--fg-faint: oklch(70.5% 0.015 286.067);
+	--line: oklch(92% 0.004 286.32);
+	--line-strong: oklch(87.1% 0.006 286.286);
+	--link: oklch(50% 0.134 242.749);
+	--warn: oklch(66.6% 0.179 58.318);
+	--ok: oklch(59.6% 0.145 163.225);
+	--user-bubble: oklch(92% 0.004 286.32);
+	--user-fg: oklch(21% 0.006 285.885);
+	--user-line: oklch(87.1% 0.006 286.286);
+	--user-raised: oklch(21% 0.006 285.885 / 10%);
+}
+
+.dark {
+	color-scheme: dark;
+	--canvas: oklch(14.1% 0.005 285.823);
+	--panel: oklch(21% 0.006 285.885);
+	--surface: oklch(14.1% 0.005 285.823);
+	--raised: oklch(27.4% 0.006 286.033);
+	--fg: oklch(96.7% 0.001 286.375);
+	--fg-soft: oklch(87.1% 0.006 286.286);
+	--fg-muted: oklch(70.5% 0.015 286.067);
+	--fg-subtle: oklch(55.2% 0.016 285.938);
+	--fg-faint: oklch(44.2% 0.017 285.786);
+	--line: oklch(27.4% 0.006 286.033);
+	--line-strong: oklch(37% 0.013 285.805);
+	--link: oklch(74.6% 0.16 232.661);
+	--warn: oklch(82.8% 0.189 84.429);
+	--ok: oklch(69.6% 0.17 162.48);
+	--user-bubble: oklch(96.7% 0.001 286.375);
+	--user-fg: oklch(21% 0.006 285.885);
+	--user-line: oklch(87.1% 0.006 286.286);
+	--user-raised: oklch(21% 0.006 285.885 / 10%);
+}
+
+@theme inline {
+	--color-canvas: var(--canvas);
+	--color-panel: var(--panel);
+	--color-surface: var(--surface);
+	--color-raised: var(--raised);
+	--color-fg: var(--fg);
+	--color-fg-soft: var(--fg-soft);
+	--color-fg-muted: var(--fg-muted);
+	--color-fg-subtle: var(--fg-subtle);
+	--color-fg-faint: var(--fg-faint);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-link: var(--link);
+	--color-warn: var(--warn);
+	--color-ok: var(--ok);
+	--color-user-bubble: var(--user-bubble);
+	--color-user-fg: var(--user-fg);
+	--color-user-line: var(--user-line);
+	--color-user-raised: var(--user-raised);
+}
+
+html {
+	background-color: var(--canvas);
+}
+
 html,
 body,
 #root {
@@ -8,8 +83,8 @@ body,
 }
 
 body {
-	background-color: var(--color-zinc-950);
-	color: var(--color-zinc-100);
+	background-color: var(--canvas);
+	color: var(--fg);
 	-webkit-font-smoothing: antialiased;
 	-webkit-tap-highlight-color: transparent;
 	-webkit-text-size-adjust: 100%;
@@ -18,7 +93,7 @@ body {
 
 * {
 	scrollbar-width: thin;
-	scrollbar-color: var(--color-zinc-700) transparent;
+	scrollbar-color: var(--line-strong) transparent;
 }
 
 /* Syntax highlighting for markdown code blocks (rehype-highlight classes). */
