@@ -44,7 +44,7 @@ export function MessageList() {
 
 	return (
 		<div ref={scrollRef} data-message-scroll className="flex-1 overflow-y-auto overscroll-contain">
-			<div className="mx-auto flex max-w-3xl flex-col gap-4 px-3 pt-4 pb-[var(--composer-height,6rem)] sm:px-4 sm:pt-6">
+			<div className="mx-auto flex max-w-3xl flex-col gap-4 px-3 pt-4 pb-[calc(var(--composer-height,6rem)+1.5rem)] sm:px-4 sm:pt-6">
 				{visibleEntries.map((entry) => (
 					<EntryView key={entry.id} entry={entry} />
 				))}
