@@ -45,11 +45,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 			className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4"
 		>
 			<div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-1.5">
-				{runActive && (
-					<p className="w-fit rounded-lg border border-line bg-panel/95 px-3 py-1.5 text-[11px] text-fg-subtle shadow-sm">
-						The agent is working. Sending another message queues it as a follow-up.
-					</p>
-				)}
+
 				<div className="flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-panel p-2 shadow-lg shadow-black/5 focus-within:border-line-strong dark:shadow-black/40">
 					<textarea
 						ref={textareaRef}
@@ -89,6 +85,18 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 					<div className="flex w-full flex-wrap items-center gap-1 px-1">
 						<ModelChip />
 						<ThinkingChip />
+						{runActive && (
+							<span className="ml-auto flex flex-wrap items-center justify-end gap-x-1.5 text-[11px] text-fg-faint">
+								<span className="flex items-center gap-1.5">
+									<span
+										aria-hidden="true"
+										className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-warn motion-safe:animate-spin"
+									/>
+									<span className="text-warn">Working</span>
+								</span>
+								<span>Sending another message queues it as a follow-up.</span>
+							</span>
+						)}
 					</div>
 				</div>
 			</div>

@@ -44,7 +44,6 @@ export function AssistantBubble({
 				if (block.type === "thinking" && block.thinking === "") return null;
 				return <BlockView key={index} block={block} stateKey={`${messageKey}:${index}`} />;
 			})}
-			{streaming && <span className="inline-block h-4 w-2 animate-pulse rounded-sm bg-fg-subtle" />}
 			{usage !== undefined && usage.input + usage.output > 0 && (
 				<div className="text-[11px] text-fg-faint">
 					{formatTokens(usage.input)} in · {formatTokens(usage.output)} out
