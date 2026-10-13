@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { SessionSummary } from "@harness/protocol";
 import { relativeTime } from "../lib/format.ts";
+import { useProviderPalette } from "../lib/provider-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
 import { useTheme } from "../lib/theme.tsx";
 import { MoonIcon, PencilIcon, PlusIcon, SettingsIcon, SunIcon, TrashIcon } from "./icons.tsx";
@@ -16,9 +17,9 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 		selectSession,
 		renameSession,
 		deleteSession,
-		openProviderDialog,
 	} = useHarness();
 	const { theme, toggleTheme } = useTheme();
+	const providersPalette = useProviderPalette();
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deletingId, setDeletingId] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
@@ -58,7 +59,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 					</button>
 					<button
 						type="button"
-						onClick={openProviderDialog}
+						onClick={providersPalette.open}
 						title="Model providers"
 						className="rounded-md p-1.5 text-fg-muted hover:bg-raised hover:text-fg pointer-coarse:p-2.5"
 					>

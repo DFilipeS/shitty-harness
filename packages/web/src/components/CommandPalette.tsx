@@ -1,5 +1,13 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { collectCommands, type Command, type CommandContext, type CommandPage, type CommandRegistry, type PromptOptions } from "../lib/commands.tsx";
+import {
+	collectCommands,
+	type Command,
+	type CommandContext,
+	type CommandPage,
+	type CommandRegistry,
+	type PaletteStart,
+	type PromptOptions,
+} from "../lib/commands.tsx";
 import { ArrowLeftIcon, CheckIcon, SearchIcon } from "./icons.tsx";
 
 const SHORTCUTS: { keys: string; label: string }[] = [
@@ -66,12 +74,12 @@ function groupCommands(commands: Command[]): Group[] {
 
 export function CommandPalette({
 	open,
-	startPage,
+	initial,
 	registry,
 	onClose,
 }: {
 	open: boolean;
-	startPage: "commands" | "shortcuts";
+	initial: PaletteStart;
 	registry: CommandRegistry;
 	onClose: () => void;
 }) {
@@ -84,16 +92,18 @@ export function CommandPalette({
 		if (!open) return;
 		setState({
 			pages: [
-				startPage === "shortcuts"
+				initial.kind === "shortcuts"
 					? { kind: "shortcuts", title: "Keyboard shortcuts" }
-					: { kind: "commands", title: "Commands", commands: collectCommands(registry) },
+					: initial.kind === "page"
+						? initial.page
+						: { kind: "commands", title: "Commands", commands: collectCommands(registry) },
 			],
 			query: "",
 			selected: 0,
 			promptValue: "",
 		});
 		inputRef.current?.focus();
-	}, [open, startPage, registry]);
+	}, [open, initial, registry]);
 
 	// A prompt replaces the list, so select its initial value for quick editing.
 	useLayoutEffect(() => {
@@ -110,6 +120,8 @@ export function CommandPalette({
 			? SHORTCUTS.filter((shortcut) => shortcut.label.toLowerCase().includes(state.query.trim().toLowerCase()))
 			: [];
 	const selected = items.length === 0 ? -1 : Math.min(state.selected, items.length - 1);
+	// Only the plain command list shows a count; a page opened directly shows its own title.
+	const rootCommands = state.pages.length === 1 && initial.kind === "commands";
 
 	// Keep the selected row in view while arrowing through a long list.
 	useLayoutEffect(() => {
@@ -236,6 +248,9 @@ export function CommandPalette({
 							state.prompt?.placeholder ??
 							(page?.kind === "commands" ? (page.placeholder ?? "Type a command…") : "Keyboard shortcuts")
 						}
+						type={state.prompt?.secret === true ? "password" : "text"}
+						autoComplete="off"
+						spellCheck={false}
 						role="combobox"
 						aria-expanded="true"
 						aria-controls="command-palette-list"
@@ -323,11 +338,9 @@ export function CommandPalette({
 					<span className="truncate">
 						{state.prompt !== undefined
 							? state.prompt.title
-							: state.pages.length > 1
-								? page?.title
-								: page?.kind === "commands"
-									? `${items.length} command${items.length === 1 ? "" : "s"}`
-									: page?.title}
+							: rootCommands
+								? `${items.length} command${items.length === 1 ? "" : "s"}`
+								: page?.title}
 					</span>
 					<span className="hidden shrink-0 sm:inline">
 						{state.prompt !== undefined

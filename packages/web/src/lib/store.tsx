@@ -45,7 +45,6 @@ type State = {
 	models: ModelInfo[];
 	activeSessionId?: string;
 	sessionsById: Record<string, SessionState>;
-	providerDialogOpen: boolean;
 	error?: string;
 };
 
@@ -59,7 +58,6 @@ type Action =
 	| { type: "session/event"; id: string; event: AgentEvent }
 	| { type: "session/live-done"; id: string }
 	| { type: "session/agent"; id: string; agent: AgentState }
-	| { type: "dialog/set"; open: boolean }
 	| { type: "error/set"; error: string }
 	| { type: "error/clear" };
 
@@ -70,7 +68,6 @@ const initialState: State = {
 	providers: [],
 	models: [],
 	sessionsById: {},
-	providerDialogOpen: false,
 };
 
 function emptySession(id: string): SessionState {
@@ -195,8 +192,6 @@ function reducer(state: State, action: Action): State {
 			if (current === undefined) return state;
 			return { ...state, sessionsById: { ...state.sessionsById, [action.id]: { ...current, agent: action.agent } } };
 		}
-		case "dialog/set":
-			return { ...state, providerDialogOpen: action.open };
 		case "error/set":
 			return { ...state, error: action.error };
 		case "error/clear":
@@ -212,7 +207,6 @@ type HarnessContextValue = {
 	models: ModelInfo[];
 	activeSessionId?: string;
 	activeSession?: SessionState;
-	providerDialogOpen: boolean;
 	error?: string;
 	createSession(): Promise<void>;
 	selectSession(id: string): void;
@@ -225,8 +219,6 @@ type HarnessContextValue = {
 	configureThinkingLevel(level: ModelThinkingLevel): Promise<void>;
 	configureProvider(providerId: string, apiKey: string | null): Promise<void>;
 	refreshProviders(): Promise<void>;
-	openProviderDialog(): void;
-	closeProviderDialog(): void;
 	clearError(): void;
 };
 
@@ -433,7 +425,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			...(state.activeSessionId === undefined || state.sessionsById[state.activeSessionId] === undefined
 				? {}
 				: { activeSession: state.sessionsById[state.activeSessionId] }),
-			providerDialogOpen: state.providerDialogOpen,
 			...(state.error === undefined ? {} : { error: state.error }),
 			createSession,
 			selectSession,
@@ -446,8 +437,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureThinkingLevel,
 			configureProvider,
 			refreshProviders,
-			openProviderDialog: () => dispatch({ type: "dialog/set", open: true }),
-			closeProviderDialog: () => dispatch({ type: "dialog/set", open: false }),
 			clearError: () => dispatch({ type: "error/clear" }),
 		}),
 		[

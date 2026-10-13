@@ -1,7 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { ChatPanel } from "./components/ChatPanel.tsx";
 import { ErrorToast } from "./components/ErrorToast.tsx";
-import { ProviderDialog } from "./components/ProviderDialog.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import {
 	KeyboardIcon,
@@ -15,6 +14,7 @@ import {
 } from "./components/icons.tsx";
 import { CommandPaletteProvider, useRegisterCommands, type Command } from "./lib/commands.tsx";
 import { relativeTime } from "./lib/format.ts";
+import { useProviderPalette } from "./lib/provider-commands.tsx";
 import { HarnessProvider, useHarness } from "./lib/store.tsx";
 import { ThemeProvider, useTheme } from "./lib/theme.tsx";
 
@@ -57,7 +57,6 @@ function AppShell() {
 				/>
 			)}
 			<ChatPanel onOpenSidebar={() => setSidebarOpen(true)} />
-			<ProviderDialog />
 			<ErrorToast />
 		</div>
 	);
@@ -65,15 +64,9 @@ function AppShell() {
 
 /** Commands that make sense anywhere in the app, regardless of the open session. */
 function useGlobalCommands(setSidebarOpen: Dispatch<SetStateAction<boolean>>) {
-	const {
-		sessions,
-		activeSessionId,
-		createSession,
-		selectSession,
-		openProviderDialog,
-		refreshProviders,
-	} = useHarness();
+	const { sessions, activeSessionId, createSession, selectSession, refreshProviders } = useHarness();
 	const { theme, toggleTheme } = useTheme();
+	const providersPalette = useProviderPalette();
 
 	const commands: Command[] = [
 		{
@@ -110,9 +103,9 @@ function useGlobalCommands(setSidebarOpen: Dispatch<SetStateAction<boolean>>) {
 			id: "providers.open",
 			title: "Configure model providers…",
 			group: "App",
-			keywords: ["api key", "credentials", "settings", "models"],
+			keywords: ["api key", "credentials", "settings", "models", "connect"],
 			icon: <SettingsIcon />,
-			run: () => openProviderDialog(),
+			run: ({ pushPage }) => pushPage(providersPalette.page()),
 		},
 		{
 			id: "providers.refresh",

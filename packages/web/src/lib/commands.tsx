@@ -45,9 +45,17 @@ export type PromptOptions = {
 	title: string;
 	initialValue?: string;
 	placeholder?: string;
+	/** Masks the input, e.g. for API keys. */
+	secret?: boolean;
 	/** Return `false` to keep the palette open, e.g. when the value is empty. */
 	onSubmit(value: string): boolean | void | Promise<boolean | void>;
 };
+
+/** What the palette shows when it opens. */
+export type PaletteStart =
+	| { kind: "commands" }
+	| { kind: "shortcuts" }
+	| { kind: "page"; page: CommandPage }; 
 
 type Registration = { priority: number; commands: Command[] };
 
@@ -79,6 +87,8 @@ type PaletteControls = {
 	close(): void;
 	toggle(): void;
 	openShortcuts(): void;
+	/** Opens the palette directly on `page`, e.g. from an "Add a provider" button. */
+	openPage(page: CommandPage): void;
 };
 
 const PaletteContext = createContext<PaletteControls | undefined>(undefined);
@@ -97,21 +107,25 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 	const registry = useRef<CommandRegistry>(new Map());
 	const [open, setOpen] = useState(false);
-	const [startPage, setStartPage] = useState<"commands" | "shortcuts">("commands");
+	const [initial, setInitial] = useState<PaletteStart>({ kind: "commands" });
 
 	const controls = useMemo<PaletteControls>(
 		() => ({
 			open: () => {
-				setStartPage("commands");
+				setInitial({ kind: "commands" });
 				setOpen(true);
 			},
 			close: () => setOpen(false),
 			toggle: () => {
-				setStartPage("commands");
+				setInitial({ kind: "commands" });
 				setOpen((current) => !current);
 			},
 			openShortcuts: () => {
-				setStartPage("shortcuts");
+				setInitial({ kind: "shortcuts" });
+				setOpen(true);
+			},
+			openPage: (page) => {
+				setInitial({ kind: "page", page });
 				setOpen(true);
 			},
 		}),
@@ -141,7 +155,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 				{children}
 				<CommandPalette
 					open={open}
-					startPage={startPage}
+					initial={initial}
 					registry={registry.current}
 					onClose={() => setOpen(false)}
 				/>
