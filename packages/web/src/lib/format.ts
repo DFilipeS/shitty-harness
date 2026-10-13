@@ -19,6 +19,13 @@ export function formatCost(value: number): string {
 	return `$${value.toFixed(2)}`;
 }
 
+/** Text color for a context share: amber near the limit, red past it, default otherwise. */
+export function contextTone(percent: number): string {
+	if (percent >= 95) return "text-red-500";
+	if (percent >= 80) return "text-warn";
+	return "";
+}
+
 /** Compact token counts: `845`, `1.2k`, `12k`, `1.2M`. */
 export function formatTokens(value: number): string {
 	if (value < 1_000) return String(Math.round(value));

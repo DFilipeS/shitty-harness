@@ -1,6 +1,7 @@
-import { formatCost, formatTokens } from "../lib/format.ts";
+import { contextTone, formatCost, formatTokens } from "../lib/format.ts";
 import { useHarness } from "../lib/store.tsx";
 import { cacheHitRate, contextTokens, usageTotals } from "../lib/usage.ts";
+import { ProgressRing } from "./ProgressRing.tsx";
 
 /** Session spend, tokens, context use, and cache stats for the chat header. */
 export function SessionStats() {
@@ -22,8 +23,7 @@ export function SessionStats() {
 		info !== undefined && info.contextWindow > 0 && used !== undefined
 			? { used, window: info.contextWindow, percent: Math.round((used / info.contextWindow) * 100) }
 			: undefined;
-	const contextClass =
-		context === undefined ? "" : context.percent >= 95 ? "text-red-500" : context.percent >= 80 ? "text-warn" : "";
+	const contextClass = context === undefined ? "" : contextTone(context.percent);
 
 	const details = [
 		`${totals.tokens.toLocaleString()} tokens (${totals.input.toLocaleString()} in, ${totals.output.toLocaleString()} out)`,
@@ -48,11 +48,17 @@ export function SessionStats() {
 			{context !== undefined && (
 				<>
 					<span className="hidden text-fg-faint sm:inline">·</span>
-					<span className={`hidden sm:inline ${contextClass}`}>{context.percent}% context</span>
+					<span className={`hidden items-center gap-1 sm:inline-flex ${contextClass}`}>
+						<ProgressRing percent={context.percent} />
+						{context.percent}% context
+					</span>
 				</>
 			)}
 			<span className="hidden text-fg-faint sm:inline">·</span>
-			<span className="hidden sm:inline">{percent}% cache</span>
+			<span className={`hidden items-center gap-1 sm:inline-flex ${cached === 0 ? "" : "text-ok"}`}>
+				<ProgressRing percent={percent} />
+				{percent}% cache
+			</span>
 		</div>
 	);
 }
