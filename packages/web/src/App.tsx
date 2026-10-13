@@ -32,8 +32,10 @@ export function App() {
 }
 
 /** Matches Tailwind's `lg` breakpoint, where the sidebar stops being a drawer. */
+const DESKTOP_QUERY = "(min-width: 64rem)";
+
 function isDesktop(): boolean {
-	return window.matchMedia("(min-width: 64rem)").matches;
+	return window.matchMedia(DESKTOP_QUERY).matches;
 }
 
 const SIDEBAR_STORAGE_KEY = "harness-sidebar";
@@ -66,6 +68,14 @@ function AppShell() {
 	}, []);
 
 	useGlobalCommands(toggleSidebar);
+
+	// Crossing the breakpoint resets the sidebar: a drawer on phones, an open column on desktop.
+	useEffect(() => {
+		const query = window.matchMedia(DESKTOP_QUERY);
+		const onChange = (event: MediaQueryListEvent) => setSidebarOpen(event.matches);
+		query.addEventListener("change", onChange);
+		return () => query.removeEventListener("change", onChange);
+	}, []);
 
 	return (
 		<div className="flex h-full overflow-hidden">
