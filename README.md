@@ -91,10 +91,16 @@ chat page also offers session commands (change model, rename, delete, …). Some
 a nested list (`Change model…`, `Switch session…`) or ask for a value
 (`Rename current session…`); `⌫` on an empty search goes back one level.
 
+The model and thinking chips under the message box have their own shortcuts, and every
+command with a binding shows it in the palette. On Windows and Linux, use `Ctrl` instead
+of `⌘`.
+
 | Shortcut | Action |
 | --- | --- |
 | `⌘K` | Open the command palette |
 | `⌘B` | Toggle the sessions sidebar |
+| `⌘⇧M` | Change the model |
+| `⌘⇧T` | Change the thinking level |
 | `?` | Show the shortcut list |
 | `↵` | Send the message |
 | `⇧↵` | New line in the message |
