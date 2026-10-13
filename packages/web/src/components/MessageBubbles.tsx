@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatTokens, type LiveBlock, type LiveMessage } from "../lib/messages.ts";
+import { BrainIcon, ChevronDownIcon } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 
 /**
@@ -77,9 +78,13 @@ function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: str
 				thinkingOpenState.set(stateKey, next);
 				setOpen(next);
 			}}
-			className="rounded-md border border-line bg-panel/50 px-3 py-2 text-xs text-fg-muted"
+			className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs text-fg-muted"
 		>
-			<summary className="cursor-pointer select-none">Thinking</summary>
+			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
+				<BrainIcon className="h-3.5 w-3.5 shrink-0" />
+				Thinking
+				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
+			</summary>
 			<div className="mt-1.5">
 				<Markdown text={thinking} variant="thinking" size="xs" />
 			</div>
