@@ -2,6 +2,17 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Brightness wave for the ASCII empty-state logo; each glyph is offset by its row and column. */
+@keyframes ascii-shimmer {
+	0%,
+	100% {
+		opacity: 0.25;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
 /*
  * Semantic colors. Components only use these tokens, so light and dark are one set of classes.
  * Values are Tailwind's zinc palette plus accent shades; `.dark` is toggled on <html>.
