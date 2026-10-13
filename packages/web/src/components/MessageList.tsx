@@ -15,7 +15,6 @@ import { AssistantBubble, Divider, ToolResultBubble, UserBubble } from "./Messag
 export function MessageList() {
 	const { activeSession } = useHarness();
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const bottomRef = useRef<HTMLDivElement>(null);
 	const stickToBottom = useRef(true);
 
 	useEffect(() => {
@@ -34,7 +33,8 @@ export function MessageList() {
 	const visibleEntries = live?.entryId === undefined ? entries : entries.filter((entry) => entry.id !== live.entryId);
 
 	useEffect(() => {
-		if (stickToBottom.current) bottomRef.current?.scrollIntoView({ block: "end" });
+		const element = scrollRef.current;
+		if (element !== null && stickToBottom.current) element.scrollTop = element.scrollHeight;
 	}, [entries.length, live]);
 
 	const handleReveal = useCallback(() => {
@@ -44,7 +44,7 @@ export function MessageList() {
 
 	return (
 		<div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain">
-			<div className="mx-auto flex max-w-3xl flex-col gap-4 px-3 py-4 sm:px-4 sm:py-6">
+			<div className="mx-auto flex max-w-3xl flex-col gap-4 px-3 pt-4 pb-[var(--composer-height,6rem)] sm:px-4 sm:pt-6">
 				{visibleEntries.map((entry) => (
 					<EntryView key={entry.id} entry={entry} />
 				))}
@@ -54,7 +54,6 @@ export function MessageList() {
 				{entries.length === 0 && live === undefined && (
 					<p className="py-10 text-center text-sm text-fg-subtle">Send a message to start the conversation.</p>
 				)}
-				<div ref={bottomRef} />
 			</div>
 		</div>
 	);

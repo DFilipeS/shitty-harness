@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type Ref } from "react";
 import { useHarness } from "../lib/store.tsx";
 import { SendIcon, StopIcon } from "./icons.tsx";
 
-export function Composer() {
+/** Floating message composer. ChatPanel positions it and reserves its height in the message list. */
+export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 	const { activeSession, sendPrompt, abortSession, status } = useHarness();
 	const [text, setText] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -20,14 +21,22 @@ export function Composer() {
 	};
 
 	return (
-		<div className="border-t border-line px-3 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] sm:px-4 sm:py-3">
-			<div className="mx-auto flex max-w-3xl flex-col gap-2">
+		<div
+			ref={ref}
+			className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4"
+		>
+			<div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-1.5">
 				{model === undefined && (
-					<p className="text-xs text-warn">
+					<p className="w-fit rounded-lg border border-line bg-panel/95 px-3 py-1.5 text-xs text-warn shadow-sm">
 						Choose a model above (or add a provider in settings) before sending a message.
 					</p>
 				)}
-				<div className="flex items-end gap-2 rounded-xl border border-line bg-panel p-2 focus-within:border-line-strong">
+				{runActive && (
+					<p className="w-fit rounded-lg border border-line bg-panel/95 px-3 py-1.5 text-[11px] text-fg-subtle shadow-sm">
+						The agent is working. Sending another message queues it as a follow-up.
+					</p>
+				)}
+				<div className="flex items-center gap-2 rounded-2xl border border-line bg-panel p-2 shadow-lg shadow-black/5 focus-within:border-line-strong dark:shadow-black/40">
 					<textarea
 						ref={textareaRef}
 						value={text}
@@ -63,11 +72,6 @@ export function Composer() {
 						</button>
 					)}
 				</div>
-				{runActive && (
-					<p className="text-[11px] text-fg-subtle">
-						The agent is working. Sending another message queues it as a follow-up.
-					</p>
-				)}
 			</div>
 		</div>
 	);

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
@@ -7,6 +8,20 @@ import { MenuIcon, PlusIcon } from "./icons.tsx";
 
 export function ChatPanel({ onOpenSidebar }: { onOpenSidebar: () => void }) {
 	const { activeSessionId, activeSession, sessionsLoaded, createSession } = useHarness();
+	const mainRef = useRef<HTMLElement>(null);
+	const composerRef = useRef<HTMLDivElement>(null);
+
+	// The composer floats over the list, so publish its height for the list's bottom padding.
+	useLayoutEffect(() => {
+		const main = mainRef.current;
+		const composer = composerRef.current;
+		if (main === null || composer === null) return;
+		const update = () => main.style.setProperty("--composer-height", `${composer.offsetHeight}px`);
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(composer);
+		return () => observer.disconnect();
+	}, [activeSessionId]);
 
 	if (activeSessionId === undefined || activeSession === undefined) {
 		return (
@@ -30,10 +45,10 @@ export function ChatPanel({ onOpenSidebar }: { onOpenSidebar: () => void }) {
 	}
 
 	return (
-		<main className="flex min-w-0 flex-1 flex-col">
+		<main ref={mainRef} className="relative flex min-w-0 flex-1 flex-col">
 			<ChatHeader onOpenSidebar={onOpenSidebar} />
 			<MessageList />
-			<Composer />
+			<Composer ref={composerRef} />
 		</main>
 	);
 }
