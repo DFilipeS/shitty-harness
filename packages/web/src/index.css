@@ -20,3 +20,62 @@ body {
 	scrollbar-width: thin;
 	scrollbar-color: var(--color-zinc-700) transparent;
 }
+
+/* Syntax highlighting for markdown code blocks (rehype-highlight classes). */
+.hljs-comment,
+.hljs-quote {
+	color: #71717a;
+	font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+	color: #c084fc;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-addition,
+.hljs-meta .hljs-string {
+	color: #34d399;
+}
+
+.hljs-number,
+.hljs-built_in,
+.hljs-type,
+.hljs-symbol,
+.hljs-bullet {
+	color: #fbbf24;
+}
+
+.hljs-title,
+.hljs-name {
+	color: #38bdf8;
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property,
+.hljs-params {
+	color: #d4d4d8;
+}
+
+.hljs-tag,
+.hljs-punctuation {
+	color: #71717a;
+}
+
+.hljs-attribute {
+	color: #7dd3fc;
+}
+
+.hljs-deletion {
+	color: #f87171;
+}
+
+.hljs-regexp {
+	color: #fb923c;
+}

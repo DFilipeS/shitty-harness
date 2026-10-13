@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatTokens, type LiveBlock, type LiveMessage } from "../lib/messages.ts";
+import { Markdown } from "./Markdown.tsx";
 
 /**
  * Open state of thinking blocks, keyed by `<assistant message timestamp>:<block index>`. The key is
@@ -63,7 +64,7 @@ function BlockView({ block, stateKey }: { block: LiveBlock; stateKey: string }) 
 			</div>
 		);
 	}
-	return <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{block.text}</div>;
+	return <Markdown text={block.text} />;
 }
 
 function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: string }) {
