@@ -73,6 +73,10 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 3. Create a session. The model and thinking level live under the message box; click either one to pick from the palette.
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
 
+The header keeps a running tally for the open session on the right: cost, tokens, and cache hit
+rate once the provider reports cache usage. Hover it for the input/output and cache breakdown.
+On a phone only the cost stays visible.
+
 While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
 
 On a narrow screen the sidebar becomes a drawer behind the menu button in the header. On wider screens the same button (or `⌘B`) collapses the sidebar to give the conversation the full width; the desktop choice is remembered across reloads.
