@@ -125,3 +125,44 @@ export const Markdown = memo(function Markdown({
 		</div>
 	);
 });
+
+/**
+ * Block elements collapse to inline content so single-line text stays truncatable (`text-overflow:
+ * ellipsis` only applies to a container's own inline content). Links render as styled text because
+ * a title click already has a meaning.
+ */
+const inlineComponents: Components = {
+	p: ({ children }) => <>{children}</>,
+	h1: ({ children }) => <span className="font-semibold">{children}</span>,
+	h2: ({ children }) => <span className="font-semibold">{children}</span>,
+	h3: ({ children }) => <span className="font-semibold">{children}</span>,
+	h4: ({ children }) => <span className="font-semibold">{children}</span>,
+	h5: ({ children }) => <span className="font-semibold">{children}</span>,
+	h6: ({ children }) => <span className="font-semibold">{children}</span>,
+	blockquote: ({ children }) => <>{children}</>,
+	pre: ({ children }) => <>{children}</>,
+	ul: ({ children }) => <>{children}</>,
+	ol: ({ children }) => <>{children}</>,
+	li: ({ children }) => <>{children}</>,
+	hr: () => null,
+	a: ({ children }) => (
+		<span className="underline decoration-current/40 underline-offset-2">{children}</span>
+	),
+	code: ({ className, children }) => (
+		<code className={`rounded bg-zinc-700/50 px-1 py-0.5 font-mono text-[0.85em] ${className ?? ""}`}>
+			{children}
+		</code>
+	),
+	del: ({ children }) => <del className="opacity-70">{children}</del>,
+};
+
+/** Inline-only markdown for single-line text such as session titles. */
+export const MarkdownInline = memo(function MarkdownInline({ text }: { text: string }) {
+	return (
+		<span>
+			<ReactMarkdown remarkPlugins={[remarkGfm]} components={inlineComponents}>
+				{text}
+			</ReactMarkdown>
+		</span>
+	);
+});

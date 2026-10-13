@@ -1,5 +1,6 @@
 import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
+import { MarkdownInline } from "./Markdown.tsx";
 import { MessageList } from "./MessageList.tsx";
 import { ModelPicker } from "./ModelPicker.tsx";
 import { MenuIcon, PlusIcon } from "./icons.tsx";
@@ -56,7 +57,9 @@ function ChatHeader({ onOpenSidebar }: { onOpenSidebar: () => void }) {
 	return (
 		<header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-zinc-800 px-3 py-2.5 sm:px-4">
 			<SidebarToggle onOpenSidebar={onOpenSidebar} />
-			<h1 className="min-w-0 flex-1 truncate text-sm font-medium">{session?.title ?? "Session"}</h1>
+			<h1 className="min-w-0 flex-1 truncate text-sm font-medium">
+				{session === undefined ? "Session" : <MarkdownInline text={session.title} />}
+			</h1>
 			<div className="w-full min-w-0 lg:w-auto">
 				<ModelPicker />
 			</div>

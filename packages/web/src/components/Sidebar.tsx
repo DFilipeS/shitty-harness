@@ -3,6 +3,7 @@ import type { SessionSummary } from "@harness/protocol";
 import { relativeTime } from "../lib/format.ts";
 import { useHarness } from "../lib/store.tsx";
 import { PencilIcon, PlusIcon, SettingsIcon, TrashIcon } from "./icons.tsx";
+import { MarkdownInline } from "./Markdown.tsx";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
 	const {
@@ -127,7 +128,9 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 										onDoubleClick={() => startRename(session)}
 										className="min-w-0 flex-1 text-left"
 									>
-										<div className="truncate text-sm">{session.title}</div>
+										<div className="truncate text-sm">
+											<MarkdownInline text={session.title} />
+										</div>
 										{session.working ? (
 											<div className="flex items-center gap-1.5 text-[11px] text-amber-400/90">
 												<span
