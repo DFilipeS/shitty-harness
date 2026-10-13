@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { SessionSummary } from "@harness/protocol";
 import { relativeTime } from "../lib/format.ts";
 import { useHarness } from "../lib/store.tsx";
-import { useTheme } from "../lib/theme.ts";
+import { useTheme } from "../lib/theme.tsx";
 import { MoonIcon, PencilIcon, PlusIcon, SettingsIcon, SunIcon, TrashIcon } from "./icons.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 

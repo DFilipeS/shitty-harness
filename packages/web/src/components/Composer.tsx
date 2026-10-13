@@ -56,6 +56,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 				<div className="flex items-end gap-2 rounded-2xl border border-line bg-panel p-2 shadow-lg shadow-black/5 focus-within:border-line-strong dark:shadow-black/40">
 					<textarea
 						ref={textareaRef}
+						data-composer-input
 						value={text}
 						rows={1}
 						placeholder="Send a message…"

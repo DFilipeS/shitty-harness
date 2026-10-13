@@ -127,6 +127,67 @@ export function TrashIcon({ className }: IconProps) {
 	);
 }
 
+export function SearchIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<circle cx="11" cy="11" r="7" />
+			<path d="m20.5 20.5-4.2-4.2" />
+		</Svg>
+	);
+}
+
+export function CheckIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<path d="M20 6 9 17l-5-5" />
+		</Svg>
+	);
+}
+
+export function ArrowLeftIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<path d="M19 12H5M12 19l-7-7 7-7" />
+		</Svg>
+	);
+}
+
+export function KeyboardIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<rect x="2" y="6" width="20" height="12" rx="2" />
+			<path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+		</Svg>
+	);
+}
+
+export function MessageIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+		</Svg>
+	);
+}
+
+export function SparklesIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<path d="m12 3 1.8 4.9L19 9.7l-5.2 1.8L12 16.4l-1.8-4.9L5 9.7l5.2-1.8Z" />
+			<path d="m18.5 15.5.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z" />
+		</Svg>
+	);
+}
+
+export function LayersIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<path d="m12 3 9 5-9 5-9-5Z" />
+			<path d="m3 13 9 5 9-5" />
+			<path d="m3 17 9 5 9-5" />
+		</Svg>
+	);
+}
+
 export function RefreshIcon({ className }: IconProps) {
 	return (
 		<Svg className={className}>
