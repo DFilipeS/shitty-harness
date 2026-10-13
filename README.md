@@ -75,7 +75,7 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 
 While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
 
-On a narrow screen the sidebar becomes a drawer behind the menu button in the header.
+On a narrow screen the sidebar becomes a drawer behind the menu button in the header. On wider screens the same button (or `⌘B`) collapses the sidebar to give the conversation the full width; the desktop choice is remembered across reloads.
 
 The sidebar also has a light/dark toggle. The first visit follows your system preference; the choice is saved in the browser.
 
