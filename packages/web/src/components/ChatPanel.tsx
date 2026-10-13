@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
 import { useRegisterCommands, type Command } from "../lib/commands.tsx";
+import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 import { MessageList } from "./MessageList.tsx";
-import { ModelPicker } from "./ModelPicker.tsx";
 import {
 	BrainIcon,
 	ChevronDownIcon,
@@ -77,21 +77,10 @@ function scrollToLatest() {
 
 /** Commands that act on the open conversation. They are hidden while no session is selected. */
 function useChatCommands() {
-	const {
-		sessions,
-		models,
-		activeSessionId,
-		activeSession,
-		renameSession,
-		deleteSession,
-		configureModel,
-		configureThinkingLevel,
-		abortSession,
-	} = useHarness();
-
-	const modelRef = activeSession?.agent.model;
-	const currentModel = models.find((model) => model.provider === modelRef?.provider && model.id === modelRef.modelId);
-	const thinkingLevels = currentModel?.thinkingLevels ?? [];
+	const { sessions, models, activeSessionId, activeSession, renameSession, deleteSession, abortSession } =
+		useHarness();
+	const modelPalette = useModelPalette();
+	const thinkingPalette = useThinkingPalette();
 	const hasSession = () => activeSessionId !== undefined;
 
 	const commands: Command[] = [
@@ -154,22 +143,7 @@ function useChatCommands() {
 			keywords: ["provider", "llm", "switch"],
 			icon: <SparklesIcon />,
 			when: () => hasSession() && models.length > 0,
-			run: ({ pushPage }) => {
-				pushPage({
-					kind: "commands",
-					title: "Change model",
-					placeholder: "Search models…",
-					commands: models.map((model) => ({
-						id: `model.${model.provider}.${model.id}`,
-						title: model.name,
-						group: model.providerName,
-						detail: `${Math.round(model.contextWindow / 1000)}k context`,
-						keywords: [model.provider, model.providerName, model.id, ...(model.reasoning ? ["reasoning"] : [])],
-						current: modelRef?.provider === model.provider && modelRef.modelId === model.id,
-						run: () => void configureModel({ provider: model.provider, modelId: model.id }),
-					})),
-				});
-			},
+			run: ({ pushPage }) => pushPage(modelPalette.page()),
 		},
 		{
 			id: "thinking.change",
@@ -177,22 +151,8 @@ function useChatCommands() {
 			group: "Session",
 			keywords: ["reasoning", "effort"],
 			icon: <BrainIcon />,
-			when: () => hasSession() && thinkingLevels.length > 1,
-			run: ({ pushPage }) => {
-				const current = activeSession?.agent.thinkingLevel;
-				pushPage({
-					kind: "commands",
-					title: "Change thinking level",
-					placeholder: "Search levels…",
-					commands: thinkingLevels.map((level) => ({
-						id: `thinking.${level}`,
-						title: level,
-						group: "Thinking level",
-						current: level === current,
-						run: () => void configureThinkingLevel(level),
-					})),
-				});
-			},
+			when: () => hasSession() && thinkingPalette.levels.length > 1,
+			run: ({ pushPage }) => pushPage(thinkingPalette.page()),
 		},
 		{
 			id: "run.stop",
@@ -243,14 +203,11 @@ function ChatHeader({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 	const { sessions, activeSessionId } = useHarness();
 	const session = sessions.find((candidate) => candidate.id === activeSessionId);
 	return (
-		<header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-3 py-2.5 sm:px-4">
+		<header className="flex items-center gap-3 border-b border-line px-3 py-2.5 sm:px-4">
 			<SidebarToggle onToggleSidebar={onToggleSidebar} />
 			<h1 className="min-w-0 flex-1 truncate text-sm font-medium">
 				{session === undefined ? "Session" : <MarkdownInline text={session.title} />}
 			</h1>
-			<div className="w-full min-w-0 lg:w-auto">
-				<ModelPicker />
-			</div>
 		</header>
 	);
 }
