@@ -80,7 +80,9 @@ function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: str
 			className="rounded-md border border-line bg-panel/50 px-3 py-2 text-xs text-fg-muted"
 		>
 			<summary className="cursor-pointer select-none">Thinking</summary>
-			<div className="mt-1.5 whitespace-pre-wrap italic">{thinking}</div>
+			<div className="mt-1.5">
+				<Markdown text={thinking} variant="thinking" size="xs" />
+			</div>
 		</details>
 	);
 }

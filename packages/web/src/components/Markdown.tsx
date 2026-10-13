@@ -4,7 +4,8 @@ import rehypeHighlight from "rehype-highlight";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
-export type MarkdownVariant = "assistant" | "user";
+export type MarkdownVariant = "assistant" | "user" | "thinking";
+export type MarkdownSize = "sm" | "xs";
 
 type MarkdownPalette = {
 	text: string;
@@ -22,29 +23,34 @@ type MarkdownPalette = {
  * Assistant text follows the theme tokens, so it flips with light and dark. The user bubble keeps
  * a light background in both themes, so its palette stays fixed. Code blocks are dark in both.
  */
+const assistantPalette: MarkdownPalette = {
+	text: "text-fg",
+	link: "text-link underline decoration-link/40 underline-offset-2 hover:decoration-link",
+	blockquote: "border-line-strong text-fg-muted",
+	hr: "border-line",
+	tableHead: "border-line-strong",
+	tableHeaderCell: "text-fg-muted",
+	tableCell: "border-line",
+	code: "bg-raised text-fg",
+	checkbox: "accent-fg-muted",
+};
+
+const userPalette: MarkdownPalette = {
+	text: "text-user-fg",
+	link: "text-sky-700 underline decoration-sky-700/40 underline-offset-2 hover:decoration-sky-700",
+	blockquote: "border-user-line text-zinc-600",
+	hr: "border-user-line",
+	tableHead: "border-user-line",
+	tableHeaderCell: "text-zinc-600",
+	tableCell: "border-user-line",
+	code: "bg-user-raised text-user-fg",
+	checkbox: "accent-zinc-600",
+};
+
 const PALETTES: Record<MarkdownVariant, MarkdownPalette> = {
-	assistant: {
-		text: "text-fg",
-		link: "text-link underline decoration-link/40 underline-offset-2 hover:decoration-link",
-		blockquote: "border-line-strong text-fg-muted",
-		hr: "border-line",
-		tableHead: "border-line-strong",
-		tableHeaderCell: "text-fg-muted",
-		tableCell: "border-line",
-		code: "bg-raised text-fg",
-		checkbox: "accent-fg-muted",
-	},
-	user: {
-		text: "text-user-fg",
-		link: "text-sky-700 underline decoration-sky-700/40 underline-offset-2 hover:decoration-sky-700",
-		blockquote: "border-user-line text-zinc-600",
-		hr: "border-user-line",
-		tableHead: "border-user-line",
-		tableHeaderCell: "text-zinc-600",
-		tableCell: "border-user-line",
-		code: "bg-user-raised text-user-fg",
-		checkbox: "accent-zinc-600",
-	},
+	assistant: assistantPalette,
+	user: userPalette,
+	thinking: { ...assistantPalette, text: "text-fg-muted" },
 };
 
 /**
@@ -107,17 +113,20 @@ function componentsFor(palette: MarkdownPalette): Components {
 const COMPONENTS: Record<MarkdownVariant, Components> = {
 	assistant: componentsFor(PALETTES.assistant),
 	user: componentsFor(PALETTES.user),
+	thinking: componentsFor(PALETTES.thinking),
 };
 
 export const Markdown = memo(function Markdown({
 	text,
 	variant = "assistant",
+	size = "sm",
 }: {
 	text: string;
 	variant?: MarkdownVariant;
+	size?: MarkdownSize;
 }) {
 	return (
-		<div className={`text-sm leading-relaxed ${PALETTES[variant].text}`}>
+		<div className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${PALETTES[variant].text}`}>
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm, remarkBreaks]}
 				rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
