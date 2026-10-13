@@ -1,6 +1,9 @@
-import { useRef, useState, type Ref } from "react";
+import { useLayoutEffect, useRef, useState, type Ref } from "react";
 import { useHarness } from "../lib/store.tsx";
 import { SendIcon, StopIcon } from "./icons.tsx";
+
+/** The textarea grows with its content up to this height, then scrolls. Matches `max-h-40`. */
+const MAX_TEXTAREA_HEIGHT = 160;
 
 /** Floating message composer. ChatPanel positions it and reserves its height in the message list. */
 export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
@@ -11,6 +14,14 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 	const model = activeSession?.agent.model;
 	const runActive = activeSession?.runActive ?? false;
 	const canSend = text.trim() !== "" && model !== undefined && status === "connected";
+
+	useLayoutEffect(() => {
+		const element = textareaRef.current;
+		if (element === null) return;
+		element.style.height = "auto";
+		element.style.height = `${Math.min(element.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+		element.style.overflowY = element.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
+	}, [text]);
 
 	const submit = async () => {
 		if (!canSend) return;
@@ -49,7 +60,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 								void submit();
 							}
 						}}
-						className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-base outline-none placeholder:text-fg-faint sm:text-sm"
+						className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-2 text-base outline-none placeholder:text-fg-faint sm:text-sm"
 					/>
 					{runActive ? (
 						<button
