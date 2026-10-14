@@ -1,12 +1,12 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AssistantImages, ImageApi, ImageContent, ImageModel } from "@earendil-works/pi-ai";
+import type { AssistantImages, ImageApi, ImageContent, ImageModel, Usage } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolDiagnostic, ToolExecutionApi } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
-import { describe, expect, it } from "vitest";
-import { GenerateImageTool } from "../src/image-tool.ts";
+import { describe, expect, it, vi } from "vitest";
+import { GenerateImageTool, openRouterGenerationCost } from "../src/image-tool.ts";
 
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const OTHER_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -57,6 +57,7 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 		models: {
 			getAvailableOfType: async () => options.available ?? [IMAGE_MODEL],
 			generateImages: async (model: ImageModel<ImageApi>) => (options.generate ?? (() => generated()))(model),
+			getAuth: async () => ({ auth: { apiKey: "test-key" } }),
 		},
 		agent: async () => ({ model: options.current }),
 		env: options.env,
@@ -67,6 +68,53 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 function imageParts(result: { output?: readonly { type: string }[] }): ImageContent[] {
 	return (result.output ?? []).filter((part): part is ImageContent => part.type === "image");
 }
+
+const ESTIMATE: Usage = {
+	input: 15,
+	output: 1237,
+	cacheRead: 0,
+	cacheWrite: 0,
+	totalTokens: 1252,
+	cost: { input: 0.00003, output: 0.014844, cacheRead: 0, cacheWrite: 0, total: 0.014874 },
+};
+
+function generationLookup(total: number): typeof fetch {
+	return async () => new Response(JSON.stringify({ data: { total_cost: total } }), { status: 200 });
+}
+
+describe("openRouterGenerationCost", () => {
+	it("reads total_cost from the generation endpoint", async () => {
+		const urls: string[] = [];
+		const cost = await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1/", "key", {
+			fetch: async (input) => {
+				urls.push(String(input));
+				return new Response(JSON.stringify({ data: { total_cost: 0.135834 } }), { status: 200 });
+			},
+		});
+		expect(cost).toBeCloseTo(0.135834);
+		expect(urls).toEqual(["https://openrouter.ai/api/v1/generation?id=gen-1"]);
+	});
+
+	it("returns undefined when the lookup fails", async () => {
+		expect(
+			await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1", "key", {
+				fetch: async () => new Response("nope", { status: 500 }),
+			}),
+		).toBeUndefined();
+		expect(
+			await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1", "key", {
+				fetch: async () => {
+					throw new Error("offline");
+				},
+			}),
+		).toBeUndefined();
+		expect(
+			await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1", "key", {
+				fetch: async () => new Response(JSON.stringify({ data: {} }), { status: 200 }),
+			}),
+		).toBeUndefined();
+	});
+});
 
 describe("generate_image", () => {
 	it("generates an image, saves it, and returns it", async () => {
@@ -88,6 +136,37 @@ describe("generate_image", () => {
 			expect((await readFile(join(workspace, saved ?? ""))).toString("base64")).toBe(PNG);
 		} finally {
 			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
+	it("uses what OpenRouter charged instead of pi-ai's estimate", async () => {
+		vi.stubGlobal("fetch", generationLookup(0.135834));
+		try {
+			const result = await GenerateImageTool.execute(
+				{ prompt: "a red apple" },
+				fakeApi({ generate: async () => generated({ usage: ESTIMATE, responseId: "gen-1" }) }),
+				BACKGROUND_CONTEXT,
+			);
+			expect(result.isError).toBeUndefined();
+			expect(result.usage?.cost.total).toBeCloseTo(0.135834);
+			expect(result.usage?.cost.input).toBeCloseTo(0.00003);
+			expect(result.usage?.cost.output).toBeCloseTo(0.135834 - 0.00003);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("keeps pi-ai's estimate when the lookup fails", async () => {
+		vi.stubGlobal("fetch", async () => new Response("nope", { status: 500 }));
+		try {
+			const result = await GenerateImageTool.execute(
+				{ prompt: "a red apple" },
+				fakeApi({ generate: async () => generated({ usage: ESTIMATE, responseId: "gen-1" }) }),
+				BACKGROUND_CONTEXT,
+			);
+			expect(result.usage?.cost.total).toBeCloseTo(0.014874);
+		} finally {
+			vi.unstubAllGlobals();
 		}
 	});
 

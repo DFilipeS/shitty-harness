@@ -155,7 +155,8 @@ conversation selects it by default. A `generate_image` tool is installed alongsi
 the provider's image API (the chat stream cannot carry images), saves the picture in the working
 directory, and returns it as a tool result, so it shows up in the conversation. Models in the
 picker that have an image model of the same id are marked with a wand, and `generate_image`
-defaults to that model.
+defaults to that model. For OpenRouter image models the tool also reads the generation's real cost
+back from the provider, because image tokens are billed above the text output rate.
 
 Tools touch files and processes only through an `ExecutionEnv`. Today the only implementation is
 the local machine (`NodeExecutionEnv`), which starts in the directory the server was started from

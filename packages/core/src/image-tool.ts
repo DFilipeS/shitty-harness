@@ -1,5 +1,12 @@
 import type { Context } from "@earendil-works/chord";
-import { Type, type ImageApi, type ImageContent, type ImageModel } from "@earendil-works/pi-ai";
+import {
+	Type,
+	type AssistantImages,
+	type ImageApi,
+	type ImageContent,
+	type ImageModel,
+	type Usage,
+} from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
 
 const MIME_EXTENSIONS: Record<string, string> = {
@@ -62,6 +69,63 @@ function resolveImageModel(
 	return available.find((model) => model.output.includes("text")) ?? available[0];
 }
 
+/**
+ * What OpenRouter actually charged for a generation.
+ *
+ * pi-ai prices image tokens at the model's text output rate, but OpenRouter bills them at the
+ * model's `image_output` rate — 10x the text rate for Nano Banana Pro — so pi-ai's estimate can be
+ * far too low. The generation endpoint has the real number; undefined when it cannot be read.
+ */
+export async function openRouterGenerationCost(
+	responseId: string,
+	baseUrl: string,
+	apiKey: string,
+	options: { signal?: AbortSignal; fetch?: typeof fetch } = {},
+): Promise<number | undefined> {
+	const request = options.fetch ?? fetch;
+	try {
+		const url = `${baseUrl.replace(/\/+$/, "")}/generation?id=${encodeURIComponent(responseId)}`;
+		const response = await request(url, {
+			headers: { accept: "application/json", authorization: `Bearer ${apiKey}` },
+			...(options.signal === undefined ? {} : { signal: options.signal }),
+		});
+		if (!response.ok) return undefined;
+		const body: unknown = await response.json();
+		if (typeof body !== "object" || body === null) return undefined;
+		const data = "data" in body ? (body as { data: unknown }).data : body;
+		if (typeof data !== "object" || data === null) return undefined;
+		const total = (data as { total_cost?: unknown }).total_cost;
+		return typeof total === "number" && Number.isFinite(total) ? total : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** pi-ai's usage with the cost OpenRouter reports, when it can be read. */
+async function actualUsage(
+	result: AssistantImages,
+	model: ImageModel<ImageApi>,
+	api: ToolExecutionApi,
+	context: Context,
+): Promise<Usage | undefined> {
+	const usage = result.usage;
+	if (usage === undefined || result.api !== "openrouter-images" || result.responseId === undefined) {
+		return usage;
+	}
+	const auth = await api.models.getAuth(model.provider);
+	const apiKey = auth?.auth.apiKey;
+	if (apiKey === undefined) return usage;
+	const total = await openRouterGenerationCost(result.responseId, model.baseUrl, apiKey, {
+		...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+	});
+	if (total === undefined) return usage;
+	// The image charge is an output charge; keep the parts summing to the real total.
+	const cost = { ...usage.cost };
+	cost.output = Math.max(0, total - cost.input - cost.cacheRead - cost.cacheWrite);
+	cost.total = total;
+	return { ...usage, cost };
+}
+
 /** Writes the images into the environment; failures become diagnostics, not a failed call. */
 async function saveImages(
 	api: ToolExecutionApi,
@@ -120,19 +184,24 @@ export const GenerateImageTool = defineTool({
 			{ input: [{ type: "text", text: args.prompt }] },
 			context.abortSignal === undefined ? undefined : { signal: context.abortSignal },
 		);
-		const usage = result.usage === undefined ? {} : { usage: result.usage };
+		const usage = await actualUsage(result, model, api, context);
+		const usageField = usage === undefined ? {} : { usage };
 		if (result.stopReason !== "stop") {
 			return {
 				output: [
 					{ type: "text", text: result.errorMessage ?? `Image generation ${result.stopReason}.` },
 				],
 				isError: true,
-				...usage,
+				...usageField,
 			};
 		}
 		const images = result.output.filter((part): part is ImageContent => part.type === "image");
 		if (images.length === 0) {
-			return { output: [{ type: "text", text: "The model returned no image." }], isError: true, ...usage };
+			return {
+				output: [{ type: "text", text: "The model returned no image." }],
+				isError: true,
+				...usageField,
+			};
 		}
 
 		const saved = await saveImages(api, images, args.path, context);
@@ -140,7 +209,7 @@ export const GenerateImageTool = defineTool({
 			saved.length === 0
 				? "The image was not saved: no execution environment is configured."
 				: `Saved ${saved.map((path) => `\`${path}\``).join(", ")}.`;
-		return { output: [...images, { type: "text", text: note }], ...usage };
+		return { output: [...images, { type: "text", text: note }], ...usageField };
 	},
 });
 
