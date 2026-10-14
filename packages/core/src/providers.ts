@@ -1,5 +1,6 @@
 import { getSupportedThinkingLevels, type Models, type MutableModels } from "@earendil-works/pi-ai";
 import { builtinModels, getBuiltinModelDataGeneratedAt } from "@earendil-works/pi-ai/providers/all";
+import { personalizeOpenRouterCatalog } from "@earendil-works/pi-ai/providers/openrouter";
 import type {
 	DefaultsState,
 	ModelInfo,
@@ -72,6 +73,8 @@ export class ProviderManager implements Providers {
 					...(options.throttleMs === undefined ? {} : { throttleMs: options.throttleMs }),
 					...(options.userAgent === undefined ? {} : { userAgent: options.userAgent }),
 					...(options.now === undefined ? {} : { now: options.now }),
+					// OpenRouter can tell us which models this account may use, and at what price.
+					...(provider.id === "openrouter" ? { personalize: personalizeOpenRouterCatalog } : {}),
 					onStatus: (status) => this.#statuses.set(status.providerId, status),
 				}),
 			);

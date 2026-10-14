@@ -58,6 +58,10 @@ export function formatRefreshNotice(
 		if (report.outcome === "fetched" && report.added > 0) {
 			return `${report.name}: ${report.added} new model${report.added === 1 ? "" : "s"} (${report.models} total)`;
 		}
+		if (report.outcome === "fetched" && report.added < 0) {
+			const removed = -report.added;
+			return `${report.name}: ${removed} model${removed === 1 ? "" : "s"} removed (${report.models} total)`;
+		}
 		if (report.outcome === "unavailable") return `${report.name}: no remote catalog`;
 		if (report.outcome === "throttled") return `${report.name}: checked recently`;
 		return `${report.name}: up to date`;

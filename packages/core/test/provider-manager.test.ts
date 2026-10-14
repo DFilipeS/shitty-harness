@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AnyModel } from "@earendil-works/pi-ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { emptyConfig, loadConfig, type AppConfig } from "../src/config.ts";
 import { ProviderManager } from "../src/providers.ts";
 
@@ -123,6 +123,70 @@ describe("ProviderManager", () => {
 				model: { provider: "openrouter", modelId: "google/gemini-4-argon" },
 			});
 		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("personalizes the OpenRouter catalog with the account's models", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
+		const configPath = join(dir, "config.json");
+		const modelsPath = join(dir, "models.json");
+		const config: AppConfig = { ...emptyConfig(), providers: { openrouter: { apiKey: "test-key" } } };
+		const catalogFetch: typeof fetch = async (input) => {
+			const url = String(input);
+			if (url.includes("/api/models/providers/openrouter")) return catalogResponse([ARGON]);
+			throw new Error(`unexpected catalog fetch: ${url}`);
+		};
+		// `personalizeOpenRouterCatalog` uses the global fetch for `/models/user`.
+		vi.stubGlobal("fetch", async (input: unknown) => {
+			const url = String(input);
+			if (!url.includes("/models/user")) throw new Error(`unexpected fetch: ${url}`);
+			return new Response(
+				JSON.stringify({
+					data: [
+						{
+							id: ARGON_ID,
+							context_length: 4096,
+							top_provider: { max_completion_tokens: 512 },
+							pricing: {
+								prompt: "0.000001",
+								completion: "0.000002",
+								input_cache_read: "0.0000001",
+								input_cache_write: "0.0000002",
+							},
+						},
+					],
+				}),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		});
+		try {
+			const manager = new ProviderManager(configPath, modelsPath, config, { fetch: catalogFetch, localGeneratedAt: 0 });
+			await manager.refresh({ force: true });
+
+			// Only the account's model survives, at the account's limits and prices.
+			const models = (await manager.listModels()).filter((model) => model.provider === "openrouter");
+			expect(models.map((model) => model.id)).toEqual([ARGON_ID]);
+			expect(models[0]?.contextWindow).toBe(4096);
+			expect(models[0]?.maxTokens).toBe(512);
+			const argon = manager.models.getModel("openrouter", ARGON_ID);
+			expect(argon?.cost.input).toBeCloseTo(1);
+			expect(argon?.cost.output).toBeCloseTo(2);
+			expect(argon?.cost.cacheRead).toBeCloseTo(0.1);
+
+			// A fresh manager restores the personalized list, not the bundled one.
+			const second = new ProviderManager(configPath, modelsPath, config, {
+				fetch: async () => {
+					throw new Error("offline");
+				},
+				localGeneratedAt: 0,
+			});
+			await second.refresh({ force: false });
+			expect((await second.listModels()).filter((model) => model.provider === "openrouter").map((model) => model.id)).toEqual([
+				ARGON_ID,
+			]);
+		} finally {
+			vi.unstubAllGlobals();
 			await rm(dir, { recursive: true, force: true });
 		}
 	});

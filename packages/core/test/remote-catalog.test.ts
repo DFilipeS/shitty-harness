@@ -219,4 +219,43 @@ describe("withRemoteCatalog", () => {
 		await expect(provider.refreshModels?.(fakeContext().context)).rejects.toThrow(/Invalid model catalog/);
 		expect(statuses.at(-1)?.outcome).toBe("failed");
 	});
+
+	it("lets a personalizer replace the baseline so filtered models disappear", async () => {
+		const statuses: CatalogRefreshStatus[] = [];
+		const provider = withRemoteCatalog(fakeProvider(), {
+			fetch: async () => catalogResponse([FLASH, ARGON]),
+			personalize: async (catalog) => catalog.filter((model) => model.id !== FLASH.id),
+			onStatus: (status) => statuses.push(status),
+		});
+		await provider.refreshModels?.(fakeContext().context);
+
+		// FLASH is in the bundled baseline, but the account cannot use it.
+		expect(provider.getModels().map((model) => model.id)).toEqual(["google/gemini-4-argon"]);
+		expect(provider.getAllModels?.().map((model) => model.id)).not.toContain(FLASH.id);
+		expect(statuses).toEqual([{ providerId: PROVIDER_ID, outcome: "fetched", overlay: 1 }]);
+	});
+
+	it("treats a stored personalized catalog as the whole list", async () => {
+		const stored: ModelsStoreEntry = { models: [ARGON], lastModified: Date.parse(LAST_MODIFIED), etag: '"v1"', checkedAt: 100 };
+		const provider = withRemoteCatalog(fakeProvider(), {
+			fetch: async () => new Response(null, { status: 304 }),
+			personalize: async (catalog) => catalog,
+		});
+		await provider.refreshModels?.(fakeContext({ stored }).context);
+
+		expect(provider.getModels().map((model) => model.id)).toEqual(["google/gemini-4-argon"]);
+	});
+
+	it("reports a personalizer failure", async () => {
+		const statuses: CatalogRefreshStatus[] = [];
+		const provider = withRemoteCatalog(fakeProvider(), {
+			fetch: async () => catalogResponse([FLASH, ARGON]),
+			personalize: async () => {
+				throw new Error("account catalog failed");
+			},
+			onStatus: (status) => statuses.push(status),
+		});
+		await expect(provider.refreshModels?.(fakeContext().context)).rejects.toThrow(/account catalog failed/);
+		expect(statuses.at(-1)?.outcome).toBe("failed");
+	});
 });

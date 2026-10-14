@@ -43,6 +43,11 @@ export type RemoteCatalogOptions = {
 	userAgent?: string;
 	now?: () => number;
 	onStatus?: (status: CatalogRefreshStatus) => void;
+	/**
+	 * Rewrites the whole catalog for the account, e.g. OpenRouter's `/models/user`. When set, the
+	 * stored or fetched catalog replaces the baseline, so models the account cannot use disappear.
+	 */
+	personalize?: (catalog: readonly AnyModel[], context: RefreshModelsContext) => Promise<readonly AnyModel[]>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -135,6 +140,10 @@ async function fetchWithRetry(request: typeof fetch, url: URL, init: RequestInit
  * Wrap a provider with the pi.dev remote catalog. The bundled catalog stays the baseline; the
  * remote one is persisted in the models store (ETag and Last-Modified included) and overlaid on
  * top, so a refresh picks up new models without a package update.
+ *
+ * With `personalize` the catalog is first merged with the baseline and then rewritten for the
+ * account, and the result replaces the baseline: a model the account cannot use disappears
+ * instead of falling back to its bundled entry.
  */
 export function withRemoteCatalog(provider: Provider, options: RemoteCatalogOptions = {}): Provider {
 	const request = options.fetch ?? fetch;
@@ -143,6 +152,11 @@ export function withRemoteCatalog(provider: Provider, options: RemoteCatalogOpti
 	const userAgent = options.userAgent ?? CATALOG_USER_AGENT;
 	const now = options.now ?? Date.now;
 	let overlay: AnyModel[] = [];
+	/** True when `overlay` is a whole catalog (personalized) rather than an overlay over the baseline. */
+	let complete = false;
+
+	const catalogFor = (baseline: readonly AnyModel[]): AnyModel[] =>
+		complete && overlay.length > 0 ? [...overlay] : mergeCatalog(baseline, overlay);
 
 	const report = (outcome: ProviderRefreshOutcome, overlayCount: number, error?: string): void => {
 		options.onStatus?.({
@@ -156,15 +170,15 @@ export function withRemoteCatalog(provider: Provider, options: RemoteCatalogOpti
 	return {
 		...provider,
 		getModels: () =>
-			mergeCatalog(provider.getModels(), overlay).filter((model): model is Model<Api> =>
-				isModelType(model, "chat"),
-			),
-		getAllModels: () => mergeCatalog(provider.getAllModels?.() ?? provider.getModels(), overlay),
+			catalogFor(provider.getModels()).filter((model): model is Model<Api> => isModelType(model, "chat")),
+		getAllModels: () => catalogFor(provider.getAllModels?.() ?? provider.getModels()),
 		refreshModels: async (context: RefreshModelsContext) => {
 			const stored = context.stored;
 			const restored = freshModels(stored, options.localGeneratedAt).filter(
 				(model) => model.provider === provider.id,
 			);
+			// A stored personalized catalog is the whole list, not an overlay over the bundled one.
+			complete = options.personalize !== undefined && restored.length > 0;
 			if (
 				!(await context.publish({
 					update: () => {
@@ -231,6 +245,20 @@ export function withRemoteCatalog(provider: Provider, options: RemoteCatalogOpti
 				throw error;
 			}
 			if (context.signal.aborted) return;
+
+			if (options.personalize !== undefined) {
+				try {
+					const baseline = provider.getAllModels?.() ?? provider.getModels();
+					catalog = {
+						...catalog,
+						models: await options.personalize(mergeCatalog(baseline, catalog.models), context),
+					};
+					complete = true;
+				} catch (error) {
+					report("failed", restored.length, describeError(error));
+					throw error;
+				}
+			}
 
 			const entry: ModelsStoreEntry = { ...catalog, checkedAt };
 			const fresh = freshModels(entry, options.localGeneratedAt);

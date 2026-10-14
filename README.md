@@ -108,6 +108,10 @@ start, and revalidated with `If-None-Match`. Startup refresh uses the cache whil
 (under four hours); **Refresh providers and models** in the command palette forces a fetch and
 reports what each provider did in a toast. Set `HARNESS_CATALOG_BASE_URL` to point at a mirror.
 
+OpenRouter goes one step further: the catalog is then restricted to the chat models your key may
+use, with your account's context limits and prices (`GET /models/user`). A model the account
+cannot use disappears from the picker instead of falling back to its bundled entry.
+
 pi-ai still decides how a model is called: remote entries only add models or replace same-id
 ones, and entries older than the bundled model data are ignored.
 
