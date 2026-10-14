@@ -1,7 +1,9 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { loadConfig } from "./config.ts";
+import type { EnvironmentFactory } from "./environment.ts";
 import { ProviderManager } from "./providers.ts";
 import { HarnessService } from "./service.ts";
 
@@ -9,11 +11,21 @@ export type OpenHarnessServiceOptions = {
 	dataDir: string;
 	/** Model catalog mirror; defaults to pi.dev. */
 	catalogBaseUrl?: string;
+	/** Directory tools run in when a conversation has no `cwd` of its own. */
+	workspaceDir?: string;
+	/** Replaces the local execution environment, e.g. with a remote sandbox. */
+	environment?: EnvironmentFactory;
 };
 
+/** The local machine as the tools' execution environment. */
+export function localEnvironment(workspaceDir: string): EnvironmentFactory {
+	return ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? workspaceDir });
+}
+
 /**
- * Production composition: open SQLite storage and the config-backed provider manager, then create
- * the service over them. Node-specific, so it lives behind `@harness/core/node`.
+ * Production composition: open SQLite storage, the config-backed provider manager, and the local
+ * execution environment, then create the service over them. Node-specific, so it lives behind
+ * `@harness/core/node`.
  */
 export async function openHarnessService(options: OpenHarnessServiceOptions): Promise<HarnessService> {
 	const { dataDir } = options;
@@ -24,6 +36,7 @@ export async function openHarnessService(options: OpenHarnessServiceOptions): Pr
 		...(options.catalogBaseUrl === undefined ? {} : { catalogBaseUrl: options.catalogBaseUrl }),
 	});
 	const storage = await openNodeSqliteStorage(join(dataDir, "sessions.sqlite"));
+	const environment = options.environment ?? localEnvironment(options.workspaceDir ?? process.cwd());
 
-	return HarnessService.create({ storage, providers });
+	return HarnessService.create({ storage, providers, environment });
 }

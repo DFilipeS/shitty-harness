@@ -1,5 +1,6 @@
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { CodingTools } from "@earendil-works/pi-durable/tools";
 import {
 	createRegistry,
 	Harness,
@@ -24,6 +25,7 @@ import type {
 	ProviderRefreshReport,
 	SessionSummary,
 } from "@harness/protocol";
+import type { EnvironmentFactory } from "./environment.ts";
 import { sortModelsForDisplay } from "./model-order.ts";
 import type { Providers } from "./providers.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
@@ -88,6 +90,8 @@ type SessionSubscription = {
 export type HarnessServiceDependencies = {
 	storage: Storage;
 	providers: Providers;
+	/** Builds each conversation's execution environment. Without one, the coding tools fail. */
+	environment?: EnvironmentFactory;
 };
 
 /**
@@ -115,11 +119,16 @@ export class HarnessService {
 	 */
 	static async create(dependencies: HarnessServiceDependencies): Promise<HarnessService> {
 		const { providers } = dependencies;
+		// Every conversation selects every installed extension, so installing the coding tools is
+		// all it takes for agents to read, write, edit, and run commands.
+		const registry = createRegistry();
+		registry.install(CodingTools);
 		const harness = await Harness.open(
 			dependencies.storage,
 			{
 				models: providers.models,
-				registry: createRegistry(),
+				registry,
+				...(dependencies.environment === undefined ? {} : { env: dependencies.environment }),
 				conversationCreated: async (tx, conversation) => {
 					if (conversation.owner !== undefined) return;
 					const index = await tx.doc(SessionIndex);
