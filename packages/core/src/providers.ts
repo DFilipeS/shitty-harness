@@ -159,6 +159,7 @@ export class ProviderManager implements Providers {
 			maxTokens: model.maxTokens,
 			input: model.input,
 			thinkingLevels: getSupportedThinkingLevels(model),
+			imageGeneration: this.models.getModelOfType("image", model.provider, model.id) !== undefined,
 		}));
 	}
 

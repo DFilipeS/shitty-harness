@@ -151,7 +151,11 @@ Sessions are durable conversations. The sidebar order and titles come from a ses
 
 Agents get pi-durable's default coding tools: `read`, `write`, `edit`, and `bash`. They come from
 the `CodingTools` extension, which `packages/core/src/service.ts` installs in the registry; every
-conversation selects it by default.
+conversation selects it by default. A `generate_image` tool is installed alongside them: it calls
+the provider's image API (the chat stream cannot carry images), saves the picture in the working
+directory, and returns it as a tool result, so it shows up in the conversation. Models in the
+picker that have an image model of the same id are marked with a wand, and `generate_image`
+defaults to that model.
 
 Tools touch files and processes only through an `ExecutionEnv`. Today the only implementation is
 the local machine (`NodeExecutionEnv`), which starts in the server's working directory. Set

@@ -30,6 +30,8 @@ export type ModelInfo = {
 	maxTokens: number;
 	input: readonly string[];
 	thinkingLevels: readonly ModelThinkingLevel[];
+	/** The provider lists an image model with the same id, so `generate_image` can use it. */
+	imageGeneration: boolean;
 };
 
 /** A provider and whether the server has credentials for it. */

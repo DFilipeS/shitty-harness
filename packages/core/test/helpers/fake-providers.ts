@@ -75,6 +75,7 @@ function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Provid
 				maxTokens: model.maxTokens,
 				input: model.input,
 				thinkingLevels: getSupportedThinkingLevels(model),
+				imageGeneration: models.getModelOfType("image", model.provider, model.id) !== undefined,
 			}));
 		},
 		setApiKey,

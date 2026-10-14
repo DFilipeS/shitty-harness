@@ -3,21 +3,32 @@ import type { ModelInfo, ModelRef, ModelThinkingLevel } from "@harness/protocol"
 import { useCommandPalette, type CommandPage } from "./commands.tsx";
 import { modelCapabilities } from "./models.ts";
 import { useHarness } from "./store.tsx";
-import { BrainIcon, CpuIcon, ImageIcon } from "../components/icons.tsx";
+import { BrainIcon, CpuIcon, ImageIcon, WandIcon } from "../components/icons.tsx";
 
-/** Capability icons for one model: reasoning and image input. */
+/** Capability icons for one model: reasoning, image input, and image generation. */
 function modelBadges(model: ModelInfo): ReactNode | undefined {
-	const badges = modelCapabilities(model).map((capability) =>
-		capability === "reasoning" ? (
-			<span key={capability} title="Reasoning" className="flex">
-				<BrainIcon className="h-3.5 w-3.5" />
-			</span>
-		) : (
-			<span key={capability} title="Image input" className="flex">
-				<ImageIcon className="h-3.5 w-3.5" />
-			</span>
-		),
-	);
+	const badges = modelCapabilities(model).map((capability) => {
+		switch (capability) {
+			case "reasoning":
+				return (
+					<span key={capability} title="Reasoning" className="flex">
+						<BrainIcon className="h-3.5 w-3.5" />
+					</span>
+				);
+			case "image":
+				return (
+					<span key={capability} title="Image input" className="flex">
+						<ImageIcon className="h-3.5 w-3.5" />
+					</span>
+				);
+			case "imageGeneration":
+				return (
+					<span key={capability} title="Image generation" className="flex">
+						<WandIcon className="h-3.5 w-3.5" />
+					</span>
+				);
+		}
+	});
 	return badges.length === 0 ? undefined : badges;
 }
 

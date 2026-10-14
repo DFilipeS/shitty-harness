@@ -127,6 +127,37 @@ describe("ProviderManager", () => {
 		}
 	});
 
+	it("marks chat models that have an image sibling", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
+		const configPath = join(dir, "config.json");
+		const modelsPath = join(dir, "models.json");
+		const config: AppConfig = { ...emptyConfig(), providers: { fireworks: { apiKey: "test-key" } } };
+		const siblingId = "fake/image-model";
+		const chat = { ...ARGON, id: siblingId, provider: "fireworks" } as AnyModel;
+		const image = {
+			...ARGON,
+			type: "image",
+			id: siblingId,
+			provider: "fireworks",
+			input: ["text"],
+			output: ["image"],
+		} as unknown as AnyModel;
+		try {
+			const manager = new ProviderManager(configPath, modelsPath, config, {
+				fetch: async () => catalogResponse([chat, image]),
+				localGeneratedAt: 0,
+			});
+			await manager.refresh({ force: true });
+			const models = (await manager.listModels()).filter(
+				(model) => model.provider === "fireworks" && model.id === siblingId,
+			);
+			expect(models).toHaveLength(1);
+			expect(models[0]?.imageGeneration).toBe(true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("personalizes the OpenRouter catalog with the account's models", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
 		const configPath = join(dir, "config.json");
