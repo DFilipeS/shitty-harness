@@ -14,6 +14,8 @@ export type Command = {
 	keywords?: string[];
 	/** Small text shown at the right of the row. */
 	detail?: string;
+	/** Small icons shown before the detail, e.g. a model's capabilities. */
+	badges?: ReactNode;
 	/** Keyboard binding that runs the command from anywhere, e.g. "mod+shift+m". */
 	keys?: string;
 	icon?: ReactNode;

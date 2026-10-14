@@ -1,7 +1,25 @@
+import type { ReactNode } from "react";
 import type { ModelInfo, ModelRef, ModelThinkingLevel } from "@harness/protocol";
 import { useCommandPalette, type CommandPage } from "./commands.tsx";
+import { modelCapabilities } from "./models.ts";
 import { useHarness } from "./store.tsx";
-import { BrainIcon, CpuIcon } from "../components/icons.tsx";
+import { BrainIcon, CpuIcon, ImageIcon } from "../components/icons.tsx";
+
+/** Capability icons for one model: reasoning and image input. */
+function modelBadges(model: ModelInfo): ReactNode | undefined {
+	const badges = modelCapabilities(model).map((capability) =>
+		capability === "reasoning" ? (
+			<span key={capability} title="Reasoning" className="flex">
+				<BrainIcon className="h-3.5 w-3.5" />
+			</span>
+		) : (
+			<span key={capability} title="Image input" className="flex">
+				<ImageIcon className="h-3.5 w-3.5" />
+			</span>
+		),
+	);
+	return badges.length === 0 ? undefined : badges;
+}
 
 type ConfigureModel = (model: ModelRef) => Promise<void>;
 type ConfigureThinkingLevel = (level: ModelThinkingLevel) => Promise<void>;
@@ -24,6 +42,7 @@ export function buildModelPage(
 			id: `${options.idPrefix ?? "model."}${model.provider}.${model.id}`,
 			title: model.name,
 			group: model.providerName,
+			badges: modelBadges(model),
 			detail: `${Math.round(model.contextWindow / 1000)}k context`,
 			keywords: [model.provider, model.providerName, model.id, ...(model.reasoning ? ["reasoning"] : [])],
 			current: current?.provider === model.provider && current.modelId === model.id,

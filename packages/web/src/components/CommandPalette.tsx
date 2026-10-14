@@ -330,6 +330,9 @@ export function CommandPalette({
 									>
 										{command.icon !== undefined && <span className="shrink-0 text-fg-subtle">{command.icon}</span>}
 										<span className="min-w-0 flex-1 truncate text-sm">{command.title}</span>
+										{command.badges !== undefined && (
+											<span className="flex shrink-0 items-center gap-1.5 text-fg-muted">{command.badges}</span>
+										)}
 										{command.detail !== undefined && (
 											<span className="max-w-[45%] shrink-0 truncate text-[11px] text-fg-faint">
 												{command.detail}
