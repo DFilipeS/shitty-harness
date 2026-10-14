@@ -23,7 +23,7 @@ Data lives in `data/` (git-ignored):
 | File | Contents |
 | --- | --- |
 | `sessions.sqlite` | durable conversations, tasks, entries, documents |
-| `config.json` | provider API keys (mode `0600`) |
+| `config.json` | provider API keys and model defaults (mode `0600`) |
 | `models.json` | cached dynamic provider catalogs |
 
 ## Requirements
@@ -71,6 +71,9 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 1. Press `⌘K` and run **Configure model providers…** (or use the palette button in the sidebar).
 2. Pick a provider, choose **Set API key…**, paste the key, and press `↵`.
 3. Create a session. The model and thinking level live under the message box; click either one to pick from the palette.
+4. Optional: run **Model defaults…** in the palette to choose the model and thinking level new
+   sessions start with. **First available** and **Model default** clear each choice; sessions that
+   already exist keep their own model and level.
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
 
 The header keeps a running tally for the open session on the right: cost, tokens, context use,
