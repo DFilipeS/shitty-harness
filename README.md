@@ -91,6 +91,19 @@ Messages render Markdown (GFM tables, task lists, strikethrough) with syntax-hig
 
 Deleting a session removes it from the app index, so it disappears from the sidebar and cannot be resumed. Durable storage is append-only and has no public delete API, so the underlying records stay in `sessions.sqlite`.
 
+### Model catalogs
+
+The provider list and model picker come from pi-ai's bundled catalog plus pi.dev's public catalog
+(`https://pi.dev/api/models/providers/<id>`, the same source the pi CLI uses). Refreshing pulls
+the remote catalog, so newly released models show up without waiting for a pi-ai update. The
+result is cached in `data/models.json` with its `ETag` and `Last-Modified`, restored on the next
+start, and revalidated with `If-None-Match`. Startup refresh uses the cache while it is fresh
+(under four hours); **Refresh providers and models** in the command palette forces a fetch and
+reports what each provider did in a toast. Set `HARNESS_CATALOG_BASE_URL` to point at a mirror.
+
+pi-ai still decides how a model is called: remote entries only add models or replace same-id
+ones, and entries older than the bundled model data are ignored.
+
 ## Keyboard
 
 The app is keyboard-first. Press `⌘K` (or `Ctrl+K`) anywhere to open the command palette:
