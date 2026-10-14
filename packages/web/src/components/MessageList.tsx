@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { EntryRecord } from "@harness/protocol";
 import {
 	assistantMessageOf,
+	toolResultImages,
 	toolResultOf,
 	toolResultText,
 	toLiveBlock,
@@ -45,7 +46,11 @@ export function MessageList() {
 			}
 			const result = toolResultOf(entry);
 			if (result !== undefined) {
-				results.set(result.toolCallId, { text: toolResultText(result), isError: result.isError === true });
+				results.set(result.toolCallId, {
+					text: toolResultText(result),
+					images: toolResultImages(result),
+					isError: result.isError === true,
+				});
 			}
 		}
 		for (const block of live?.blocks ?? []) if (block.type === "toolCall") calls.add(block.id);
@@ -113,7 +118,13 @@ function EntryView({
 	if (toolResult !== undefined) {
 		// A result with a call on screen lives inside that call's block.
 		if (toolCallIds.has(toolResult.toolCallId)) return null;
-		return <ToolResultBubble text={toolResultText(toolResult)} isError={toolResult.isError === true} />;
+		return (
+			<ToolResultBubble
+				text={toolResultText(toolResult)}
+				images={toolResultImages(toolResult)}
+				isError={toolResult.isError === true}
+			/>
+		);
 	}
 
 	if (entry.kind === "pi.compaction") return <Divider label="Context compacted" />;

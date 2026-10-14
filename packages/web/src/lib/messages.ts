@@ -1,4 +1,4 @@
-import type { AssistantMessage, ToolResultMessage, Usage, UserMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ImageContent, ToolResultMessage, Usage, UserMessage } from "@earendil-works/pi-ai";
 import type { AgentEvent, EntryRecord } from "@harness/protocol";
 
 /** A content block of the assistant message currently being streamed. */
@@ -126,13 +126,28 @@ export function userText(message: UserMessage): string {
 
 export function toolResultText(message: ToolResultMessage): string {
 	return message.content
-		.map((part) => (part.type === "text" ? part.text : part.type === "image" ? "[image]" : ""))
+		.map((part) => (part.type === "text" ? part.text : ""))
+		.filter((text) => text !== "")
 		.join("\n");
 }
+
+/** Images the tool returned, in order. */
+export function toolResultImages(message: ToolResultMessage): ToolResultImage[] {
+	return message.content
+		.filter((part): part is ImageContent => part.type === "image")
+		.map((part) => ({ data: part.data, mimeType: part.mimeType }));
+}
+
+/** An image a tool returned: base64 data and its MIME type. */
+export type ToolResultImage = {
+	data: string;
+	mimeType: string;
+};
 
 /** A tool result paired with the call it belongs to. */
 export type ToolResultView = {
 	text: string;
+	images: readonly ToolResultImage[];
 	isError: boolean;
 };
 

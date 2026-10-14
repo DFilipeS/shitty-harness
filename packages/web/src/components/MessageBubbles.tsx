@@ -5,6 +5,7 @@ import {
 	toolCallSummary,
 	type LiveBlock,
 	type LiveMessage,
+	type ToolResultImage,
 	type ToolResultView,
 } from "../lib/messages.ts";
 import {
@@ -143,14 +144,19 @@ function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultVi
 			</summary>
 			<div className="mt-1.5 flex flex-col gap-1.5">
 				<ToolArguments name={call.name} text={call.argumentsText} args={args} />
-				{result !== undefined && (
-					<pre
-						className={`max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${
-							failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
-						}`}
-					>
-						{result.text}
-					</pre>
+				{result !== undefined && (result.text !== "" || result.images.length > 0) && (
+					<div className="flex flex-col gap-1.5 border-t border-line pt-1.5">
+						<ToolResultImages images={result.images} />
+						{result.text !== "" && (
+							<pre
+								className={`max-h-80 overflow-auto whitespace-pre-wrap font-mono ${
+									failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
+								}`}
+							>
+								{result.text}
+							</pre>
+						)}
+					</div>
 				)}
 			</div>
 		</details>
@@ -249,7 +255,32 @@ function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: str
 	);
 }
 
-export function ToolResultBubble({ text, isError }: { text: string; isError: boolean }) {
+/** Images a tool returned, shown as thumbnails that open the full image in a new tab. */
+function ToolResultImages({ images }: { images: readonly ToolResultImage[] }) {
+	if (images.length === 0) return null;
+	return (
+		<div className="flex flex-wrap gap-1.5">
+			{images.map((image, index) => {
+				const src = `data:${image.mimeType};base64,${image.data}`;
+				return (
+					<a key={index} href={src} target="_blank" rel="noreferrer" className="w-fit">
+						<img src={src} alt="Tool result" className="max-h-80 max-w-full rounded border border-line" />
+					</a>
+				);
+			})}
+		</div>
+	);
+}
+
+export function ToolResultBubble({
+	text,
+	images,
+	isError,
+}: {
+	text: string;
+	images: readonly ToolResultImage[];
+	isError: boolean;
+}) {
 	return (
 		<details
 			className={`rounded-md border px-3 py-2 text-xs ${
@@ -259,7 +290,10 @@ export function ToolResultBubble({ text, isError }: { text: string; isError: boo
 			}`}
 		>
 			<summary className="cursor-pointer select-none">{isError ? "Tool error" : "Tool result"}</summary>
-			<pre className="mt-1.5 max-h-80 overflow-auto whitespace-pre-wrap font-mono">{text}</pre>
+			<div className="mt-1.5 flex flex-col gap-1.5">
+				<ToolResultImages images={images} />
+				{text !== "" && <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono">{text}</pre>}
+			</div>
 		</details>
 	);
 }
