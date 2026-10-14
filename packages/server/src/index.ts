@@ -9,7 +9,9 @@ const port = Number(process.env.PORT ?? 8787);
 const webRoot = process.env.NODE_ENV === "production" ? resolve(here, "../../web/dist") : undefined;
 
 const catalogBaseUrl = process.env.HARNESS_CATALOG_BASE_URL;
-const workspaceDir = process.env.HARNESS_WORKSPACE ?? process.cwd();
+// npm runs workspace scripts with the package as cwd; INIT_CWD is where npm was invoked, which is
+// the project the user is in (the repo root for `npm run dev` and `npm start`).
+const workspaceDir = process.env.HARNESS_WORKSPACE ?? process.env.INIT_CWD ?? process.cwd();
 const service = await openHarnessService({
 	dataDir,
 	workspaceDir,

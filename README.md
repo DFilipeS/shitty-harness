@@ -158,8 +158,9 @@ picker that have an image model of the same id are marked with a wand, and `gene
 defaults to that model.
 
 Tools touch files and processes only through an `ExecutionEnv`. Today the only implementation is
-the local machine (`NodeExecutionEnv`), which starts in the server's working directory. Set
-`HARNESS_WORKSPACE=/some/dir` to change it. **Commands run as the server user with no sandbox**, so
+the local machine (`NodeExecutionEnv`), which starts in the directory the server was started from
+(the repo root under `npm run dev` and `npm start`). Set `HARNESS_WORKSPACE=/some/dir` to change
+it. **Commands run as the server user with no sandbox**, so
 only point this at a machine where that is fine.
 
 The environment is the seam for remote execution: `openHarnessService` takes an `environment`
