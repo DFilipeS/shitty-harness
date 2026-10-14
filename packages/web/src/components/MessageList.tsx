@@ -9,7 +9,6 @@ import {
 	userText,
 } from "../lib/messages.ts";
 import { useHarness } from "../lib/store.tsx";
-import { AsciiLogo } from "./AsciiLogo.tsx";
 import { LiveMessage } from "./LiveMessage.tsx";
 import { AssistantBubble, Divider, ToolResultBubble, UserBubble } from "./MessageBubbles.tsx";
 
@@ -53,10 +52,7 @@ export function MessageList() {
 					<LiveMessage key={live.key} sessionId={activeSession.id} message={live} onReveal={handleReveal} />
 				)}
 				{entries.length === 0 && live === undefined && (
-					<div className="flex min-h-[50vh] flex-col items-center justify-center gap-8">
-						<AsciiLogo />
-						<p className="text-center text-sm text-fg-subtle">Send a message to start the conversation.</p>
-					</div>
+					<p className="py-10 text-center text-sm text-fg-subtle">Send a message to start the conversation.</p>
 				)}
 			</div>
 		</div>

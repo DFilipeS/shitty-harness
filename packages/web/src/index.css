@@ -2,26 +2,6 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Empty-state art: the π dots shimmer in a diagonal wave while the stars twinkle. */
-@keyframes dot-shimmer {
-	0%,
-	100% {
-		opacity: 0.55;
-	}
-	50% {
-		opacity: 1;
-	}
-}
-
-@keyframes star-twinkle {
-	0%,
-	100% {
-		opacity: 0.1;
-	}
-	50% {
-		opacity: 0.65;
-	}
-}
 
 /*
  * Semantic colors. Components only use these tokens, so light and dark are one set of classes.

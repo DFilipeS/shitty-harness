@@ -81,9 +81,6 @@ a call reuses a cached prefix, which needs a repeated prompt of roughly a thousa
 the tally for the input/output, context, and cache read/write breakdown. On a phone only the cost
 stays visible.
 
-An empty conversation shows a dot-matrix π (orange bar, blue and yellow legs) shimmering on a
-starfield; it disappears with the first message and respects `prefers-reduced-motion`.
-
 While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
 
 On a narrow screen the sidebar becomes a drawer behind the menu button in the header. On wider screens the same button (or `⌘B`) collapses the sidebar to give the conversation the full width; the desktop choice is remembered across reloads.
