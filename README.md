@@ -137,16 +137,33 @@ Provider credentials can also come from environment variables (for example `OPEN
 1. The client sends `sessions.prompt` over `/ws`.
 2. `core` durably admits the submission (`conversation.submit`) and returns its ID.
 3. The durable generation task calls the model, streams progress, and commits entries.
-4. The server forwards `watchEvents` batches as `session.event` messages.
-5. The client renders committed entries plus the in-flight assistant message.
+4. Tool calls run in the conversation's environment and their results are committed too.
+5. The server forwards `watchEvents` batches as `session.event` messages.
+6. The client renders committed entries plus the in-flight assistant message.
 
 Sessions are durable conversations. The sidebar order and titles come from a session-scoped `app.session-index` document, which is updated in the same commits that create conversations and place prompts.
 
+## Tools
+
+Agents get pi-durable's default coding tools: `read`, `write`, `edit`, and `bash`. They come from
+the `CodingTools` extension, which `packages/core/src/service.ts` installs in the registry; every
+conversation selects it by default.
+
+Tools touch files and processes only through an `ExecutionEnv`. Today the only implementation is
+the local machine (`NodeExecutionEnv`), which starts in the server's working directory. Set
+`HARNESS_WORKSPACE=/some/dir` to change it. **Commands run as the server user with no sandbox**, so
+only point this at a machine where that is fine.
+
+The environment is the seam for remote execution: `openHarnessService` takes an `environment`
+factory, and anything implementing pi-durable's `ExecutionEnv` works — for example a container per
+conversation, looked up by `conversationId`. Only the local implementation exists today.
+
 ## Current scope
 
-- Chat only: no tools are installed in the registry yet.
+- Local tools only: the coding tools run on the machine that runs the server; a remote sandbox
+  environment is not implemented yet.
 - API keys only: no OAuth login flows.
 - Built-in providers only: no custom OpenAI/Anthropic-compatible endpoints.
 - Single user, local-first: the server trusts every client on localhost.
 
-The `registry` in `packages/core/src/service.ts` is where tools and prompt sections will be installed. The protocol is versionless and experimental, like pi-durable itself.
+The protocol is versionless and experimental, like pi-durable itself.
