@@ -2,14 +2,24 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Brightness wave for the ASCII empty-state logo; each glyph is offset by its row and column. */
-@keyframes ascii-shimmer {
+/* Empty-state art: the π dots shimmer in a diagonal wave while the stars twinkle. */
+@keyframes dot-shimmer {
 	0%,
 	100% {
-		opacity: 0.25;
+		opacity: 0.55;
 	}
 	50% {
 		opacity: 1;
+	}
+}
+
+@keyframes star-twinkle {
+	0%,
+	100% {
+		opacity: 0.1;
+	}
+	50% {
+		opacity: 0.65;
 	}
 }
 

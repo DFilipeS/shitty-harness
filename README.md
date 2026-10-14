@@ -81,8 +81,8 @@ a call reuses a cached prefix, which needs a repeated prompt of roughly a thousa
 the tally for the input/output, context, and cache read/write breakdown. On a phone only the cost
 stays visible.
 
-An empty conversation shows a shimmering ASCII π, which disappears with the first message and
-respects `prefers-reduced-motion`.
+An empty conversation shows a dot-matrix π (orange bar, blue and yellow legs) shimmering on a
+starfield; it disappears with the first message and respects `prefers-reduced-motion`.
 
 While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
 
