@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatTokens } from "../lib/format.ts";
 import {
 	parseToolArguments,
@@ -121,45 +121,44 @@ function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultVi
 	const preview = toolCallSummary(args);
 	const failed = result?.isError === true;
 	return (
-		<details
-			data-tool-call={call.name}
-			data-tool-state={failed ? "failed" : result === undefined ? "running" : "done"}
-			open={open}
-			onToggle={(event) => {
-				const next = event.currentTarget.open;
-				toolOpenState.set(call.id, next);
-				setOpen(next);
-			}}
-			className={`group rounded-md border bg-panel/50 px-3 py-2 text-xs ${failed ? "border-red-500/30" : "border-line"}`}
-		>
-			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
-				<ToolIcon name={call.name} className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-red-500" : "text-fg-subtle"}`} />
-				<span className="shrink-0 font-mono text-fg">{call.name}</span>
-				{preview !== "" && <span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>}
-				{result === undefined && (
-					<span className="shrink-0 text-fg-faint motion-safe:animate-pulse">running…</span>
-				)}
-				{failed && <span className="shrink-0 text-red-500">failed</span>}
-				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
-			</summary>
-			<div className="mt-1.5 flex flex-col gap-1.5">
-				<ToolArguments name={call.name} text={call.argumentsText} args={args} />
-				{result !== undefined && (result.text !== "" || result.images.length > 0) && (
-					<div className="flex flex-col gap-1.5 border-t border-line pt-1.5">
-						<ToolResultImages images={result.images} />
-						{result.text !== "" && (
-							<pre
-								className={`max-h-80 overflow-auto whitespace-pre-wrap font-mono ${
-									failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
-								}`}
-							>
-								{result.text}
-							</pre>
-						)}
-					</div>
-				)}
-			</div>
-		</details>
+		<>
+			<details
+				data-tool-call={call.name}
+				data-tool-state={failed ? "failed" : result === undefined ? "running" : "done"}
+				open={open}
+				onToggle={(event) => {
+					const next = event.currentTarget.open;
+					toolOpenState.set(call.id, next);
+					setOpen(next);
+				}}
+				className={`group rounded-md border bg-panel/50 px-3 py-2 text-xs ${failed ? "border-red-500/30" : "border-line"}`}
+			>
+				<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
+					<ToolIcon name={call.name} className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-red-500" : "text-fg-subtle"}`} />
+					<span className="shrink-0 font-mono text-fg">{call.name}</span>
+					{preview !== "" && <span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>}
+					{result === undefined && (
+						<span className="shrink-0 text-fg-faint motion-safe:animate-pulse">running…</span>
+					)}
+					{failed && <span className="shrink-0 text-red-500">failed</span>}
+					<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
+				</summary>
+				<div className="mt-1.5 flex flex-col gap-1.5">
+					<ToolArguments name={call.name} text={call.argumentsText} args={args} />
+					{result !== undefined && result.text !== "" && (
+						<pre
+							className={`max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${
+								failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
+							}`}
+						>
+							{result.text}
+						</pre>
+					)}
+				</div>
+			</details>
+			{/* Images are the point of the call, so they stay visible below the collapsed row. */}
+			{result !== undefined && <ToolResultImages images={result.images} />}
+		</>
 	);
 }
 
@@ -255,20 +254,65 @@ function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: str
 	);
 }
 
-/** Images a tool returned, shown as thumbnails that open the full image in a new tab. */
+function imageDataUrl(image: ToolResultImage): string {
+	return `data:${image.mimeType};base64,${image.data}`;
+}
+
+/**
+ * Images a tool returned, shown inline. Clicking one opens it full size over the app: a data URL
+ * cannot be opened in a new tab (Chrome blocks top-level navigation to `data:`), and an in-app
+ * preview keeps the image viewable on a phone too.
+ */
 function ToolResultImages({ images }: { images: readonly ToolResultImage[] }) {
+	const [preview, setPreview] = useState<ToolResultImage | undefined>(undefined);
+
+	useEffect(() => {
+		if (preview === undefined) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setPreview(undefined);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [preview]);
+
 	if (images.length === 0) return null;
 	return (
-		<div className="flex flex-wrap gap-1.5">
-			{images.map((image, index) => {
-				const src = `data:${image.mimeType};base64,${image.data}`;
-				return (
-					<a key={index} href={src} target="_blank" rel="noreferrer" className="w-fit">
-						<img src={src} alt="Tool result" className="max-h-80 max-w-full rounded border border-line" />
-					</a>
-				);
-			})}
-		</div>
+		<>
+			<div className="flex flex-wrap gap-2">
+				{images.map((image, index) => (
+					<button
+						key={index}
+						type="button"
+						onClick={() => setPreview(image)}
+						aria-label="View image full size"
+						className="w-fit cursor-zoom-in"
+					>
+						<img
+							src={imageDataUrl(image)}
+							alt="Tool result"
+							className="max-h-[28rem] max-w-full rounded-lg border border-line"
+						/>
+					</button>
+				))}
+			</div>
+			{preview !== undefined && (
+				<div
+					data-image-preview
+					role="dialog"
+					aria-modal="true"
+					aria-label="Image preview"
+					onClick={() => setPreview(undefined)}
+					className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4"
+				>
+					<img
+						src={imageDataUrl(preview)}
+						alt="Tool result"
+						onClick={(event) => event.stopPropagation()}
+						className="max-h-full max-w-full rounded-lg"
+					/>
+				</div>
+			)}
+		</>
 	);
 }
 
@@ -282,19 +326,19 @@ export function ToolResultBubble({
 	isError: boolean;
 }) {
 	return (
-		<details
-			className={`rounded-md border px-3 py-2 text-xs ${
-				isError
-					? "border-red-500/30 bg-red-500/10 text-red-700 dark:bg-red-950/20 dark:text-red-300"
-					: "border-line bg-panel/50 text-fg-muted"
-			}`}
-		>
-			<summary className="cursor-pointer select-none">{isError ? "Tool error" : "Tool result"}</summary>
-			<div className="mt-1.5 flex flex-col gap-1.5">
-				<ToolResultImages images={images} />
-				{text !== "" && <pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono">{text}</pre>}
-			</div>
-		</details>
+		<>
+			<details
+				className={`rounded-md border px-3 py-2 text-xs ${
+					isError
+						? "border-red-500/30 bg-red-500/10 text-red-700 dark:bg-red-950/20 dark:text-red-300"
+						: "border-line bg-panel/50 text-fg-muted"
+				}`}
+			>
+				<summary className="cursor-pointer select-none">{isError ? "Tool error" : "Tool result"}</summary>
+				{text !== "" && <pre className="mt-1.5 max-h-80 overflow-auto whitespace-pre-wrap font-mono">{text}</pre>}
+			</details>
+			<ToolResultImages images={images} />
+		</>
 	);
 }
 
