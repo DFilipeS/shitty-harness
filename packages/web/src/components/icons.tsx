@@ -222,3 +222,13 @@ export function RefreshIcon({ className }: IconProps) {
 		</Svg>
 	);
 }
+
+export function SlidersIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<path d="M4 7h16M4 17h16" />
+			<circle cx="9" cy="7" r="2.5" />
+			<circle cx="15" cy="17" r="2.5" />
+		</Svg>
+	);
+}

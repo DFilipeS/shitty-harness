@@ -1,28 +1,33 @@
 import type { ModelInfo, ModelRef, ModelThinkingLevel } from "@harness/protocol";
 import { useCommandPalette, type CommandPage } from "./commands.tsx";
 import { useHarness } from "./store.tsx";
+import { BrainIcon, CpuIcon } from "../components/icons.tsx";
 
 type ConfigureModel = (model: ModelRef) => Promise<void>;
 type ConfigureThinkingLevel = (level: ModelThinkingLevel) => Promise<void>;
+
+/** The command-list page shape, so callers can add rows to a built page. */
+type CommandList = Extract<CommandPage, { kind: "commands" }>;
 
 /** One command per available model, grouped by provider, with the current one checked. */
 export function buildModelPage(
 	models: ModelInfo[],
 	current: ModelRef | undefined,
-	configureModel: ConfigureModel,
-): CommandPage {
+	select: ConfigureModel,
+	options: { title?: string; idPrefix?: string } = {},
+): CommandList {
 	return {
 		kind: "commands",
-		title: "Change model",
+		title: options.title ?? "Change model",
 		placeholder: "Search models…",
 		commands: models.map((model) => ({
-			id: `model.${model.provider}.${model.id}`,
+			id: `${options.idPrefix ?? "model."}${model.provider}.${model.id}`,
 			title: model.name,
 			group: model.providerName,
 			detail: `${Math.round(model.contextWindow / 1000)}k context`,
 			keywords: [model.provider, model.providerName, model.id, ...(model.reasoning ? ["reasoning"] : [])],
 			current: current?.provider === model.provider && current.modelId === model.id,
-			run: () => void configureModel({ provider: model.provider, modelId: model.id }),
+			run: () => void select({ provider: model.provider, modelId: model.id }),
 		})),
 	};
 }
@@ -31,19 +36,72 @@ export function buildModelPage(
 export function buildThinkingPage(
 	levels: readonly ModelThinkingLevel[],
 	current: ModelThinkingLevel | undefined,
-	configureThinkingLevel: ConfigureThinkingLevel,
-): CommandPage {
+	select: ConfigureThinkingLevel,
+	options: { title?: string; idPrefix?: string } = {},
+): CommandList {
 	return {
 		kind: "commands",
-		title: "Change thinking level",
+		title: options.title ?? "Change thinking level",
 		placeholder: "Search levels…",
 		commands: levels.map((level) => ({
-			id: `thinking.${level}`,
+			id: `${options.idPrefix ?? "thinking."}${level}`,
 			title: level,
 			group: "Thinking level",
 			current: level === current,
-			run: () => void configureThinkingLevel(level),
+			run: () => void select(level),
 		})),
+	};
+}
+
+/** The model page plus "First available", which clears the stored default. */
+export function buildDefaultModelPage(
+	models: ModelInfo[],
+	current: ModelRef | undefined,
+	setDefaultModel: (model: ModelRef | null) => Promise<void>,
+): CommandList {
+	const page = buildModelPage(models, current, setDefaultModel, {
+		title: "Default model",
+		idPrefix: "default.model.",
+	});
+	return {
+		...page,
+		commands: [
+			{
+				id: "default.model.first",
+				title: "First available",
+				group: "Defaults",
+				detail: "No default model",
+				current: current === undefined,
+				run: () => void setDefaultModel(null),
+			},
+			...page.commands,
+		],
+	};
+}
+
+/** The thinking page plus "Model default", which clears the stored level. */
+export function buildDefaultThinkingPage(
+	levels: readonly ModelThinkingLevel[],
+	current: ModelThinkingLevel | undefined,
+	setDefaultLevel: (level: ModelThinkingLevel | null) => Promise<void>,
+): CommandList {
+	const page = buildThinkingPage(levels, current, setDefaultLevel, {
+		title: "Default thinking level",
+		idPrefix: "default.thinking.",
+	});
+	return {
+		...page,
+		commands: [
+			{
+				id: "default.thinking.model",
+				title: "Model default",
+				group: "Defaults",
+				detail: "Let the model decide",
+				current: current === undefined,
+				run: () => void setDefaultLevel(null),
+			},
+			...page.commands,
+		],
 	};
 }
 
@@ -75,4 +133,51 @@ export function useThinkingPalette(): {
 		page: () => buildThinkingPage(levels, level, configureThinkingLevel),
 		open: () => openPage(buildThinkingPage(levels, level, configureThinkingLevel)),
 	};
+}
+
+/**
+ * The defaults page: the model and thinking level new sessions start with. The thinking levels
+ * come from the model a new session will actually use, so the list matches what gets applied.
+ */
+export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
+	const { models, defaults, setDefaults } = useHarness();
+	const { openPage } = useCommandPalette();
+	const defaultModel = defaults.model;
+	const defaultInfo = models.find(
+		(model) => model.provider === defaultModel?.provider && model.id === defaultModel.modelId,
+	);
+	const resolved = defaultInfo ?? models[0];
+	const levels = resolved?.thinkingLevels ?? [];
+
+	const page = (): CommandPage => ({
+		kind: "commands",
+		title: "Model defaults",
+		placeholder: "Search settings…",
+		commands: [
+			{
+				id: "defaults.model",
+				title: "Default model",
+				group: "Defaults",
+				detail: defaultInfo?.name ?? "First available",
+				icon: <CpuIcon />,
+				run: ({ pushPage }) =>
+					pushPage(buildDefaultModelPage(models, defaultModel, (model) => setDefaults({ model }))),
+			},
+			{
+				id: "defaults.thinking",
+				title: "Default thinking level",
+				group: "Defaults",
+				detail: defaults.thinkingLevel ?? "Model default",
+				icon: <BrainIcon />,
+				run: ({ pushPage }) =>
+					pushPage(
+						buildDefaultThinkingPage(levels, defaults.thinkingLevel, (level) =>
+							setDefaults({ thinkingLevel: level }),
+						),
+					),
+			},
+		],
+	});
+
+	return { page, open: () => openPage(page()) };
 }

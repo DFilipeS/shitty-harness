@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import type {
 	AgentEvent,
 	AgentState,
+	DefaultsState,
 	EntryRecord,
 	ModelInfo,
 	ModelRef,
@@ -44,6 +45,7 @@ type State = {
 	sessionsLoaded: boolean;
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	defaults: DefaultsState;
 	activeSessionId?: string;
 	sessionsById: Record<string, SessionState>;
 	error?: string;
@@ -60,7 +62,8 @@ type Action =
 	| { type: "status"; status: ConnectionStatus }
 	| { type: "sessions/set"; sessions: SessionSummary[] }
 	| { type: "sessions/upsert"; session: SessionSummary }
-	| { type: "providers/set"; providers: ProviderInfo[]; models: ModelInfo[] }
+	| { type: "providers/set"; providers: ProviderInfo[]; models: ModelInfo[]; defaults: DefaultsState }
+	| { type: "defaults/set"; defaults: DefaultsState }
 	| { type: "session/activate"; id: string }
 	| { type: "session/attached"; id: string; snapshot: SnapshotEvent }
 	| { type: "session/event"; id: string; event: AgentEvent }
@@ -77,6 +80,7 @@ const initialState: State = {
 	sessionsLoaded: false,
 	providers: [],
 	models: [],
+	defaults: {},
 	sessionsById: {},
 };
 
@@ -173,7 +177,9 @@ function reducer(state: State, action: Action): State {
 			return { ...state, sessions: [action.session, ...without], sessionsLoaded: true };
 		}
 		case "providers/set":
-			return { ...state, providers: action.providers, models: action.models };
+			return { ...state, providers: action.providers, models: action.models, defaults: action.defaults };
+		case "defaults/set":
+			return { ...state, defaults: action.defaults };
 		case "session/activate":
 			return {
 				...state,
@@ -219,6 +225,7 @@ type HarnessContextValue = {
 	sessionsLoaded: boolean;
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	defaults: DefaultsState;
 	activeSessionId?: string;
 	activeSession?: SessionState;
 	error?: string;
@@ -233,6 +240,7 @@ type HarnessContextValue = {
 	configureModel(model: ModelRef): Promise<void>;
 	configureThinkingLevel(level: ModelThinkingLevel): Promise<void>;
 	configureProvider(providerId: string, apiKey: string | null): Promise<void>;
+	setDefaults(change: { model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }): Promise<void>;
 	refreshProviders(): Promise<void>;
 	clearError(): void;
 	clearNotice(): void;
@@ -258,6 +266,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					type: "providers/set",
 					providers: event.providers,
 					models: event.models,
+					defaults: event.defaults,
 				});
 			}
 		});
@@ -283,6 +292,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					type: "providers/set",
 					providers: providers.providers,
 					models: providers.models,
+					defaults: providers.defaults,
 				});
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
@@ -409,7 +419,20 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					type: "providers/set",
 					providers: providers.providers,
 					models: providers.models,
+					defaults: providers.defaults,
 				});
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client],
+	);
+
+	const setDefaults = useCallback(
+		async (change: { model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }) => {
+			try {
+				const result = await client.send({ type: "defaults.set", ...change });
+				dispatch({ type: "defaults/set", defaults: result.defaults });
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
 			}
@@ -424,6 +447,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				type: "providers/set",
 				providers: result.providers,
 				models: result.models,
+				defaults: result.defaults,
 			});
 			const notice = formatRefreshNotice(result.refresh);
 			if (notice !== undefined) dispatch({ type: "notice/set", notice });
@@ -441,6 +465,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			sessionsLoaded: state.sessionsLoaded,
 			providers: state.providers,
 			models: state.models,
+			defaults: state.defaults,
 			...(state.activeSessionId === undefined ? {} : { activeSessionId: state.activeSessionId }),
 			...(state.activeSessionId === undefined || state.sessionsById[state.activeSessionId] === undefined
 				? {}
@@ -457,6 +482,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureModel,
 			configureThinkingLevel,
 			configureProvider,
+			setDefaults,
 			refreshProviders,
 			clearError: () => dispatch({ type: "error/clear" }),
 			clearNotice,
@@ -473,6 +499,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureModel,
 			configureThinkingLevel,
 			configureProvider,
+			setDefaults,
 			refreshProviders,
 			clearNotice,
 		],

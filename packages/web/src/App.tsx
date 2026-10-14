@@ -10,11 +10,13 @@ import {
 	PlusIcon,
 	RefreshIcon,
 	SettingsIcon,
+	SlidersIcon,
 	SunIcon,
 } from "./components/icons.tsx";
 import { CommandPaletteProvider, useRegisterCommands, type Command } from "./lib/commands.tsx";
 import { relativeTime } from "./lib/format.ts";
 import { useProviderPalette } from "./lib/provider-commands.tsx";
+import { useDefaultsPalette } from "./lib/session-commands.tsx";
 import { SHORTCUTS } from "./lib/shortcuts.ts";
 import { HarnessProvider, useHarness } from "./lib/store.tsx";
 import { ThemeProvider, useTheme } from "./lib/theme.tsx";
@@ -104,6 +106,7 @@ function useGlobalCommands(toggleSidebar: () => void) {
 	const { sessions, activeSessionId, createSession, selectSession, refreshProviders } = useHarness();
 	const { theme, toggleTheme } = useTheme();
 	const providersPalette = useProviderPalette();
+	const defaultsPalette = useDefaultsPalette();
 
 	const commands: Command[] = [
 		{
@@ -143,6 +146,14 @@ function useGlobalCommands(toggleSidebar: () => void) {
 			keywords: ["api key", "credentials", "settings", "models", "connect"],
 			icon: <SettingsIcon />,
 			run: ({ pushPage }) => pushPage(providersPalette.page()),
+		},
+		{
+			id: "defaults.open",
+			title: "Model defaults…",
+			group: "App",
+			keywords: ["default", "model", "thinking", "reasoning", "new session"],
+			icon: <SlidersIcon />,
+			run: ({ pushPage }) => pushPage(defaultsPalette.page()),
 		},
 		{
 			id: "providers.refresh",
