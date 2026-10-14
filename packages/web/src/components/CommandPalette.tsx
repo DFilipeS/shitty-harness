@@ -63,15 +63,29 @@ function filter(commands: Command[], query: string): Command[] {
 
 type Group = { name: string; items: { command: Command; index: number }[] };
 
-/** Groups rows under their heading while keeping the flat index for keyboard selection. */
-function groupCommands(commands: Command[]): Group[] {
+/**
+ * Groups rows under their heading. The filter ranks rows by match score, which can scatter a
+ * group's rows through the list, so the flat index is assigned in rendered order (group by group)
+ * rather than ranked order. Arrowing then moves down the list the user sees.
+ */
+function groupCommands(commands: Command[]): { groups: Group[]; rows: Command[] } {
+	const byGroup = new Map<string, Command[]>();
+	for (const command of commands) {
+		const existing = byGroup.get(command.group);
+		if (existing === undefined) byGroup.set(command.group, [command]);
+		else existing.push(command);
+	}
 	const groups: Group[] = [];
-	commands.forEach((command, index) => {
-		const group = groups.find((candidate) => candidate.name === command.group);
-		if (group === undefined) groups.push({ name: command.group, items: [{ command, index }] });
-		else group.items.push({ command, index });
-	});
-	return groups;
+	const rows: Command[] = [];
+	for (const [name, commandsInGroup] of byGroup) {
+		const items: { command: Command; index: number }[] = [];
+		for (const command of commandsInGroup) {
+			items.push({ command, index: rows.length });
+			rows.push(command);
+		}
+		groups.push({ name, items });
+	}
+	return { groups, rows };
 }
 
 export function CommandPalette({
@@ -117,13 +131,13 @@ export function CommandPalette({
 	}, [open, state.prompt]);
 
 	const page = state.pages[state.pages.length - 1];
-	const items = state.prompt === undefined && page?.kind === "commands" ? filter(page.commands, state.query) : [];
-	const groups = groupCommands(items);
+	const matches = state.prompt === undefined && page?.kind === "commands" ? filter(page.commands, state.query) : [];
+	const { groups, rows } = groupCommands(matches);
 	const shortcuts =
 		state.prompt === undefined && page?.kind === "shortcuts"
 			? HELP.filter((shortcut) => shortcut.label.toLowerCase().includes(state.query.trim().toLowerCase()))
 			: [];
-	const selected = items.length === 0 ? -1 : Math.min(state.selected, items.length - 1);
+	const selected = rows.length === 0 ? -1 : Math.min(state.selected, rows.length - 1);
 	// Only the plain command list shows a count; a page opened directly shows its own title.
 	const rootCommands = state.pages.length === 1 && initial.kind === "commands";
 
@@ -131,13 +145,13 @@ export function CommandPalette({
 	useLayoutEffect(() => {
 		if (selected < 0) return;
 		listRef.current?.querySelector(`[data-index="${selected}"]`)?.scrollIntoView({ block: "nearest" });
-	}, [selected, items.length]);
+	}, [selected, rows.length]);
 
 	const move = (delta: number) => {
-		if (items.length === 0) return;
+		if (rows.length === 0) return;
 		setState((current) => ({
 			...current,
-			selected: (Math.min(current.selected, items.length - 1) + delta + items.length) % items.length,
+			selected: (Math.min(current.selected, rows.length - 1) + delta + rows.length) % rows.length,
 		}));
 	};
 
@@ -200,7 +214,7 @@ export function CommandPalette({
 		} else if (event.key === "Enter") {
 			event.preventDefault();
 			if (state.prompt !== undefined) submitPrompt();
-			else if (selected >= 0 && items[selected] !== undefined) runCommand(items[selected]);
+			else if (selected >= 0 && rows[selected] !== undefined) runCommand(rows[selected]);
 		} else if (event.key === "Escape") {
 			event.preventDefault();
 			goBack();
@@ -258,7 +272,7 @@ export function CommandPalette({
 						role="combobox"
 						aria-expanded="true"
 						aria-controls="command-palette-list"
-						aria-activedescendant={selected >= 0 ? `command-${items[selected]?.id ?? ""}` : undefined}
+						aria-activedescendant={selected >= 0 ? `command-${rows[selected]?.id ?? ""}` : undefined}
 						className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-fg-faint sm:text-sm"
 					/>
 				</div>
@@ -332,7 +346,7 @@ export function CommandPalette({
 							</div>
 						))}
 
-						{page?.kind === "commands" && items.length === 0 && (
+						{page?.kind === "commands" && rows.length === 0 && (
 							<p className="px-3 py-8 text-center text-xs text-fg-subtle">No commands match “{state.query}”.</p>
 						)}
 					</div>
@@ -343,7 +357,7 @@ export function CommandPalette({
 						{state.prompt !== undefined
 							? state.prompt.title
 							: rootCommands
-								? `${items.length} command${items.length === 1 ? "" : "s"}`
+								? `${rows.length} command${rows.length === 1 ? "" : "s"}`
 								: page?.title}
 					</span>
 					<span className="hidden shrink-0 sm:inline">
