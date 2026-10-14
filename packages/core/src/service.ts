@@ -15,7 +15,15 @@ import {
 	type TaskGraph,
 	type TaskGraphWatch,
 } from "@earendil-works/pi-durable";
-import type { ModelInfo, ModelRef, ProviderInfo, ProviderRefreshReport, SessionSummary } from "@harness/protocol";
+import type {
+	DefaultsState,
+	ModelInfo,
+	ModelRef,
+	ModelThinkingLevel,
+	ProviderInfo,
+	ProviderRefreshReport,
+	SessionSummary,
+} from "@harness/protocol";
 import type { Providers } from "./providers.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 
@@ -63,15 +71,12 @@ export class ServiceError extends Error {
 /** Provider and session-list changes the server forwards to every connected client. */
 export type ServiceEvent =
 	| { type: "sessions"; sessions: SessionSummary[] }
-	| {
-			type: "providers";
-			providers: ProviderInfo[];
-			models: ModelInfo[];
-	  };
+	| ({ type: "providers" } & ProvidersState);
 
 export type ProvidersState = {
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	defaults: DefaultsState;
 };
 
 type SessionSubscription = {
@@ -200,8 +205,8 @@ export class HarnessService {
 			{ ownership: { kind: "ownerless" } },
 			BACKGROUND_CONTEXT,
 		);
-		const model = await this.#pickInitialModel();
-		if (model !== undefined) await conversation.configure({ model }, BACKGROUND_CONTEXT);
+		const change = await this.#initialAgentChange();
+		if (Object.keys(change).length > 0) await conversation.configure(change, BACKGROUND_CONTEXT);
 		return this.#requireSession(String(conversation.id));
 	}
 
@@ -328,7 +333,23 @@ export class HarnessService {
 			this.#providers.listProviders(),
 			this.#providers.listModels(),
 		]);
-		return { providers, models };
+		return { providers, models, defaults: this.#providers.getDefaults() };
+	}
+
+	/** Store the model and thinking level new sessions start with. */
+	async setDefaults(change: {
+		model?: ModelRef | null;
+		thinkingLevel?: ModelThinkingLevel | null;
+	}): Promise<DefaultsState> {
+		if (change.model !== undefined && change.model !== null) {
+			const resolved = this.#providers.models.getModel(change.model.provider, change.model.modelId);
+			if (resolved === undefined) {
+				throw new ServiceError("unknown_model", `Unknown model: ${change.model.provider}/${change.model.modelId}`);
+			}
+		}
+		const defaults = await this.#providers.setDefaults(change);
+		await this.#emitProviders();
+		return defaults;
 	}
 
 	async configureProvider(providerId: string, apiKey: string | null): Promise<void> {
@@ -398,10 +419,24 @@ export class HarnessService {
 		this.#emit({ type: "providers", ...(await this.listProviders()) });
 	}
 
-	async #pickInitialModel(): Promise<ModelRef | undefined> {
+	/** The model and thinking level a new session starts with, honouring the stored defaults. */
+	async #initialAgentChange(): Promise<SessionAgentChange> {
 		const available = await this.#providers.models.getAvailable();
-		const first = available[0];
-		return first === undefined ? undefined : { provider: first.provider, modelId: first.id };
+		const preferred = this.#providers.getDefaults().model;
+		const chosen =
+			(preferred === undefined
+				? undefined
+				: available.find(
+						(model) => model.provider === preferred.provider && model.id === preferred.modelId,
+					)) ?? available[0];
+		const change: SessionAgentChange = {};
+		if (chosen !== undefined) change.model = { provider: chosen.provider, modelId: chosen.id };
+
+		const level = this.#providers.getDefaults().thinkingLevel;
+		if (level !== undefined && chosen !== undefined) {
+			change.thinkingLevel = clampThinkingLevel(chosen, level);
+		}
+		return change;
 	}
 
 	async #requireSession(id: string): Promise<SessionSummary> {

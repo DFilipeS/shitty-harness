@@ -42,6 +42,7 @@ const COMMAND_TYPES = new Set<string>([
 	"providers.list",
 	"providers.configure",
 	"providers.refresh",
+	"defaults.set",
 ]);
 
 const THINKING_LEVELS = new Set<string>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -260,6 +261,13 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				const refresh = await service.refreshProviders();
 				return { data: { ...(await service.listProviders()), refresh } };
 			}
+			case "defaults.set": {
+				const defaults = await service.setDefaults({
+					model: optionalModelRef(command.model),
+					thinkingLevel: optionalThinkingLevel(command.thinkingLevel),
+				});
+				return { data: { defaults } };
+			}
 		}
 	}
 
@@ -325,6 +333,7 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 						type: "providers.changed",
 						providers: event.providers,
 						models: event.models,
+						defaults: event.defaults,
 					};
 		for (const connection of connections) send(connection, message);
 	});

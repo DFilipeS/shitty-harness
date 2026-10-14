@@ -1,7 +1,14 @@
 import { getSupportedThinkingLevels, type Models, type MutableModels } from "@earendil-works/pi-ai";
 import { builtinModels, getBuiltinModelDataGeneratedAt } from "@earendil-works/pi-ai/providers/all";
-import type { ModelInfo, ProviderInfo, ProviderRefreshReport } from "@harness/protocol";
-import { saveConfig, type AppConfig } from "./config.ts";
+import type {
+	DefaultsState,
+	ModelInfo,
+	ModelRef,
+	ModelThinkingLevel,
+	ProviderInfo,
+	ProviderRefreshReport,
+} from "@harness/protocol";
+import { saveConfig, type AppConfig, type DefaultsConfig } from "./config.ts";
 import { ConfigCredentialStore } from "./credentials.ts";
 import { FileModelsStore } from "./models-store.ts";
 import { withRemoteCatalog, type CatalogRefreshStatus } from "./remote-catalog.ts";
@@ -15,6 +22,9 @@ export interface Providers {
 	listProviders(): Promise<ProviderInfo[]>;
 	listModels(): Promise<ModelInfo[]>;
 	setApiKey(providerId: string, apiKey: string | null): Promise<void>;
+	/** Defaults for new sessions; empty means the harness picks. */
+	getDefaults(): DefaultsState;
+	setDefaults(change: { model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }): Promise<DefaultsState>;
 	/** Refresh remote model catalogs; `force` bypasses the freshness throttle. */
 	refresh(options?: { providerId?: string; force?: boolean }): Promise<ProviderRefreshReport[]>;
 }
@@ -88,6 +98,35 @@ export class ProviderManager implements Providers {
 			}
 			config.providers[providerId] = { apiKey: apiKey.trim() };
 		});
+	}
+
+	getDefaults(): DefaultsState {
+		const defaults = this.#config.defaults;
+		if (defaults === undefined) return {};
+		return {
+			...(defaults.model === undefined ? {} : { model: { ...defaults.model } }),
+			...(defaults.thinkingLevel === undefined ? {} : { thinkingLevel: defaults.thinkingLevel }),
+		};
+	}
+
+	async setDefaults(change: {
+		model?: ModelRef | null;
+		thinkingLevel?: ModelThinkingLevel | null;
+	}): Promise<DefaultsState> {
+		await this.#mutate((config) => {
+			const defaults: DefaultsConfig = config.defaults ?? {};
+			if (change.model !== undefined) {
+				if (change.model === null) delete defaults.model;
+				else defaults.model = { provider: change.model.provider, modelId: change.model.modelId };
+			}
+			if (change.thinkingLevel !== undefined) {
+				if (change.thinkingLevel === null) delete defaults.thinkingLevel;
+				else defaults.thinkingLevel = change.thinkingLevel;
+			}
+			if (defaults.model === undefined && defaults.thinkingLevel === undefined) delete config.defaults;
+			else config.defaults = defaults;
+		});
+		return this.getDefaults();
 	}
 
 	async listProviders(): Promise<ProviderInfo[]> {

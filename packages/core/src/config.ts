@@ -1,18 +1,42 @@
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 
 /** Per-provider credentials. Only API keys for now. */
 export type ProviderConfig = {
 	apiKey?: string;
 };
 
+/** Model and thinking level applied to new sessions. */
+export type DefaultsConfig = {
+	model?: { provider: string; modelId: string };
+	thinkingLevel?: ModelThinkingLevel;
+};
+
 /** Everything stored in `data/config.json`. */
 export type AppConfig = {
 	providers: Record<string, ProviderConfig>;
+	defaults?: DefaultsConfig;
 };
 
 export function emptyConfig(): AppConfig {
 	return { providers: {} };
+}
+
+const THINKING_LEVELS: readonly ModelThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+function parseDefaults(value: unknown): DefaultsConfig | undefined {
+	if (!isRecord(value)) return undefined;
+	const defaults: DefaultsConfig = {};
+	const model = value.model;
+	if (isRecord(model) && typeof model.provider === "string" && typeof model.modelId === "string") {
+		defaults.model = { provider: model.provider, modelId: model.modelId };
+	}
+	const level = value.thinkingLevel;
+	if (typeof level === "string" && (THINKING_LEVELS as readonly string[]).includes(level)) {
+		defaults.thinkingLevel = level as ModelThinkingLevel;
+	}
+	return Object.keys(defaults).length === 0 ? undefined : defaults;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -44,7 +68,8 @@ export async function loadConfig(path: string): Promise<AppConfig> {
 		}
 	}
 
-	return { providers };
+	const defaults = parseDefaults(parsed.defaults);
+	return { providers, ...(defaults === undefined ? {} : { defaults }) };
 }
 
 export async function saveConfig(path: string, config: AppConfig): Promise<void> {

@@ -45,9 +45,20 @@ export type SessionsListResult = {
 	sessions: SessionSummary[];
 };
 
+/** Model and thinking level applied to new sessions; unset means the harness picks. */
+export type DefaultsState = {
+	model?: ModelRef;
+	thinkingLevel?: ModelThinkingLevel;
+};
+
 export type ProvidersListResult = {
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	defaults: DefaultsState;
+};
+
+export type DefaultsSetResult = {
+	defaults: DefaultsState;
 };
 
 /** How a provider's model catalog refresh ended. */
@@ -96,7 +107,8 @@ export type ClientCommand =
 	  }
 	| { id: string; type: "providers.list" }
 	| { id: string; type: "providers.configure"; providerId: string; apiKey: string | null }
-	| { id: string; type: "providers.refresh" };
+	| { id: string; type: "providers.refresh" }
+	| { id: string; type: "defaults.set"; model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }; 
 
 export type CommandType = ClientCommand["type"];
 
@@ -114,6 +126,7 @@ export type CommandResult = {
 	"providers.list": ProvidersListResult;
 	"providers.configure": ProvidersListResult;
 	"providers.refresh": ProvidersRefreshResult;
+	"defaults.set": DefaultsSetResult;
 };
 
 export type ServerError = {
@@ -133,6 +146,7 @@ export type ServerEvent =
 			type: "providers.changed";
 			providers: ProviderInfo[];
 			models: ModelInfo[];
+			defaults: DefaultsState;
 	  };
 
 export type ServerMessage = ServerResponse | ServerEvent;

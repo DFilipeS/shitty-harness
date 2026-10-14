@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AnyModel } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
-import { emptyConfig, type AppConfig } from "../src/config.ts";
+import { emptyConfig, loadConfig, type AppConfig } from "../src/config.ts";
 import { ProviderManager } from "../src/providers.ts";
 
 const LAST_MODIFIED = "Wed, 14 Oct 2026 09:03:09 GMT";
@@ -74,6 +74,54 @@ describe("ProviderManager", () => {
 			expect(secondReports.find((report) => report.providerId === "openrouter")?.outcome).toBe("throttled");
 			expect(offlineCalls.filter((url) => url.includes("openrouter"))).toHaveLength(0);
 			expect((await second.listModels()).some((model) => model.id === ARGON_ID)).toBe(true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("persists model defaults in config.json and clears them", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-defaults-"));
+		const configPath = join(dir, "config.json");
+		const modelsPath = join(dir, "models.json");
+		const expected = { model: { provider: "openrouter", modelId: ARGON_ID }, thinkingLevel: "high" } as const;
+		try {
+			const manager = new ProviderManager(configPath, modelsPath, emptyConfig(), { localGeneratedAt: 0 });
+			await manager.setDefaults(expected);
+			expect(manager.getDefaults()).toEqual(expected);
+			expect(JSON.parse(await readFile(configPath, "utf8")).defaults).toEqual(expected);
+
+			// A new manager reads them back from disk.
+			const second = new ProviderManager(configPath, modelsPath, await loadConfig(configPath), { localGeneratedAt: 0 });
+			expect(second.getDefaults()).toEqual(expected);
+
+			await second.setDefaults({ model: null, thinkingLevel: null });
+			expect(second.getDefaults()).toEqual({});
+			expect(JSON.parse(await readFile(configPath, "utf8")).defaults).toBeUndefined();
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("ignores invalid defaults when loading config.json", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-defaults-"));
+		const configPath = join(dir, "config.json");
+		try {
+			await writeFile(
+				configPath,
+				JSON.stringify({ providers: {}, defaults: { model: { provider: 7 }, thinkingLevel: "turbo" } }),
+			);
+			expect((await loadConfig(configPath)).defaults).toBeUndefined();
+
+			await writeFile(
+				configPath,
+				JSON.stringify({
+					providers: {},
+					defaults: { model: { provider: "openrouter", modelId: "google/gemini-4-argon" }, thinkingLevel: "turbo" },
+				}),
+			);
+			expect((await loadConfig(configPath)).defaults).toEqual({
+				model: { provider: "openrouter", modelId: "google/gemini-4-argon" },
+			});
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}

@@ -7,11 +7,12 @@ import {
 	type FauxProviderHandle,
 	type Model,
 } from "@earendil-works/pi-ai";
-import type { ModelInfo, ProviderInfo, ProviderRefreshReport } from "@harness/protocol";
+import type { DefaultsState, ModelInfo, ProviderInfo, ProviderRefreshReport } from "@harness/protocol";
 import type { Providers } from "../../src/providers.ts";
 
 export const FAKE_PROVIDER_ID = "fake";
 export const FAKE_MODEL_ID = "fake-model";
+export const FAKE_REASONING_MODEL_ID = "fake-reasoning-model";
 
 const FAKE_MODEL = {
 	id: FAKE_MODEL_ID,
@@ -26,14 +27,25 @@ const FAKE_MODEL = {
 	maxTokens: 1_000,
 } satisfies Model<string>;
 
+/** A second model that reasons, so tests can tell the default model and thinking level apart. */
+export const FAKE_REASONING_MODEL = {
+	...FAKE_MODEL,
+	id: FAKE_REASONING_MODEL_ID,
+	name: "Fake Reasoning Model",
+	reasoning: true,
+} satisfies Model<string>;
+
 type Models = ReturnType<typeof createModels>;
 
 export type FakeProvidersOptions = {
 	apiKey?: string;
+	/** Extra models beyond the default one; the first model is what the harness falls back to. */
+	models?: readonly Model<string>[];
 };
 
 /** Catalog reads shared by the in-memory adapters below. */
 function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Providers {
+	let defaults: DefaultsState = {};
 	return {
 		models,
 		async listProviders(): Promise<ProviderInfo[]> {
@@ -65,6 +77,20 @@ function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Provid
 			}));
 		},
 		setApiKey,
+		getDefaults: () => ({ ...defaults }),
+		async setDefaults(change): Promise<DefaultsState> {
+			const next: DefaultsState = { ...defaults };
+			if (change.model !== undefined) {
+				if (change.model === null) delete next.model;
+				else next.model = { ...change.model };
+			}
+			if (change.thinkingLevel !== undefined) {
+				if (change.thinkingLevel === null) delete next.thinkingLevel;
+				else next.thinkingLevel = change.thinkingLevel;
+			}
+			defaults = next;
+			return { ...defaults };
+		},
 		async refresh(): Promise<ProviderRefreshReport[]> {
 			return [];
 		},
@@ -88,7 +114,7 @@ export function createFakeProviders(options: FakeProvidersOptions = {}): Provide
 					resolve: async () => (apiKey === undefined ? undefined : { auth: { apiKey } }),
 				},
 			},
-			models: [FAKE_MODEL],
+			models: [FAKE_MODEL, ...(options.models ?? [])],
 			api: {
 				stream: () => {
 					throw new Error("Fake provider streaming is not implemented");

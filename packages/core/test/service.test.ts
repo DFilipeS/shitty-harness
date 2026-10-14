@@ -1,10 +1,19 @@
 import { MemoryStorage } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vitest";
 import { HarnessService, type HarnessServiceDependencies } from "../src/index.ts";
-import { createFakeProviders, createFauxProviders, FAKE_MODEL_ID, FAKE_PROVIDER_ID } from "./helpers/fake-providers.ts";
+import {
+	createFakeProviders,
+	createFauxProviders,
+	FAKE_MODEL_ID,
+	FAKE_PROVIDER_ID,
+	FAKE_REASONING_MODEL,
+	FAKE_REASONING_MODEL_ID,
+	type FakeProvidersOptions,
+} from "./helpers/fake-providers.ts";
 
 type OpenOptions = {
 	apiKey?: string;
+	models?: FakeProvidersOptions["models"];
 };
 
 async function openService(options: OpenOptions = {}): Promise<HarnessService> {
@@ -53,6 +62,61 @@ describe("HarnessService", () => {
 			},
 			{ apiKey: "test-key" },
 		);
+	});
+
+	it("uses the default model and thinking level for new sessions", async () => {
+		await withService(
+			async (service) => {
+				const defaults = await service.setDefaults({
+					model: { provider: FAKE_PROVIDER_ID, modelId: FAKE_REASONING_MODEL_ID },
+					thinkingLevel: "high",
+				});
+				expect(defaults).toEqual({
+					model: { provider: FAKE_PROVIDER_ID, modelId: FAKE_REASONING_MODEL_ID },
+					thinkingLevel: "high",
+				});
+
+				const session = await service.createSession();
+				const agent = await service.configureSession(session.id, {});
+				expect(agent.model).toEqual({ provider: FAKE_PROVIDER_ID, modelId: FAKE_REASONING_MODEL_ID });
+				expect(agent.thinkingLevel).toBe("high");
+			},
+			{ apiKey: "test-key", models: [FAKE_REASONING_MODEL] },
+		);
+	});
+
+	it("clamps the default thinking level to the model that gets it", async () => {
+		await withService(
+			async (service) => {
+				await service.setDefaults({ thinkingLevel: "high" });
+				const session = await service.createSession();
+				const agent = await service.configureSession(session.id, {});
+				expect(agent.model).toEqual({ provider: FAKE_PROVIDER_ID, modelId: FAKE_MODEL_ID });
+				expect(agent.thinkingLevel).toBe("off");
+			},
+			{ apiKey: "test-key" },
+		);
+	});
+
+	it("falls back to the first model when the default is cleared", async () => {
+		await withService(
+			async (service) => {
+				await service.setDefaults({ model: { provider: FAKE_PROVIDER_ID, modelId: FAKE_REASONING_MODEL_ID } });
+				await service.setDefaults({ model: null });
+				const session = await service.createSession();
+				const agent = await service.configureSession(session.id, {});
+				expect(agent.model).toEqual({ provider: FAKE_PROVIDER_ID, modelId: FAKE_MODEL_ID });
+			},
+			{ apiKey: "test-key", models: [FAKE_REASONING_MODEL] },
+		);
+	});
+
+	it("rejects a default model that does not exist", async () => {
+		await withService(async (service) => {
+			await expect(
+				service.setDefaults({ model: { provider: "nope", modelId: "nope" } }),
+			).rejects.toMatchObject({ code: "unknown_model" });
+		});
 	});
 
 	it("renames a session and rejects an empty title", async () => {
