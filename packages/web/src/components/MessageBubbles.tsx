@@ -1,7 +1,21 @@
 import { useState } from "react";
 import { formatTokens } from "../lib/format.ts";
-import type { LiveBlock, LiveMessage } from "../lib/messages.ts";
-import { BrainIcon, ChevronDownIcon } from "./icons.tsx";
+import {
+	parseToolArguments,
+	toolCallSummary,
+	type LiveBlock,
+	type LiveMessage,
+	type ToolResultView,
+} from "../lib/messages.ts";
+import {
+	BrainIcon,
+	ChevronDownIcon,
+	FileIcon,
+	FilePlusIcon,
+	PencilIcon,
+	TerminalIcon,
+	WrenchIcon,
+} from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 
 /**
@@ -10,6 +24,12 @@ import { Markdown } from "./Markdown.tsx";
  * block expanded while the answer streamed stays open when the live bubble is replaced.
  */
 const thinkingOpenState = new Map<string, boolean>();
+
+/**
+ * Open state of tool blocks, keyed by tool call id. The id is stable from the live partial to the
+ * committed entry, so a block expanded while the call ran stays open afterwards.
+ */
+const toolOpenState = new Map<string, boolean>();
 
 export function UserBubble({ text }: { text: string }) {
 	return (
@@ -25,11 +45,14 @@ export function AssistantBubble({
 	messageKey,
 	blocks,
 	usage,
+	toolResults,
 	streaming = false,
 }: {
 	messageKey: string;
 	blocks: LiveBlock[];
 	usage?: LiveMessage["usage"];
+	/** Results of this message's tool calls, keyed by tool call id. */
+	toolResults?: ReadonlyMap<string, ToolResultView>;
 	streaming?: boolean;
 }) {
 	const hasVisible = blocks.some((block) => {
@@ -43,7 +66,7 @@ export function AssistantBubble({
 			{blocks.map((block, index) => {
 				if (block.type === "text" && block.text === "") return null;
 				if (block.type === "thinking" && block.thinking === "") return null;
-				return <BlockView key={index} block={block} stateKey={`${messageKey}:${index}`} />;
+				return <BlockView key={index} block={block} stateKey={`${messageKey}:${index}`} toolResults={toolResults} />;
 			})}
 			{usage !== undefined && usage.input + usage.output > 0 && (
 				<div className="text-[11px] text-fg-faint">
@@ -54,18 +77,152 @@ export function AssistantBubble({
 	);
 }
 
-function BlockView({ block, stateKey }: { block: LiveBlock; stateKey: string }) {
+function BlockView({
+	block,
+	stateKey,
+	toolResults,
+}: {
+	block: LiveBlock;
+	stateKey: string;
+	toolResults?: ReadonlyMap<string, ToolResultView>;
+}) {
 	if (block.type === "thinking") {
 		return <ThinkingBlock stateKey={stateKey} thinking={block.thinking} />;
 	}
 	if (block.type === "toolCall") {
-		return (
-			<div className="rounded-md border border-line bg-panel/50 px-3 py-2 font-mono text-xs text-fg-muted">
-				{block.name}({block.argumentsText})
-			</div>
-		);
+		return <ToolCallBlock call={block} result={toolResults?.get(block.id)} />;
 	}
 	return <Markdown text={block.text} />;
+}
+
+type ToolCall = Extract<LiveBlock, { type: "toolCall" }>;
+
+/** The tool's icon; unknown tools get a wrench. */
+function ToolIcon({ name, className }: { name: string; className?: string }) {
+	switch (name) {
+		case "bash":
+			return <TerminalIcon className={className} />;
+		case "read":
+			return <FileIcon className={className} />;
+		case "write":
+			return <FilePlusIcon className={className} />;
+		case "edit":
+			return <PencilIcon className={className} />;
+		default:
+			return <WrenchIcon className={className} />;
+	}
+}
+
+/** One collapsible row per tool call, holding the arguments and the result, like a thinking block. */
+function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultView }) {
+	const [open, setOpen] = useState(() => toolOpenState.get(call.id) ?? false);
+	const args = parseToolArguments(call.argumentsText);
+	const preview = toolCallSummary(args);
+	const failed = result?.isError === true;
+	return (
+		<details
+			data-tool-call={call.name}
+			data-tool-state={failed ? "failed" : result === undefined ? "running" : "done"}
+			open={open}
+			onToggle={(event) => {
+				const next = event.currentTarget.open;
+				toolOpenState.set(call.id, next);
+				setOpen(next);
+			}}
+			className={`group rounded-md border bg-panel/50 px-3 py-2 text-xs ${failed ? "border-red-500/30" : "border-line"}`}
+		>
+			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
+				<ToolIcon name={call.name} className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-red-500" : "text-fg-subtle"}`} />
+				<span className="shrink-0 font-mono text-fg">{call.name}</span>
+				{preview !== "" && <span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>}
+				{result === undefined && (
+					<span className="shrink-0 text-fg-faint motion-safe:animate-pulse">running…</span>
+				)}
+				{failed && <span className="shrink-0 text-red-500">failed</span>}
+				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
+			</summary>
+			<div className="mt-1.5 flex flex-col gap-1.5">
+				<ToolArguments name={call.name} text={call.argumentsText} args={args} />
+				{result !== undefined && (
+					<pre
+						className={`max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${
+							failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
+						}`}
+					>
+						{result.text}
+					</pre>
+				)}
+			</div>
+		</details>
+	);
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+	return typeof value === "object" && value !== null && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: undefined;
+}
+
+/** Tool-aware rendering of the call arguments, with pretty JSON as the fallback. */
+function ToolArguments({
+	name,
+	text,
+	args,
+}: {
+	name: string;
+	text: string;
+	args: Record<string, unknown> | undefined;
+}) {
+	if (args === undefined) {
+		// Still streaming, or not an object: show what arrived.
+		return <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">{text}</pre>;
+	}
+	const command = typeof args.command === "string" ? args.command : undefined;
+	if (name === "bash" && command !== undefined) {
+		return (
+			<pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">
+				<span className="text-fg-faint">$ </span>
+				{command}
+			</pre>
+		);
+	}
+	const path = typeof args.path === "string" ? args.path : undefined;
+	const content = typeof args.content === "string" ? args.content : undefined;
+	const edits = Array.isArray(args.edits) ? args.edits : undefined;
+	if (path === undefined && content === undefined && edits === undefined) {
+		return (
+			<pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">
+				{JSON.stringify(args, null, 2)}
+			</pre>
+		);
+	}
+	return (
+		<div className="flex flex-col gap-1.5">
+			{path !== undefined && <div className="truncate font-mono text-fg-subtle">{path}</div>}
+			{content !== undefined && (
+				<pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">{content}</pre>
+			)}
+			{edits?.map((edit, index) => {
+				const entry = record(edit);
+				const oldText = typeof entry?.oldText === "string" ? entry.oldText : undefined;
+				const newText = typeof entry?.newText === "string" ? entry.newText : undefined;
+				return (
+					<div key={index} className="overflow-hidden rounded border border-line">
+						{oldText !== undefined && (
+							<pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-red-500/10 px-2 py-1 font-mono text-red-700 dark:text-red-300">
+								- {oldText}
+							</pre>
+						)}
+						{newText !== undefined && (
+							<pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-green-500/10 px-2 py-1 font-mono text-green-700 dark:text-green-300">
+								+ {newText}
+							</pre>
+						)}
+					</div>
+				);
+			})}
+		</div>
+	);
 }
 
 function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: string }) {

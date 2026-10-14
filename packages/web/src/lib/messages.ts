@@ -130,4 +130,31 @@ export function toolResultText(message: ToolResultMessage): string {
 		.join("\n");
 }
 
+/** A tool result paired with the call it belongs to. */
+export type ToolResultView = {
+	text: string;
+	isError: boolean;
+};
+
+/** Parses a tool call's arguments; undefined while they stream in or when they are not an object. */
+export function parseToolArguments(text: string): Record<string, unknown> | undefined {
+	try {
+		const value: unknown = JSON.parse(text);
+		return typeof value === "object" && value !== null && !Array.isArray(value)
+			? (value as Record<string, unknown>)
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** A short one-liner for a collapsed tool call: its command, or the file it touches. */
+export function toolCallSummary(args: Record<string, unknown> | undefined): string {
+	if (args === undefined) return "";
+	if (typeof args.command === "string") return args.command;
+	if (typeof args.path === "string") return args.path;
+	const first = Object.values(args).find((value) => typeof value === "string");
+	return typeof first === "string" ? first : "";
+}
+
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ToolResultView } from "../lib/messages.ts";
 import { useHarness, type LiveMessageState } from "../lib/store.tsx";
 import { AssistantBubble } from "./MessageBubbles.tsx";
 
@@ -47,10 +48,12 @@ export function LiveMessage({
 	sessionId,
 	message,
 	onReveal,
+	toolResults,
 }: {
 	sessionId: string;
 	message: LiveMessageState;
 	onReveal?: () => void;
+	toolResults?: ReadonlyMap<string, ToolResultView>;
 }) {
 	const { finishLive } = useHarness();
 	const reducedMotion = useMemo(prefersReducedMotion, []);
@@ -103,5 +106,13 @@ export function LiveMessage({
 		() => (reducedMotion ? message.blocks : truncateBlocks(message.blocks, revealed)),
 		[reducedMotion, message.blocks, revealed],
 	);
-	return <AssistantBubble messageKey={message.key} blocks={blocks} usage={message.usage} streaming={!done} />;
+	return (
+		<AssistantBubble
+			messageKey={message.key}
+			blocks={blocks}
+			usage={message.usage}
+			toolResults={toolResults}
+			streaming={!done}
+		/>
+	);
 }
