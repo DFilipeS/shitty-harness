@@ -2,6 +2,17 @@ import type { ClientCommand, CommandResult, ServerEvent, ServerMessage } from "@
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
+/** A command the server rejected; `code` is the stable server-side reason. */
+export class ServerCommandError extends Error {
+	readonly code: string;
+
+	constructor(code: string, message: string) {
+		super(`${code}: ${message}`);
+		this.name = "ServerCommandError";
+		this.code = code;
+	}
+}
+
 type WithoutId<C> = C extends { id: string } ? Omit<C, "id"> : never;
 
 /** A client command without its correlation ID. */
@@ -65,7 +76,7 @@ export class HarnessClient {
 				this.#pending.delete(parsed.id);
 				if (pending === undefined) return;
 				if (parsed.ok) pending.resolve(parsed.data);
-				else pending.reject(new Error(`${parsed.error.code}: ${parsed.error.message}`));
+				else pending.reject(new ServerCommandError(parsed.error.code, parsed.error.message));
 				return;
 			}
 			for (const listener of [...this.#eventListeners]) listener(parsed);

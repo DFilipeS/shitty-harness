@@ -13,9 +13,10 @@ import type {
 	SnapshotEvent,
 	UsageState,
 } from "@harness/protocol";
-import { HarnessClient, type ConnectionStatus } from "./client.ts";
+import { HarnessClient, ServerCommandError, type ConnectionStatus } from "./client.ts";
 import { errorMessage, formatRefreshNotice } from "./format.ts";
 import { applyMessageChanges, fromAssistantMessage, type LiveMessage } from "./messages.ts";
+import { sessionIdFromPath, sessionPath } from "./url.ts";
 
 /**
  * The in-flight assistant message plus what the typing animation needs: a stable `key` so the
@@ -65,6 +66,7 @@ type Action =
 	| { type: "providers/set"; providers: ProviderInfo[]; models: ModelInfo[]; defaults: DefaultsState }
 	| { type: "defaults/set"; defaults: DefaultsState }
 	| { type: "session/activate"; id: string }
+	| { type: "session/deactivate" }
 	| { type: "session/attached"; id: string; snapshot: SnapshotEvent }
 	| { type: "session/event"; id: string; event: AgentEvent }
 	| { type: "session/live-done"; id: string }
@@ -186,6 +188,8 @@ function reducer(state: State, action: Action): State {
 				activeSessionId: action.id,
 				sessionsById: { ...state.sessionsById, [action.id]: state.sessionsById[action.id] ?? emptySession(action.id) },
 			};
+		case "session/deactivate":
+			return { ...state, activeSessionId: undefined };
 		case "session/attached":
 			return {
 				...state,
@@ -310,7 +314,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				const { snapshot } = await client.send({ type: "sessions.attach", sessionId: id });
 				if (!cancelled) dispatch({ type: "session/attached", id, snapshot });
 			} catch (error) {
-				if (!cancelled) dispatch({ type: "error/set", error: errorMessage(error) });
+				if (cancelled) return;
+				// The session is gone (deleted here or in another tab): drop it and clean the URL.
+				if (error instanceof ServerCommandError && error.code === "not_found") {
+					window.history.replaceState(null, "", "/");
+					dispatch({ type: "session/deactivate" });
+					return;
+				}
+				dispatch({ type: "error/set", error: errorMessage(error) });
 			}
 		})();
 		return () => {
@@ -319,19 +330,56 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		};
 	}, [state.status, state.activeSessionId, client]);
 
+	// Back and forward move between sessions, following the URL.
+	useEffect(() => {
+		const onPopState = () => {
+			const id = sessionIdFromPath(window.location.pathname);
+			if (id === undefined) dispatch({ type: "session/deactivate" });
+			else dispatch({ type: "session/activate", id });
+		};
+		window.addEventListener("popstate", onPopState);
+		return () => window.removeEventListener("popstate", onPopState);
+	}, []);
+
+	// Open the session named in the URL once the list is known; drop ids that no longer exist.
+	useEffect(() => {
+		if (!state.sessionsLoaded) return;
+		const id = sessionIdFromPath(window.location.pathname);
+		if (id === undefined) return;
+		if (state.sessions.some((session) => session.id === id)) {
+			if (state.activeSessionId !== id) dispatch({ type: "session/activate", id });
+			return;
+		}
+		window.history.replaceState(null, "", "/");
+		dispatch({ type: "session/deactivate" });
+	}, [state.sessionsLoaded, state.sessions, state.activeSessionId]);
+
+	/** Select a session and keep the URL in step, so reloads and shared links open it. */
+	const activateSession = useCallback((id: string | undefined, mode: "push" | "replace" = "push") => {
+		if (id === undefined) dispatch({ type: "session/deactivate" });
+		else dispatch({ type: "session/activate", id });
+		const path = id === undefined ? "/" : sessionPath(id);
+		if (window.location.pathname === path) return;
+		if (mode === "push") window.history.pushState(null, "", path);
+		else window.history.replaceState(null, "", path);
+	}, []);
+
 	const createSession = useCallback(async () => {
 		try {
 			const { session } = await client.send({ type: "sessions.create" });
 			dispatch({ type: "sessions/upsert", session });
-			dispatch({ type: "session/activate", id: session.id });
+			activateSession(session.id);
 		} catch (error) {
 			dispatch({ type: "error/set", error: errorMessage(error) });
 		}
-	}, [client]);
+	}, [client, activateSession]);
 
-	const selectSession = useCallback((id: string) => {
-		dispatch({ type: "session/activate", id });
-	}, []);
+	const selectSession = useCallback(
+		(id: string) => {
+			activateSession(id);
+		},
+		[activateSession],
+	);
 
 	const renameSession = useCallback(
 		async (id: string, title: string) => {
@@ -404,11 +452,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		async (id: string) => {
 			try {
 				await client.send({ type: "sessions.delete", sessionId: id });
+				if (sessionIdFromPath(window.location.pathname) === id) activateSession(undefined, "replace");
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
 			}
 		},
-		[client],
+		[client, activateSession],
 	);
 
 	const configureProvider = useCallback(
