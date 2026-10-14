@@ -74,6 +74,10 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 4. Optional: run **Model defaults…** in the palette to choose the model and thinking level new
    sessions start with. **First available** and **Model default** clear each choice; sessions that
    already exist keep their own model and level.
+
+Each session has its own URL (`/sessions/<id>`). The address bar follows the session you open, so
+reloading the page, bookmarking it, or sending the link to another browser opens that same session.
+Back and forward move between the sessions you visited.
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
 
 The header keeps a running tally for the open session on the right: cost, tokens, context use,
