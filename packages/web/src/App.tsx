@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel.tsx";
-import { ErrorToast } from "./components/ErrorToast.tsx";
+import { Toast } from "./components/Toast.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import {
 	KeyboardIcon,
@@ -94,7 +94,7 @@ function AppShell() {
 				/>
 			)}
 			<ChatPanel onToggleSidebar={toggleSidebar} />
-			<ErrorToast />
+			<Toast />
 		</div>
 	);
 }

@@ -7,12 +7,13 @@ import type {
 	ModelRef,
 	ModelThinkingLevel,
 	ProviderInfo,
+	ProviderRefreshReport,
 	SessionSummary,
 	SnapshotEvent,
 	UsageState,
 } from "@harness/protocol";
 import { HarnessClient, type ConnectionStatus } from "./client.ts";
-import { errorMessage } from "./format.ts";
+import { errorMessage, formatRefreshNotice } from "./format.ts";
 import { applyMessageChanges, fromAssistantMessage, type LiveMessage } from "./messages.ts";
 
 /**
@@ -46,6 +47,13 @@ type State = {
 	activeSessionId?: string;
 	sessionsById: Record<string, SessionState>;
 	error?: string;
+	notice?: Notice;
+};
+
+/** Transient feedback, e.g. what a model catalog refresh did. */
+export type Notice = {
+	text: string;
+	tone: "info" | "error";
 };
 
 type Action =
@@ -59,7 +67,9 @@ type Action =
 	| { type: "session/live-done"; id: string }
 	| { type: "session/agent"; id: string; agent: AgentState }
 	| { type: "error/set"; error: string }
-	| { type: "error/clear" };
+	| { type: "error/clear" }
+	| { type: "notice/set"; notice: Notice }
+	| { type: "notice/clear" };
 
 const initialState: State = {
 	status: "disconnected",
@@ -196,6 +206,10 @@ function reducer(state: State, action: Action): State {
 			return { ...state, error: action.error };
 		case "error/clear":
 			return { ...state, error: undefined };
+		case "notice/set":
+			return { ...state, notice: action.notice };
+		case "notice/clear":
+			return { ...state, notice: undefined };
 	}
 }
 
@@ -208,6 +222,7 @@ type HarnessContextValue = {
 	activeSessionId?: string;
 	activeSession?: SessionState;
 	error?: string;
+	notice?: Notice;
 	createSession(): Promise<void>;
 	selectSession(id: string): void;
 	renameSession(id: string, title: string): Promise<void>;
@@ -220,6 +235,7 @@ type HarnessContextValue = {
 	configureProvider(providerId: string, apiKey: string | null): Promise<void>;
 	refreshProviders(): Promise<void>;
 	clearError(): void;
+	clearNotice(): void;
 };
 
 const HarnessContext = createContext<HarnessContextValue | undefined>(undefined);
@@ -403,16 +419,20 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 
 	const refreshProviders = useCallback(async () => {
 		try {
-			const providers = await client.send({ type: "providers.refresh" });
+			const result = await client.send({ type: "providers.refresh" });
 			dispatch({
 				type: "providers/set",
-				providers: providers.providers,
-				models: providers.models,
+				providers: result.providers,
+				models: result.models,
 			});
+			const notice = formatRefreshNotice(result.refresh);
+			if (notice !== undefined) dispatch({ type: "notice/set", notice });
 		} catch (error) {
 			dispatch({ type: "error/set", error: errorMessage(error) });
 		}
 	}, [client]);
+
+	const clearNotice = useCallback(() => dispatch({ type: "notice/clear" }), []);
 
 	const value = useMemo<HarnessContextValue>(
 		() => ({
@@ -426,6 +446,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				? {}
 				: { activeSession: state.sessionsById[state.activeSessionId] }),
 			...(state.error === undefined ? {} : { error: state.error }),
+			...(state.notice === undefined ? {} : { notice: state.notice }),
 			createSession,
 			selectSession,
 			renameSession,
@@ -438,6 +459,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureProvider,
 			refreshProviders,
 			clearError: () => dispatch({ type: "error/clear" }),
+			clearNotice,
 		}),
 		[
 			state,
@@ -452,6 +474,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureThinkingLevel,
 			configureProvider,
 			refreshProviders,
+			clearNotice,
 		],
 	);
 

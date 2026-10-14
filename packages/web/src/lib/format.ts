@@ -1,3 +1,5 @@
+import type { ProviderRefreshReport } from "@harness/protocol";
+
 export function relativeTime(timestamp: number): string {
 	const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1_000));
 	if (seconds < 60) return "just now";
@@ -36,4 +38,29 @@ export function formatTokens(value: number): string {
 export function errorMessage(error: unknown): string {
 	if (error instanceof Error) return error.message;
 	return String(error);
+}
+
+/** One line per provider describing what a model catalog refresh did, e.g. "OpenRouter: 3 new models". */
+export function formatRefreshNotice(
+	reports: readonly ProviderRefreshReport[],
+): { text: string; tone: "info" | "error" } | undefined {
+	if (reports.length === 0) return undefined;
+	const failed = reports.filter((report) => report.outcome === "failed");
+	if (failed.length > 0) {
+		return {
+			tone: "error",
+			text: failed
+				.map((report) => `${report.name}: refresh failed${report.error === undefined ? "" : ` (${report.error})`}`)
+				.join(" · "),
+		};
+	}
+	const parts = reports.map((report) => {
+		if (report.outcome === "fetched" && report.added > 0) {
+			return `${report.name}: ${report.added} new model${report.added === 1 ? "" : "s"} (${report.models} total)`;
+		}
+		if (report.outcome === "unavailable") return `${report.name}: no remote catalog`;
+		if (report.outcome === "throttled") return `${report.name}: checked recently`;
+		return `${report.name}: up to date`;
+	});
+	return { tone: "info", text: parts.join(" · ") };
 }
