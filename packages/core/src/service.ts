@@ -24,6 +24,7 @@ import type {
 	ProviderRefreshReport,
 	SessionSummary,
 } from "@harness/protocol";
+import { sortModelsForDisplay } from "./model-order.ts";
 import type { Providers } from "./providers.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 
@@ -333,7 +334,7 @@ export class HarnessService {
 			this.#providers.listProviders(),
 			this.#providers.listModels(),
 		]);
-		return { providers, models, defaults: this.#providers.getDefaults() };
+		return { providers, models: sortModelsForDisplay(models), defaults: this.#providers.getDefaults() };
 	}
 
 	/** Store the model and thinking level new sessions start with. */
@@ -421,7 +422,8 @@ export class HarnessService {
 
 	/** The model and thinking level a new session starts with, honouring the stored defaults. */
 	async #initialAgentChange(): Promise<SessionAgentChange> {
-		const available = await this.#providers.models.getAvailable();
+		// Same order as the model picker, so "first available" is the first row users see.
+		const available = sortModelsForDisplay(await this.#providers.models.getAvailable());
 		const preferred = this.#providers.getDefaults().model;
 		const chosen =
 			(preferred === undefined

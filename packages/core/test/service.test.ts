@@ -111,6 +111,21 @@ describe("HarnessService", () => {
 		);
 	});
 
+	it("lists models alphabetically inside each provider", async () => {
+		const alpha = { ...FAKE_REASONING_MODEL, id: "alpha-model", name: "Alpha Model" };
+		await withService(
+			async (service) => {
+				const { models } = await service.listProviders();
+				expect(models.map((model) => model.name)).toEqual([
+					"Alpha Model",
+					"Fake Model",
+					"Fake Reasoning Model",
+				]);
+			},
+			{ apiKey: "test-key", models: [FAKE_REASONING_MODEL, alpha] },
+		);
+	});
+
 	it("rejects a default model that does not exist", async () => {
 		await withService(async (service) => {
 			await expect(
