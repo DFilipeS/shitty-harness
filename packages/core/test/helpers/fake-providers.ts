@@ -5,6 +5,7 @@ import {
 	fauxProvider,
 	getSupportedThinkingLevels,
 	type FauxProviderHandle,
+	type ImageModel,
 	type Model,
 } from "@earendil-works/pi-ai";
 import type { DefaultsState, ModelInfo, ProviderInfo, ProviderRefreshReport } from "@harness/protocol";
@@ -132,17 +133,60 @@ export function createFakeProviders(options: FakeProvidersOptions = {}): Provide
 	});
 }
 
+export const FAKE_IMAGE_PROVIDER_ID = "fake-images";
+export const FAKE_IMAGE_MODEL_ID = "fake-image-model";
+const FAKE_IMAGE_API = "openrouter-images";
+
+/** An image model whose generation returns the given image without any network access. */
+function createFakeImageProvider(image: { data: string; mimeType: string }) {
+	const model: ImageModel<typeof FAKE_IMAGE_API> = {
+		type: "image",
+		id: FAKE_IMAGE_MODEL_ID,
+		name: "Fake Image Model",
+		api: FAKE_IMAGE_API,
+		provider: FAKE_IMAGE_PROVIDER_ID,
+		baseUrl: "http://localhost",
+		input: ["text", "image"],
+		output: ["image", "text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+	};
+	return createProvider({
+		id: FAKE_IMAGE_PROVIDER_ID,
+		name: "Fake Images",
+		auth: { apiKey: { name: "Fake image key", resolve: async () => ({ auth: {} }) } },
+		models: [model],
+		images: {
+			[FAKE_IMAGE_API]: {
+				generateImages: async () => ({
+					api: FAKE_IMAGE_API,
+					provider: FAKE_IMAGE_PROVIDER_ID,
+					model: FAKE_IMAGE_MODEL_ID,
+					output: [{ type: "image", data: image.data, mimeType: image.mimeType }],
+					stopReason: "stop",
+					timestamp: Date.now(),
+				}),
+			},
+		},
+	});
+}
+
 /**
  * Streaming `Providers` adapter built on pi-ai's faux provider. The scripted answer streams at
- * `tokensPerSecond`, so tests can observe a run while it is in flight.
+ * `tokensPerSecond`, so tests can observe a run while it is in flight. With `image`, a fake image
+ * provider is registered too, so the `generate_image` tool has something to call.
  */
-export function createFauxProviders(options: { text?: string; tokensPerSecond?: number } = {}): {
+export function createFauxProviders(options: {
+	text?: string;
+	tokensPerSecond?: number;
+	image?: { data: string; mimeType: string };
+} = {}): {
 	providers: Providers;
 	faux: FauxProviderHandle;
 } {
 	const models = createModels();
 	const faux = fauxProvider({ tokensPerSecond: options.tokensPerSecond ?? 20 });
 	models.setProvider(faux.provider);
+	if (options.image !== undefined) models.setProvider(createFakeImageProvider(options.image));
 	faux.setResponses([fauxAssistantMessage(options.text ?? "The faux model is answering this prompt.")]);
 	return { providers: providersFor(models, async () => {}), faux };
 }

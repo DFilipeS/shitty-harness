@@ -1,6 +1,7 @@
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
+import { ImageTools } from "./image-tool.ts";
 import {
 	createRegistry,
 	Harness,
@@ -123,6 +124,7 @@ export class HarnessService {
 		// all it takes for agents to read, write, edit, and run commands.
 		const registry = createRegistry();
 		registry.install(CodingTools);
+		registry.install(ImageTools);
 		const harness = await Harness.open(
 			dependencies.storage,
 			{

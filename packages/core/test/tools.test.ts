@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
@@ -20,6 +20,8 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 10_000): P
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 }
+
+const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 describe("coding tools", () => {
 	it("offers the bundled tools and runs them in the local environment", async () => {
@@ -69,6 +71,40 @@ describe("coding tools", () => {
 			expect(written?.ok).toBe(true);
 			expect(await readFile(join(workspace, "note.txt"), "utf8")).toBe("hi");
 		} finally {
+			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
+	it("generates an image through the harness and keeps it in the transcript", async () => {
+		const workspace = await mkdtemp(join(tmpdir(), "harness-tools-image-"));
+		const { providers, faux } = createFauxProviders({ image: { data: PNG, mimeType: "image/png" } });
+		faux.setResponses([
+			fauxAssistantMessage([fauxToolCall("generate_image", { prompt: "a red apple" })], { stopReason: "toolUse" }),
+			fauxAssistantMessage("Here is your image."),
+		]);
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? workspace }),
+		});
+		try {
+			const session = await service.createSession();
+			await service.prompt(session.id, "Generate a red apple", "request-image");
+			await waitFor(async () => (await service.listSessions())[0]?.working === true);
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+
+			const { snapshot, unsubscribe } = await service.subscribeSession(session.id, () => {});
+			unsubscribe();
+			const toolResults = snapshot.entries.filter((entry) => entry.kind === "pi.tool-result");
+			expect(toolResults).toHaveLength(1);
+			const message = toolResults[0]?.model?.[0];
+			const content = message?.role === "toolResult" ? message.content : [];
+			expect(content.some((part) => part.type === "image" && part.data === PNG)).toBe(true);
+			expect(JSON.stringify(content)).toContain("Saved `image-");
+			const files = await readdir(workspace);
+			expect(files.some((name) => /^image-\d+\.png$/.test(name))).toBe(true);
+		} finally {
+			await service.close();
 			await rm(workspace, { recursive: true, force: true });
 		}
 	});
