@@ -15,7 +15,7 @@ import {
 	type TaskGraph,
 	type TaskGraphWatch,
 } from "@earendil-works/pi-durable";
-import type { ModelInfo, ModelRef, ProviderInfo, SessionSummary } from "@harness/protocol";
+import type { ModelInfo, ModelRef, ProviderInfo, ProviderRefreshReport, SessionSummary } from "@harness/protocol";
 import type { Providers } from "./providers.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 
@@ -137,7 +137,8 @@ export class HarnessService {
 		const service = new HarnessService(harness, providers);
 		await service.#watchSessionIndex();
 		await service.#watchTaskGraph();
-		void service.#refreshProviders().catch((error: unknown) => {
+		// Startup uses the cached catalog when it is fresh; the client can force a refresh.
+		void service.#refreshProviders(undefined, false).catch((error: unknown) => {
 			console.warn("[core] model refresh failed:", error);
 		});
 		return service;
@@ -332,11 +333,12 @@ export class HarnessService {
 
 	async configureProvider(providerId: string, apiKey: string | null): Promise<void> {
 		await this.#providers.setApiKey(providerId, apiKey);
-		await this.#refreshProviders(providerId);
+		await this.#refreshProviders(providerId, true);
 	}
 
-	async refreshProviders(): Promise<void> {
-		await this.#refreshProviders();
+	/** Refresh every configured provider and report what each refresh did. */
+	async refreshProviders(): Promise<ProviderRefreshReport[]> {
+		return this.#refreshProviders(undefined, true);
 	}
 
 	async close(): Promise<void> {
@@ -383,9 +385,13 @@ export class HarnessService {
 		return created;
 	}
 
-	async #refreshProviders(providerId?: string): Promise<void> {
-		await this.#providers.refresh(providerId);
+	async #refreshProviders(providerId?: string, force = false): Promise<ProviderRefreshReport[]> {
+		const reports = await this.#providers.refresh({
+			...(providerId === undefined ? {} : { providerId }),
+			force,
+		});
 		await this.#emitProviders();
+		return reports;
 	}
 
 	async #emitProviders(): Promise<void> {

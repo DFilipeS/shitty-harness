@@ -50,6 +50,25 @@ export type ProvidersListResult = {
 	models: ModelInfo[];
 };
 
+/** How a provider's model catalog refresh ended. */
+export type ProviderRefreshOutcome = "fetched" | "not-modified" | "unavailable" | "throttled" | "failed";
+
+/** Result of refreshing one provider's catalog, shown to the user after a manual refresh. */
+export type ProviderRefreshReport = {
+	providerId: string;
+	name: string;
+	outcome: ProviderRefreshOutcome;
+	/** Chat models available after the refresh. */
+	models: number;
+	/** Change in available chat models caused by the refresh. */
+	added: number;
+	error?: string;
+};
+
+export type ProvidersRefreshResult = ProvidersListResult & {
+	refresh: ProviderRefreshReport[];
+};
+
 export type SessionsAttachResult = {
 	snapshot: SnapshotEvent;
 };
@@ -94,7 +113,7 @@ export type CommandResult = {
 	"sessions.configure": SessionsConfigureResult;
 	"providers.list": ProvidersListResult;
 	"providers.configure": ProvidersListResult;
-	"providers.refresh": ProvidersListResult;
+	"providers.refresh": ProvidersRefreshResult;
 };
 
 export type ServerError = {

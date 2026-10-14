@@ -8,7 +8,11 @@ const dataDir = process.env.HARNESS_DATA_DIR ?? resolve(here, "../../../data");
 const port = Number(process.env.PORT ?? 8787);
 const webRoot = process.env.NODE_ENV === "production" ? resolve(here, "../../web/dist") : undefined;
 
-const service = await openHarnessService({ dataDir });
+const catalogBaseUrl = process.env.HARNESS_CATALOG_BASE_URL;
+const service = await openHarnessService({
+	dataDir,
+	...(catalogBaseUrl === undefined || catalogBaseUrl === "" ? {} : { catalogBaseUrl }),
+});
 const server = await startServer({ service, port, webRoot });
 
 console.log(`[server] listening on http://localhost:${server.port} (data: ${dataDir})`);

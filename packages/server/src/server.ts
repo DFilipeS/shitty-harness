@@ -257,8 +257,8 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				return { data: await service.listProviders() };
 			}
 			case "providers.refresh": {
-				await service.refreshProviders();
-				return { data: await service.listProviders() };
+				const refresh = await service.refreshProviders();
+				return { data: { ...(await service.listProviders()), refresh } };
 			}
 		}
 	}

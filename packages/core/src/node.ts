@@ -7,6 +7,8 @@ import { HarnessService } from "./service.ts";
 
 export type OpenHarnessServiceOptions = {
 	dataDir: string;
+	/** Model catalog mirror; defaults to pi.dev. */
+	catalogBaseUrl?: string;
 };
 
 /**
@@ -18,7 +20,9 @@ export async function openHarnessService(options: OpenHarnessServiceOptions): Pr
 	await mkdir(dataDir, { recursive: true });
 
 	const configPath = join(dataDir, "config.json");
-	const providers = new ProviderManager(configPath, join(dataDir, "models.json"), await loadConfig(configPath));
+	const providers = new ProviderManager(configPath, join(dataDir, "models.json"), await loadConfig(configPath), {
+		...(options.catalogBaseUrl === undefined ? {} : { catalogBaseUrl: options.catalogBaseUrl }),
+	});
 	const storage = await openNodeSqliteStorage(join(dataDir, "sessions.sqlite"));
 
 	return HarnessService.create({ storage, providers });

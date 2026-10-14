@@ -7,7 +7,7 @@ import {
 	type FauxProviderHandle,
 	type Model,
 } from "@earendil-works/pi-ai";
-import type { ModelInfo, ProviderInfo } from "@harness/protocol";
+import type { ModelInfo, ProviderInfo, ProviderRefreshReport } from "@harness/protocol";
 import type { Providers } from "../../src/providers.ts";
 
 export const FAKE_PROVIDER_ID = "fake";
@@ -65,7 +65,9 @@ function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Provid
 			}));
 		},
 		setApiKey,
-		async refresh(): Promise<void> {},
+		async refresh(): Promise<ProviderRefreshReport[]> {
+			return [];
+		},
 	};
 }
 
