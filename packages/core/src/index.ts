@@ -10,9 +10,9 @@ export {
 } from "./remote-catalog.ts";
 export { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 export { type EnvironmentFactory } from "./environment.ts";
+export { ServiceError } from "./errors.ts";
 export {
 	HarnessService,
-	ServiceError,
 	type HarnessServiceDependencies,
 	type ProvidersState,
 	type ServiceEvent,

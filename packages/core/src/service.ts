@@ -1,6 +1,9 @@
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
+import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
+import { buildPromptContent, saveAttachment } from "./attachments.ts";
+import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
 import {
 	createRegistry,
@@ -23,6 +26,7 @@ import type {
 	ModelInfo,
 	ModelRef,
 	ModelThinkingLevel,
+	PromptAttachment,
 	ProviderInfo,
 	ProviderRefreshReport,
 	SessionSummary,
@@ -62,16 +66,7 @@ type SessionAgentChange = {
 	thinkingLevel?: AgentState["thinkingLevel"] | null;
 };
 
-/** App-level failure with a stable code the client can react to. */
-export class ServiceError extends Error {
-	readonly code: string;
-
-	constructor(code: string, message: string) {
-		super(message);
-		this.name = "ServiceError";
-		this.code = code;
-	}
-}
+export { ServiceError };
 
 /** Provider and session-list changes the server forwards to every connected client. */
 export type ServiceEvent =
@@ -104,6 +99,7 @@ export type HarnessServiceDependencies = {
 export class HarnessService {
 	readonly #harness: Harness;
 	readonly #providers: Providers;
+	readonly #environment: EnvironmentFactory | undefined;
 	readonly #subscriptions = new Map<ConversationId, Promise<SessionSubscription>>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
 	#indexWatch: DocumentWatch<SessionIndexState> | undefined;
@@ -111,9 +107,10 @@ export class HarnessService {
 	#working = new Set<string>();
 	#closed = false;
 
-	private constructor(harness: Harness, providers: Providers) {
+	private constructor(harness: Harness, providers: Providers, environment: EnvironmentFactory | undefined) {
 		this.#harness = harness;
 		this.#providers = providers;
+		this.#environment = environment;
 	}
 
 	/**
@@ -158,7 +155,7 @@ export class HarnessService {
 		}, BACKGROUND_CONTEXT);
 		harness.resume();
 
-		const service = new HarnessService(harness, providers);
+		const service = new HarnessService(harness, providers, dependencies.environment);
 		await service.#watchSessionIndex();
 		await service.#watchTaskGraph();
 		// Startup uses the cached catalog when it is fresh; the client can force a refresh.
@@ -272,18 +269,36 @@ export class HarnessService {
 		}, BACKGROUND_CONTEXT);
 	}
 
-	async prompt(id: string, text: string, requestId: string): Promise<{ submissionId: string }> {
+	async prompt(
+		id: string,
+		text: string,
+		requestId: string,
+		attachments: readonly PromptAttachment[] = [],
+	): Promise<{ submissionId: string }> {
 		const trimmed = text.trim();
-		if (trimmed === "") throw new ServiceError("invalid", "Message must not be empty");
-		const conversation = await this.#requireConversation(parseConversationId(id));
+		if (trimmed === "" && attachments.length === 0) {
+			throw new ServiceError("invalid", "Message must not be empty");
+		}
+		const conversationId = parseConversationId(id);
+		const conversation = await this.#requireConversation(conversationId);
 		const agent = await conversation.agent(BACKGROUND_CONTEXT);
 		if (agent.model === undefined) throw new ServiceError("no_model", "Select a model before sending a message");
+		const model = this.#providers.models.getModel(agent.model.provider, agent.model.modelId);
+		const env =
+			attachments.length === 0 ? undefined : await this.#buildEnvironment(conversationId, agent.cwd);
+		const content = await buildPromptContent(trimmed, attachments, model?.input, (attachment, index) =>
+			env === undefined ? Promise.resolve(undefined) : saveAttachment(env, id, attachment, index, BACKGROUND_CONTEXT),
+		);
 
 		await this.#updateSession(id, (entry) => {
-			if (entry.title === NEW_SESSION_TITLE) entry.title = deriveTitle(trimmed);
+			if (entry.title === NEW_SESSION_TITLE) {
+				entry.title = deriveTitle(
+					trimmed === "" ? attachments.map((attachment) => attachment.name).join(", ") : trimmed,
+				);
+			}
 		});
 		const submission = await conversation.submit(
-			{ type: "input", content: trimmed, requestId },
+			{ type: "input", content, requestId },
 			BACKGROUND_CONTEXT,
 		);
 		return { submissionId: String(submission.id) };
@@ -443,6 +458,20 @@ export class HarnessService {
 		});
 		this.#subscriptions.set(id, created);
 		return created;
+	}
+
+	/** Build the environment a conversation's tools run in, or undefined when none is configured. */
+	async #buildEnvironment(conversationId: ConversationId, cwd: string | undefined): Promise<ExecutionEnv | undefined> {
+		if (this.#environment === undefined) return undefined;
+		try {
+			return await this.#environment(
+				{ conversationId, ...(cwd === undefined ? {} : { cwd }), read: this.#harness },
+				BACKGROUND_CONTEXT,
+			);
+		} catch (error) {
+			console.warn("[core] building the attachment environment failed:", error);
+			return undefined;
+		}
 	}
 
 	async #refreshProviders(providerId?: string, force = false): Promise<ProviderRefreshReport[]> {

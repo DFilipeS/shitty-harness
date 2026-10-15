@@ -10,6 +10,7 @@ import {
 	type Usage,
 } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, section, type ToolExecutionApi } from "@earendil-works/pi-durable";
+import { decodeBase64, encodeBase64 } from "./base64.ts";
 import type { ModelRef } from "@harness/protocol";
 
 const MIME_EXTENSIONS: Record<string, string> = {
@@ -32,7 +33,7 @@ const generateImageSchema = Type.Object({
 	image: Type.Optional(
 		Type.String({
 			description:
-				"File in the working directory to edit or use as a reference, for example a path from an earlier `Saved ...` note.",
+				"File in the working directory to edit or use as a reference, for example a path from an earlier `Saved ...` note or from the attached-files list.",
 		}),
 	),
 	path: Type.Optional(
@@ -52,22 +53,6 @@ export type ImageToolsOptions = {
 	/** The configured default image model, when one is set. */
 	defaultImageModel?: () => ModelRef | undefined;
 };
-
-function decodeBase64(data: string): Uint8Array {
-	const binary = atob(data);
-	const bytes = new Uint8Array(binary.length);
-	for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-	return bytes;
-}
-
-function encodeBase64(bytes: Uint8Array): string {
-	let binary = "";
-	const chunk = 0x8000;
-	for (let index = 0; index < bytes.length; index += chunk) {
-		binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
-	}
-	return btoa(binary);
-}
 
 function mimeTypeFor(path: string): string {
 	const extension = path.split(".").pop()?.toLowerCase() ?? "";
@@ -312,7 +297,7 @@ function imageSection(options: ImageToolsOptions, toolName: string) {
 			const preferred = options.defaultImageModel?.();
 			const lines = [
 				"For anything that creates or changes an image, call the generate_image tool and then reply in text. Never put an image in a reply: the chat stream cannot store one, so it would be lost.",
-				"Pass `image` with a file path to edit or reference an existing image, such as one from an earlier `Saved ...` note.",
+				"Pass `image` with a file path to edit or reference an existing image, such as one from an earlier `Saved ...` note or from the attached-files list.",
 				`Image models: ${usable.map((model) => `${model.name} (${model.id})`).join(", ")}.`,
 			];
 			const defaultModel =

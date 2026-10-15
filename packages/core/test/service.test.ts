@@ -1,4 +1,8 @@
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { MemoryStorage } from "@earendil-works/pi-durable";
+import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { describe, expect, it } from "vitest";
 import { HarnessService, type HarnessServiceDependencies } from "../src/index.ts";
 import {
@@ -210,6 +214,93 @@ describe("HarnessService", () => {
 				const session = await service.createSession();
 				await service.configureSession(session.id, { model: null });
 				await expect(service.prompt(session.id, "Hello", "request-2")).rejects.toMatchObject({ code: "no_model" });
+			},
+			{ apiKey: "test-key" },
+		);
+	});
+
+	it("places attachments in the user message", async () => {
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			await service.prompt(session.id, "Look at this", "request-attachments", [
+				{ name: "shot.png", mimeType: "image/png", data: "aGk=" },
+				{ name: "notes.md", mimeType: "text/markdown", data: "# Notes" },
+			]);
+			const { snapshot, unsubscribe } = await service.subscribeSession(session.id, () => {});
+			const user = snapshot.entries.find((entry) => entry.kind === "pi.user");
+			expect(user?.model?.[0]).toMatchObject({
+				role: "user",
+				content: [
+					{ type: "text", text: "Look at this" },
+					{
+						type: "text",
+						text: '<attached-file name="notes.md" mime="text/markdown">\n# Notes\n</attached-file>',
+					},
+					{ type: "image", data: "aGk=", mimeType: "image/png" },
+				],
+			});
+			unsubscribe();
+		} finally {
+			await service.close();
+		}
+	});
+
+	it("saves attachments in the workspace and tells the model the path", async () => {
+		const workspace = await mkdtemp(join(tmpdir(), "harness-attachments-"));
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? workspace }),
+		});
+		try {
+			const session = await service.createSession();
+			await service.prompt(session.id, "Look at this", "request-save", [
+				{ name: "shot.png", mimeType: "image/png", data: "aGk=" },
+			]);
+
+			const directory = join(workspace, ".harness", "attachments", session.id);
+			const files = await readdir(directory);
+			expect(files).toHaveLength(1);
+			const file = files[0] ?? "";
+			expect(await readFile(join(directory, file))).toEqual(Buffer.from("aGk=", "base64"));
+
+			const { snapshot, unsubscribe } = await service.subscribeSession(session.id, () => {});
+			const user = snapshot.entries.find((entry) => entry.kind === "pi.user");
+			expect(JSON.stringify(user?.model?.[0]?.content)).toContain(`.harness/attachments/${session.id}/${file}`);
+			unsubscribe();
+		} finally {
+			await service.close();
+			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
+	it("titles a session from its attachments when there is no text", async () => {
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			await service.prompt(session.id, "  ", "request-title", [
+				{ name: "notes.md", mimeType: "text/markdown", data: "hi" },
+			]);
+			const listed = (await service.listSessions()).find((candidate) => candidate.id === session.id);
+			expect(listed?.title).toBe("notes.md");
+		} finally {
+			await service.close();
+		}
+	});
+
+	it("rejects image attachments for a text-only model", async () => {
+		await withService(
+			async (service) => {
+				const session = await service.createSession();
+				await expect(
+					service.prompt(session.id, "Look", "request-image", [
+						{ name: "shot.png", mimeType: "image/png", data: "aGk=" },
+					]),
+				).rejects.toMatchObject({ code: "unsupported_model" });
 			},
 			{ apiKey: "test-key" },
 		);
