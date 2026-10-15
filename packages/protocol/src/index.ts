@@ -1,7 +1,20 @@
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { AgentEvent, AgentState, EntryRecord, SnapshotEvent, UsageState } from "@earendil-works/pi-durable";
+import type { PromptAttachment } from "./attachments.ts";
 
 export type { AgentEvent, AgentState, EntryRecord, ModelThinkingLevel, SnapshotEvent, UsageState };
+export {
+	ATTACHMENT_IMAGE_MIME_TYPES,
+	ATTACHMENT_LIMITS,
+	ATTACHMENT_TEXT_EXTENSIONS,
+	ATTACHMENT_TEXT_FILE_NAMES,
+	ATTACHMENT_TEXT_MIME_TYPES,
+	classifyAttachmentFile,
+	isImageMimeType,
+	isTextMimeType,
+	type AttachmentKind,
+	type PromptAttachment,
+} from "./attachments.ts";
 
 /** A provider + model pair, as stored in a conversation's agent. */
 export type ModelRef = {
@@ -111,7 +124,14 @@ export type ClientCommand =
 	| { id: string; type: "sessions.delete"; sessionId: string }
 	| { id: string; type: "sessions.attach"; sessionId: string }
 	| { id: string; type: "sessions.detach"; sessionId: string }
-	| { id: string; type: "sessions.prompt"; sessionId: string; text: string; requestId: string }
+	| {
+			id: string;
+			type: "sessions.prompt";
+			sessionId: string;
+			text: string;
+			attachments?: PromptAttachment[];
+			requestId: string;
+		}
 	| { id: string; type: "sessions.abort"; sessionId: string }
 	| {
 			id: string;
