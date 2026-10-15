@@ -1,7 +1,7 @@
 import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { ModelInfo } from "@harness/protocol";
 import { describe, expect, it } from "vitest";
-import { hasHiddenOutput, toolResultImages, toolResultText, userParts } from "../src/lib/messages.ts";
+import { hasHiddenOutput, generatedImageInfo, toolResultImages, toolResultText, userParts } from "../src/lib/messages.ts";
 
 function result(content: ToolResultMessage["content"]): ToolResultMessage {
 	return {
@@ -158,5 +158,42 @@ describe("userParts", () => {
 	it("leaves text that only looks like a block alone", () => {
 		const text = 'not <attached-file name="x" mime="text/plain">';
 		expect(userParts(user([{ type: "text", text }]))).toEqual([{ type: "text", text }]);
+	});
+});
+
+describe("generatedImageInfo", () => {
+	const details = {
+		provider: "openrouter",
+		providerName: "OpenRouter",
+		modelId: "google/gemini-3-pro-image",
+		modelName: "Nano Banana Pro",
+	};
+
+	it("reads the provider and model from a generate_image result", () => {
+		const message = { ...result([]), toolName: "generate_image", details };
+		expect(generatedImageInfo(message)).toEqual(details);
+	});
+
+	it("ignores other tools", () => {
+		expect(generatedImageInfo({ ...result([]), details })).toBeUndefined();
+	});
+
+	it("falls back to the ids when names are missing", () => {
+		const message = {
+			...result([]),
+			toolName: "generate_image",
+			details: { provider: "openrouter", modelId: "google/gemini-3-pro-image" },
+		};
+		expect(generatedImageInfo(message)).toEqual({
+			provider: "openrouter",
+			providerName: "openrouter",
+			modelId: "google/gemini-3-pro-image",
+			modelName: "google/gemini-3-pro-image",
+		});
+	});
+
+	it("ignores malformed details", () => {
+		expect(generatedImageInfo({ ...result([]), toolName: "generate_image", details: { provider: 1 } })).toBeUndefined();
+		expect(generatedImageInfo({ ...result([]), toolName: "generate_image", details: "nope" })).toBeUndefined();
 	});
 });

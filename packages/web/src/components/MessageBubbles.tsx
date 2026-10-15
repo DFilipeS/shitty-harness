@@ -172,10 +172,26 @@ function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultVi
 						<span className="shrink-0 text-fg-faint motion-safe:animate-pulse">running…</span>
 					)}
 					{failed && <span className="shrink-0 text-red-500">failed</span>}
-					<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
+					<span className="ml-auto flex shrink-0 items-center gap-1.5">
+						{result?.imageModel !== undefined && (
+							<span
+								className="hidden max-w-40 truncate text-fg-faint sm:inline-block"
+								title={`${result.imageModel.providerName} · ${result.imageModel.modelName} (${result.imageModel.modelId})`}
+							>
+								{result.imageModel.modelName}
+							</span>
+						)}
+						<ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
+					</span>
 				</summary>
 				<div className="mt-1.5 flex flex-col gap-1.5">
 					<ToolArguments name={call.name} text={call.argumentsText} args={args} />
+					{result?.imageModel !== undefined && (
+						<div className="text-fg-faint">
+							Model: {result.imageModel.providerName} · {result.imageModel.modelName} (
+							{result.imageModel.modelId})
+						</div>
+					)}
 					{result !== undefined && result.text !== "" && (
 						<pre
 							className={`max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${

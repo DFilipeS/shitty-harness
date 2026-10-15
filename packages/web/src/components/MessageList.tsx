@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { EntryRecord, ModelInfo } from "@harness/protocol";
 import {
 	assistantMessageOf,
+	generatedImageInfo,
 	hasHiddenOutput,
 	toolResultImages,
 	toolResultOf,
@@ -57,6 +58,7 @@ export function MessageList() {
 					text: toolResultText(result),
 					images: toolResultImages(result),
 					isError: result.isError === true,
+					imageModel: generatedImageInfo(result),
 				});
 			}
 		}

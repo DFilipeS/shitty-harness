@@ -193,7 +193,32 @@ export type ToolResultView = {
 	text: string;
 	images: readonly ToolResultImage[];
 	isError: boolean;
+	/** For `generate_image`: the provider and model that produced the image. */
+	imageModel?: GeneratedImageInfo;
 };
+
+/** The provider and model a generated image came from. */
+export type GeneratedImageInfo = {
+	provider: string;
+	providerName: string;
+	modelId: string;
+	modelName: string;
+};
+
+/** Reads the model reference a `generate_image` result carries; undefined for other tools. */
+export function generatedImageInfo(message: ToolResultMessage): GeneratedImageInfo | undefined {
+	if (message.toolName !== "generate_image") return undefined;
+	const details = message.details;
+	if (typeof details !== "object" || details === null || Array.isArray(details)) return undefined;
+	const record = details as Record<string, unknown>;
+	if (typeof record.provider !== "string" || typeof record.modelId !== "string") return undefined;
+	return {
+		provider: record.provider,
+		providerName: typeof record.providerName === "string" ? record.providerName : record.provider,
+		modelId: record.modelId,
+		modelName: typeof record.modelName === "string" ? record.modelName : record.modelId,
+	};
+}
 
 /** Parses a tool call's arguments; undefined while they stream in or when they are not an object. */
 export function parseToolArguments(text: string): Record<string, unknown> | undefined {
