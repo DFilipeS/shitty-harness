@@ -35,6 +35,13 @@ export function formatTokens(value: number): string {
 	return `${(value / 1_000_000).toFixed(1)}M`;
 }
 
+/** Compact byte sizes: `512 B`, `4.2 KB`, `1.5 MB`. */
+export function formatBytes(value: number): string {
+	if (value < 1024) return `${value} B`;
+	if (value < 1024 * 1024) return `${(value / 1024).toFixed(value < 10 * 1024 ? 1 : 0)} KB`;
+	return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function errorMessage(error: unknown): string {
 	if (error instanceof Error) return error.message;
 	return String(error);

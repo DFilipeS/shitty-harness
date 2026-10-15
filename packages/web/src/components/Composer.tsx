@@ -1,21 +1,39 @@
 import { useLayoutEffect, useRef, useState, type Ref } from "react";
+import { ATTACHMENT_LIMITS } from "@harness/protocol";
+import {
+	attachmentAccept,
+	isImageAttachment,
+	readAttachment,
+	type PendingAttachment,
+} from "../lib/attachments.ts";
+import { formatBytes } from "../lib/format.ts";
 import { useProviderPalette } from "../lib/provider-commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
-import { BrainIcon, CpuIcon, SendIcon, StopIcon } from "./icons.tsx";
+import { BrainIcon, CpuIcon, FileIcon, PaperclipIcon, SendIcon, StopIcon, XIcon } from "./icons.tsx";
 
 /** The textarea grows with its content up to this height, then scrolls. Matches `max-h-40`. */
 const MAX_TEXTAREA_HEIGHT = 160;
 
 /** Floating message composer. ChatPanel positions it and reserves its height in the message list. */
 export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
-	const { activeSession, sendPrompt, abortSession, status } = useHarness();
+	const { activeSession, sendPrompt, abortSession, status, models } = useHarness();
 	const [text, setText] = useState("");
+	const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+	const [attachError, setAttachError] = useState<string | undefined>(undefined);
+	const [dragging, setDragging] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const model = activeSession?.agent.model;
 	const runActive = activeSession?.runActive ?? false;
-	const canSend = text.trim() !== "" && model !== undefined && status === "connected";
+	const modelInfo = models.find(
+		(candidate) => candidate.provider === model?.provider && candidate.id === model?.modelId,
+	);
+	const hasImages = attachments.some((pending) => isImageAttachment(pending.attachment));
+	const imagesBlocked = hasImages && modelInfo !== undefined && !modelInfo.input.includes("image");
+	const canSend =
+		(text.trim() !== "" || attachments.length > 0) && model !== undefined && status === "connected" && !imagesBlocked;
 
 	useLayoutEffect(() => {
 		const element = textareaRef.current;
@@ -31,11 +49,45 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 		return () => window.removeEventListener("resize", resize);
 	}, [text]);
 
+	const addFiles = async (files: readonly File[]) => {
+		if (files.length === 0) return;
+		setAttachError(undefined);
+		const accepted: PendingAttachment[] = [];
+		const problems: string[] = [];
+		let count = attachments.length;
+		let total = attachments.reduce((sum, pending) => sum + pending.size, 0);
+		for (const file of files) {
+			if (count >= ATTACHMENT_LIMITS.maxPerMessage) {
+				problems.push(`A message can carry at most ${ATTACHMENT_LIMITS.maxPerMessage} attachments.`);
+				break;
+			}
+			try {
+				const pending = await readAttachment(file);
+				if (total + pending.size > ATTACHMENT_LIMITS.maxTotalBytes) {
+					problems.push(
+						`${file.name} would take the attachments past ${formatBytes(ATTACHMENT_LIMITS.maxTotalBytes)}.`,
+					);
+					continue;
+				}
+				accepted.push(pending);
+				count += 1;
+				total += pending.size;
+			} catch (error) {
+				problems.push(error instanceof Error ? error.message : String(error));
+			}
+		}
+		if (accepted.length > 0) setAttachments((current) => [...current, ...accepted]);
+		if (problems.length > 0) setAttachError(problems.join(" "));
+	};
+
 	const submit = async () => {
 		if (!canSend) return;
 		const value = text;
+		const files = attachments.map((pending) => pending.attachment);
 		setText("");
-		await sendPrompt(value);
+		setAttachments([]);
+		setAttachError(undefined);
+		await sendPrompt(value, files);
 		textareaRef.current?.focus();
 	};
 
@@ -45,8 +97,59 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 			className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4"
 		>
 			<div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-1.5">
-
-				<div className="flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-panel p-2 shadow-lg shadow-black/5 focus-within:border-line-strong dark:shadow-black/40">
+				<div
+					onDragOver={(event) => {
+						if (!event.dataTransfer.types.includes("Files")) return;
+						event.preventDefault();
+						setDragging(true);
+					}}
+					onDragLeave={(event) => {
+						if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+					}}
+					onDrop={(event) => {
+						event.preventDefault();
+						setDragging(false);
+						void addFiles([...event.dataTransfer.files]);
+					}}
+					className={`flex flex-wrap items-end gap-2 rounded-2xl border bg-panel p-2 shadow-lg shadow-black/5 focus-within:border-line-strong dark:shadow-black/40 ${
+						dragging ? "border-line-strong ring-2 ring-fg/10" : "border-line"
+					}`}
+				>
+					{attachments.length > 0 && (
+						<div className="flex w-full flex-wrap gap-1.5 px-1 pt-0.5">
+							{attachments.map((pending) => (
+								<AttachmentChip
+									key={pending.key}
+									pending={pending}
+									onRemove={() =>
+										setAttachments((current) =>
+											current.filter((candidate) => candidate.key !== pending.key),
+										)
+									}
+								/>
+							))}
+						</div>
+					)}
+					<input
+						ref={fileInputRef}
+						type="file"
+						multiple
+						accept={attachmentAccept()}
+						className="hidden"
+						onChange={(event) => {
+							void addFiles([...(event.target.files ?? [])]);
+							event.target.value = "";
+						}}
+					/>
+					<button
+						type="button"
+						onClick={() => fileInputRef.current?.click()}
+						title="Attach files"
+						aria-label="Attach files"
+						className="mb-0.5 rounded-lg p-2 text-fg-subtle hover:bg-raised hover:text-fg pointer-coarse:p-2.5"
+					>
+						<PaperclipIcon />
+					</button>
 					<textarea
 						ref={textareaRef}
 						data-composer-input
@@ -54,6 +157,12 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 						rows={1}
 						placeholder="Send a message…"
 						onChange={(event) => setText(event.target.value)}
+						onPaste={(event) => {
+							const files = [...(event.clipboardData?.files ?? [])];
+							if (files.length === 0) return;
+							event.preventDefault();
+							void addFiles(files);
+						}}
 						onKeyDown={(event) => {
 							if (event.key === "Enter" && !event.shiftKey) {
 								event.preventDefault();
@@ -85,6 +194,12 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 					<div className="flex w-full flex-wrap items-center gap-1 px-1">
 						<ModelChip />
 						<ThinkingChip />
+						{imagesBlocked && (
+							<span className="text-[11px] text-warn">
+								This model cannot read images. Remove them or switch to a vision model.
+							</span>
+						)}
+						{attachError !== undefined && <span className="text-[11px] text-red-500">{attachError}</span>}
 						{runActive && (
 							<span className="ml-auto flex flex-wrap items-center justify-end gap-x-1.5 text-[11px] text-fg-faint">
 								<span className="flex items-center gap-1.5">
@@ -100,6 +215,35 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 					</div>
 				</div>
 			</div>
+		</div>
+	);
+}
+
+/** One file waiting to be sent: a thumbnail for images, a name and size for text files. */
+function AttachmentChip({ pending, onRemove }: { pending: PendingAttachment; onRemove: () => void }) {
+	const { attachment, size } = pending;
+	return (
+		<div className="flex items-center gap-1.5 rounded-lg border border-line bg-raised py-1 pr-1 pl-1.5 text-[11px]">
+			{isImageAttachment(attachment) ? (
+				<img
+					src={`data:${attachment.mimeType};base64,${attachment.data}`}
+					alt={attachment.name}
+					className="h-8 w-8 shrink-0 rounded object-cover"
+				/>
+			) : (
+				<FileIcon className="h-4 w-4 shrink-0 text-fg-subtle" />
+			)}
+			<span className="max-w-40 truncate text-fg-muted">{attachment.name}</span>
+			<span className="shrink-0 text-fg-faint">{formatBytes(size)}</span>
+			<button
+				type="button"
+				onClick={onRemove}
+				title={`Remove ${attachment.name}`}
+				aria-label={`Remove ${attachment.name}`}
+				className="rounded p-0.5 text-fg-faint hover:bg-panel hover:text-fg"
+			>
+				<XIcon className="h-3.5 w-3.5" />
+			</button>
 		</div>
 	);
 }

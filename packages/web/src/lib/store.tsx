@@ -8,6 +8,7 @@ import type {
 	ModelInfo,
 	ModelRef,
 	ModelThinkingLevel,
+	PromptAttachment,
 	ProviderInfo,
 	ProviderRefreshReport,
 	SessionSummary,
@@ -254,7 +255,7 @@ type HarnessContextValue = {
 	selectSession(id: string): void;
 	renameSession(id: string, title: string): Promise<void>;
 	deleteSession(id: string): Promise<void>;
-	sendPrompt(text: string): Promise<void>;
+	sendPrompt(text: string, attachments?: readonly PromptAttachment[]): Promise<void>;
 	abortSession(): Promise<void>;
 	finishLive(sessionId: string): void;
 	configureModel(model: ModelRef): Promise<void>;
@@ -416,11 +417,17 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	);
 
 	const sendPrompt = useCallback(
-		async (text: string) => {
+		async (text: string, attachments?: readonly PromptAttachment[]) => {
 			const id = state.activeSessionId;
 			if (id === undefined) return;
 			try {
-				await client.send({ type: "sessions.prompt", sessionId: id, text, requestId: crypto.randomUUID() });
+				await client.send({
+					type: "sessions.prompt",
+					sessionId: id,
+					text,
+					requestId: crypto.randomUUID(),
+					...(attachments === undefined || attachments.length === 0 ? {} : { attachments: [...attachments] }),
+				});
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
 			}

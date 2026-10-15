@@ -1,7 +1,7 @@
-import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { ModelInfo } from "@harness/protocol";
 import { describe, expect, it } from "vitest";
-import { hasHiddenOutput, toolResultImages, toolResultText } from "../src/lib/messages.ts";
+import { hasHiddenOutput, toolResultImages, toolResultText, userParts } from "../src/lib/messages.ts";
 
 function result(content: ToolResultMessage["content"]): ToolResultMessage {
 	return {
@@ -108,5 +108,55 @@ describe("tool result content", () => {
 		]);
 		expect(toolResultText(message)).toBe("here it is");
 		expect(toolResultImages(message)).toHaveLength(1);
+	});
+});
+
+function user(content: UserMessage["content"]): UserMessage {
+	return { role: "user", content, timestamp: 1 };
+}
+
+describe("userParts", () => {
+	it("keeps a plain string message as one text part", () => {
+		expect(userParts(user("Hello"))).toEqual([{ type: "text", text: "Hello" }]);
+	});
+
+	it("splits text and images", () => {
+		expect(
+			userParts(user([{ type: "text", text: "Look" }, { type: "image", data: "aGk=", mimeType: "image/png" }])),
+		).toEqual([
+			{ type: "text", text: "Look" },
+			{ type: "image", data: "aGk=", mimeType: "image/png" },
+		]);
+	});
+
+	it("parses an attached file block", () => {
+		expect(
+			userParts(
+				user([
+					{
+						type: "text",
+						text: '<attached-file name="notes.md" mime="text/markdown">\n# Notes\n</attached-file>',
+					},
+				]),
+			),
+		).toEqual([{ type: "file", name: "notes.md", mimeType: "text/markdown", text: "# Notes" }]);
+	});
+
+	it("unescapes file names", () => {
+		expect(
+			userParts(
+				user([
+					{
+						type: "text",
+						text: '<attached-file name="a&amp;&quot;b.md" mime="text/plain">\nx\n</attached-file>',
+					},
+				]),
+			),
+		).toEqual([{ type: "file", name: 'a&"b.md', mimeType: "text/plain", text: "x" }]);
+	});
+
+	it("leaves text that only looks like a block alone", () => {
+		const text = 'not <attached-file name="x" mime="text/plain">';
+		expect(userParts(user([{ type: "text", text }]))).toEqual([{ type: "text", text }]);
 	});
 });

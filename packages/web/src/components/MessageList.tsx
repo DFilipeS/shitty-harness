@@ -8,7 +8,7 @@ import {
 	toolResultText,
 	toLiveBlock,
 	userMessageOf,
-	userText,
+	userParts,
 	type ToolResultView,
 } from "../lib/messages.ts";
 import { useHarness } from "../lib/store.tsx";
@@ -115,7 +115,7 @@ function EntryView({
 	models: readonly ModelInfo[];
 }) {
 	const user = userMessageOf(entry);
-	if (user !== undefined) return <UserBubble text={userText(user)} />;
+	if (user !== undefined) return <UserBubble parts={userParts(user)} />;
 
 	const assistant = assistantMessageOf(entry);
 	if (assistant !== undefined) {

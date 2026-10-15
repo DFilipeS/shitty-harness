@@ -117,11 +117,40 @@ export function toolResultOf(entry: EntryRecord): ToolResultMessage | undefined 
 	return message?.role === "toolResult" ? message : undefined;
 }
 
-export function userText(message: UserMessage): string {
-	if (typeof message.content === "string") return message.content;
-	return message.content
-		.map((part) => (part.type === "text" ? part.text : part.type === "image" ? "[image]" : ""))
-		.join("\n");
+/** One display part of a user message: text, an attached image, or an attached text file. */
+export type UserPart =
+	| { type: "text"; text: string }
+	| { type: "image"; data: string; mimeType: string }
+	| { type: "file"; name: string; mimeType: string; text: string };
+
+/** The `<attached-file>` block the harness writes around an attached text file. */
+const ATTACHED_FILE_PATTERN = /^<attached-file name="([^"]*)" mime="([^"]*)">\n([\s\S]*)\n<\/attached-file>$/;
+
+/** The user message as display parts: plain text, images, and attached text files. */
+export function userParts(message: UserMessage): UserPart[] {
+	if (typeof message.content === "string") return [{ type: "text", text: message.content }];
+	return message.content.map((part): UserPart => {
+		if (part.type === "image") return { type: "image", data: part.data, mimeType: part.mimeType };
+		return parseAttachedFile(part.text) ?? { type: "text", text: part.text };
+	});
+}
+
+function parseAttachedFile(text: string): UserPart | undefined {
+	const match = ATTACHED_FILE_PATTERN.exec(text);
+	if (match === null) return undefined;
+	const [, name, mimeType, content] = match;
+	if (name === undefined || mimeType === undefined || content === undefined) return undefined;
+	return {
+		type: "file",
+		name: unescapeAttribute(name),
+		mimeType: unescapeAttribute(mimeType),
+		text: content,
+	};
+}
+
+/** Reverse of the escaping `buildPromptContent` applies to file names and MIME types. */
+function unescapeAttribute(value: string): string {
+	return value.replaceAll("&quot;", '"').replaceAll("&lt;", "<").replaceAll("&amp;", "&");
 }
 
 export function toolResultText(message: ToolResultMessage): string {

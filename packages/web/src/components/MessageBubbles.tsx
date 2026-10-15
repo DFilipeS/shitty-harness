@@ -7,6 +7,7 @@ import {
 	type LiveMessage,
 	type ToolResultImage,
 	type ToolResultView,
+	type UserPart,
 } from "../lib/messages.ts";
 import {
 	BrainIcon,
@@ -32,13 +33,43 @@ const thinkingOpenState = new Map<string, boolean>();
  */
 const toolOpenState = new Map<string, boolean>();
 
-export function UserBubble({ text }: { text: string }) {
+export function UserBubble({ parts }: { parts: UserPart[] }) {
 	return (
 		<div className="flex justify-end">
-			<div className="min-w-0 max-w-[85%] rounded-2xl rounded-br-sm bg-user-bubble px-3.5 py-2">
-				<Markdown text={text} variant="user" />
+			<div className="flex min-w-0 max-w-[85%] flex-col gap-2 rounded-2xl rounded-br-sm bg-user-bubble px-3.5 py-2">
+				{parts.map((part, index) => {
+					if (part.type === "image") {
+						return (
+							<PreviewableImage
+								key={index}
+								image={part}
+								alt="Attached image"
+								className="self-end"
+							/>
+						);
+					}
+					if (part.type === "file") return <AttachedFileCard key={index} file={part} />;
+					return <Markdown key={index} text={part.text} variant="user" />;
+				})}
 			</div>
 		</div>
+	);
+}
+
+/** A text file sent with a message, collapsed until opened. */
+function AttachedFileCard({ file }: { file: Extract<UserPart, { type: "file" }> }) {
+	return (
+		<details className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs">
+			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
+				<FileIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
+				<span className="min-w-0 truncate font-mono text-fg">{file.name}</span>
+				<span className="shrink-0 text-fg-faint">{file.mimeType}</span>
+				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
+			</summary>
+			<pre className="mt-1.5 max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono text-fg-muted">
+				{file.text}
+			</pre>
+		</details>
 	);
 }
 
@@ -259,60 +290,74 @@ function imageDataUrl(image: ToolResultImage): string {
 }
 
 /**
- * Images a tool returned, shown inline. Clicking one opens it full size over the app: a data URL
- * cannot be opened in a new tab (Chrome blocks top-level navigation to `data:`), and an in-app
- * preview keeps the image viewable on a phone too.
+ * An image that opens full size when clicked. A data URL cannot be opened in a new tab (Chrome
+ * blocks top-level navigation to `data:`), and an in-app preview keeps the image viewable on a
+ * phone too.
  */
-function ToolResultImages({ images }: { images: readonly ToolResultImage[] }) {
-	const [preview, setPreview] = useState<ToolResultImage | undefined>(undefined);
+function PreviewableImage({
+	image,
+	alt,
+	className,
+}: {
+	image: ToolResultImage;
+	alt: string;
+	className?: string;
+}) {
+	const [preview, setPreview] = useState(false);
 
 	useEffect(() => {
-		if (preview === undefined) return;
+		if (!preview) return;
 		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") setPreview(undefined);
+			if (event.key === "Escape") setPreview(false);
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [preview]);
 
-	if (images.length === 0) return null;
 	return (
 		<>
-			<div className="flex flex-wrap gap-2">
-				{images.map((image, index) => (
-					<button
-						key={index}
-						type="button"
-						onClick={() => setPreview(image)}
-						aria-label="View image full size"
-						className="w-fit cursor-zoom-in"
-					>
-						<img
-							src={imageDataUrl(image)}
-							alt="Tool result"
-							className="max-h-[28rem] max-w-full rounded-lg border border-line"
-						/>
-					</button>
-				))}
-			</div>
-			{preview !== undefined && (
+			<button
+				type="button"
+				onClick={() => setPreview(true)}
+				aria-label="View image full size"
+				className={`w-fit cursor-zoom-in ${className ?? ""}`}
+			>
+				<img
+					src={imageDataUrl(image)}
+					alt={alt}
+					className="max-h-[28rem] max-w-full rounded-lg border border-line"
+				/>
+			</button>
+			{preview && (
 				<div
 					data-image-preview
 					role="dialog"
 					aria-modal="true"
 					aria-label="Image preview"
-					onClick={() => setPreview(undefined)}
+					onClick={() => setPreview(false)}
 					className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4"
 				>
 					<img
-						src={imageDataUrl(preview)}
-						alt="Tool result"
+						src={imageDataUrl(image)}
+						alt={alt}
 						onClick={(event) => event.stopPropagation()}
 						className="max-h-full max-w-full rounded-lg"
 					/>
 				</div>
 			)}
 		</>
+	);
+}
+
+/** Images a tool returned, shown inline. */
+function ToolResultImages({ images }: { images: readonly ToolResultImage[] }) {
+	if (images.length === 0) return null;
+	return (
+		<div className="flex flex-wrap gap-2">
+			{images.map((image, index) => (
+				<PreviewableImage key={index} image={image} alt="Tool result" />
+			))}
+		</div>
 	);
 }
 
