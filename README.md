@@ -70,10 +70,13 @@ pi-durable commits streamed text and tool output every 100 ms (its default), and
 
 1. Press `⌘K` and run **Configure model providers…** (or use the palette button in the sidebar).
 2. Pick a provider, choose **Set API key…**, paste the key, and press `↵`.
-3. Create a session. The model and thinking level live under the message box; click either one to pick from the palette.
-4. Optional: run **Model defaults…** in the palette to choose the model and thinking level new
+3. Create a session. The model, thinking level, and target live under the message box; click one
+   to pick from the palette. The target is where the session's tools run: its own scratch
+directory under `data/workspaces/<session-id>` by default, or any folder on this machine. A
+chat-only session creates nothing until a tool actually runs.
+4. Optional: run **Defaults…** in the palette to choose the model, thinking level, and target new
    sessions start with. **First available** and **Model default** clear each choice; sessions that
-   already exist keep their own model and level.
+   already exist keep their own model, level, and target.
 
 Each session has its own URL (`/sessions/<id>`). The address bar follows the session you open, so
 reloading the page, bookmarking it, or sending the link to another browser opens that same session.
@@ -179,19 +182,20 @@ one, so such a reply shows only its thinking; the conversation says so when it h
 models avoid it: they always call the tool.
 
 Tools touch files and processes only through an `ExecutionEnv`. Today the only implementation is
-the local machine (`NodeExecutionEnv`), which starts in the directory the server was started from
-(the repo root under `npm run dev` and `npm start`). Set `HARNESS_WORKSPACE=/some/dir` to change
-it. **Commands run as the server user with no sandbox**, so
-only point this at a machine where that is fine.
+the local machine (`NodeExecutionEnv`). Each session has a **target**: the directory its tools run
+in. New sessions start in their own scratch directory under `data/workspaces/<session-id>`; the
+composer's target control switches a session to any folder on the machine. Switching appends a
+visible entry to the transcript and takes effect on the next run. **Commands run as the server user
+with no sandbox**, so only point the target at folders where that is fine.
 
-The environment is the seam for remote execution: `openHarnessService` takes an `environment`
-factory, and anything implementing pi-durable's `ExecutionEnv` works — for example a container per
-conversation, looked up by `conversationId`. Only the local implementation exists today.
+The target is the seam for remote execution: a sandbox will be another kind of target, and
+`openHarnessService` takes an `environment` factory, so anything implementing pi-durable's
+`ExecutionEnv` works.
 
 ## Current scope
 
-- Local tools only: the coding tools run on the machine that runs the server; a remote sandbox
-  environment is not implemented yet.
+- Local tools only: each session runs its tools in a target directory on the machine that runs the
+  server; a remote sandbox target is not implemented yet.
 - API keys only: no OAuth login flows.
 - Built-in providers only: no custom OpenAI/Anthropic-compatible endpoints.
 - Single user, local-first: the server trusts every client on localhost.
