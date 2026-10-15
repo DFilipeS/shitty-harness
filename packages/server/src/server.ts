@@ -13,6 +13,7 @@ import {
 	type PromptAttachment,
 	type ServerError,
 	type ServerMessage,
+	type TargetChoice,
 } from "@harness/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -48,6 +49,9 @@ const COMMAND_TYPES = new Set<string>([
 	"sessions.prompt",
 	"sessions.abort",
 	"sessions.configure",
+	"sessions.setTarget",
+	"workspaces.browse",
+	"workspaces.createFolder",
 	"providers.list",
 	"providers.configure",
 	"providers.refresh",
@@ -104,6 +108,25 @@ function optionalThinkingLevel(value: unknown): ModelThinkingLevel | null | unde
 		throw new ServiceError("invalid", "thinkingLevel is not a known thinking level");
 	}
 	return value as ModelThinkingLevel;
+}
+
+function optionalTargetChoice(value: unknown): TargetChoice | null | undefined {
+	if (value === undefined) return undefined;
+	if (value === null) return null;
+	if (!isRecord(value) || value.kind !== "local") {
+		throw new ServiceError("invalid", "target must be a local target");
+	}
+	if (value.path === undefined) return { kind: "local" };
+	if (typeof value.path !== "string") throw new ServiceError("invalid", "target.path must be a string");
+	return { kind: "local", path: value.path };
+}
+
+function requiredTargetChoice(value: unknown): TargetChoice {
+	const target = optionalTargetChoice(value);
+	if (target === undefined || target === null) {
+		throw new ServiceError("invalid", "target must be a local target");
+	}
+	return target;
 }
 
 function optionalAttachments(value: unknown): PromptAttachment[] {
@@ -274,6 +297,20 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				});
 				return { data: { agent } };
 			}
+			case "sessions.setTarget": {
+				const sessionId = requireString(command.sessionId, "sessionId");
+				const target = requiredTargetChoice(command.target);
+				return { data: { session: await service.setTarget(sessionId, target) } };
+			}
+			case "workspaces.browse": {
+				const path = command.path === undefined ? undefined : requireString(command.path, "path");
+				return { data: await service.browseWorkspaces(path) };
+			}
+			case "workspaces.createFolder": {
+				const parent = requireString(command.parent, "parent");
+				const name = requireString(command.name, "name");
+				return { data: await service.createWorkspaceFolder(parent, name) };
+			}
 			case "providers.list": {
 				return { data: await service.listProviders() };
 			}
@@ -292,6 +329,7 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 					model: optionalModelRef(command.model),
 					thinkingLevel: optionalThinkingLevel(command.thinkingLevel),
 					imageModel: optionalModelRef(command.imageModel),
+					target: optionalTargetChoice(command.target),
 				});
 				return { data: { defaults } };
 			}
