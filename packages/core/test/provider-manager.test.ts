@@ -36,6 +36,9 @@ describe("ProviderManager", () => {
 		const configPath = join(dir, "config.json");
 		const modelsPath = join(dir, "models.json");
 		const config: AppConfig = { ...emptyConfig(), providers: { openrouter: { apiKey: "test-key" } } };
+		// pi-ai's OpenRouter personalizer uses the global fetch, not the injected one, so keep it off
+		// the network; a 401 leaves the catalog unpersonalized, as an unknown key should.
+		vi.stubGlobal("fetch", async () => new Response("unauthorized", { status: 401 }));
 		try {
 			const calls: string[] = [];
 			const manager = new ProviderManager(configPath, modelsPath, config, {
@@ -75,6 +78,7 @@ describe("ProviderManager", () => {
 			expect(offlineCalls.filter((url) => url.includes("openrouter"))).toHaveLength(0);
 			expect((await second.listModels()).some((model) => model.id === ARGON_ID)).toBe(true);
 		} finally {
+			vi.unstubAllGlobals();
 			await rm(dir, { recursive: true, force: true });
 		}
 	});
