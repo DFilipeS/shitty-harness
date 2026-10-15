@@ -153,10 +153,21 @@ Agents get pi-durable's default coding tools: `read`, `write`, `edit`, and `bash
 the `CodingTools` extension, which `packages/core/src/service.ts` installs in the registry; every
 conversation selects it by default. A `generate_image` tool is installed alongside them: it calls
 the provider's image API (the chat stream cannot carry images), saves the picture in the working
-directory, and returns it as a tool result, so it shows up in the conversation. Models in the
-picker that have an image model of the same id are marked with a wand, and `generate_image`
-defaults to that model. For OpenRouter image models the tool also reads the generation's real cost
-back from the provider, because image tokens are billed above the text output rate.
+directory, and returns it as a tool result, so it shows up in the conversation. Pass `image` with
+a file path to edit or reference an existing picture, such as one from an earlier `Saved ...`
+note.
+
+**Model defaults…** picks the image model the tool uses; without one it takes the image sibling of
+the conversation's model, then the first image model that also returns text. Only those are
+listed: pi-ai's OpenRouter image API speaks chat completions, so `/images`-only models (FLUX,
+Seedream, …) cannot be driven yet. The prompt tells the agent which image models it can use, and
+chat models in the picker that have an image model of the same id are marked with a wand. For
+OpenRouter image models the tool reads the generation's real cost back from the provider, because
+image tokens are billed above the text output rate.
+
+A wand-marked chat model can also answer with an image of its own. A chat message cannot carry
+one, so such a reply shows only its thinking; the conversation says so when it happens. Text
+models avoid it: they always call the tool.
 
 Tools touch files and processes only through an `ExecutionEnv`. Today the only implementation is
 the local machine (`NodeExecutionEnv`), which starts in the directory the server was started from
