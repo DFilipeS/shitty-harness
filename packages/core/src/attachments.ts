@@ -132,7 +132,7 @@ function validateAttachments(attachments: readonly PromptAttachment[], modelInpu
 }
 
 /** Keep the base name; drop path separators and anything the filesystem should not see. */
-function safeFileName(name: string): string {
+export function safeFileName(name: string): string {
 	const base = name.split(/[/\\]/).pop() ?? "";
 	const cleaned = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80);
 	if (cleaned === "" || cleaned === "." || cleaned === "..") return "file";

@@ -11,6 +11,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { defineExtension, defineTool, section, type ToolExecutionApi } from "@earendil-works/pi-durable";
 import { decodeBase64, encodeBase64 } from "./base64.ts";
+import { safeFileName } from "./attachments.ts";
 import type { ModelRef } from "@harness/protocol";
 
 const MIME_EXTENSIONS: Record<string, string> = {
@@ -37,7 +38,10 @@ const generateImageSchema = Type.Object({
 		}),
 	),
 	path: Type.Optional(
-		Type.String({ description: "File to write the image to, relative to the working directory." }),
+		Type.String({
+			description:
+				"File name to save the image as, inside the harness image directory. Default: a timestamped name.",
+		}),
 	),
 	model: Type.Optional(
 		Type.String({
@@ -143,6 +147,11 @@ function actualUsage(result: AssistantImages, reportedCost: number | undefined):
 	return { ...usage, cost };
 }
 
+/** Where generated images are saved: a per-conversation folder in the harness directory. */
+function imageDirectory(conversationId: string): string {
+	return `.harness/images/${conversationId}`;
+}
+
 /** Writes the images into the environment; failures become diagnostics, not a failed call. */
 async function saveImages(
 	api: ToolExecutionApi,
@@ -152,11 +161,14 @@ async function saveImages(
 ): Promise<string[]> {
 	const env = api.env;
 	if (env === undefined) return [];
+	const directory = imageDirectory(String(api.conversationId));
+	const requested = requestedPath === undefined ? undefined : safeFileName(requestedPath);
 	const saved: string[] = [];
 	for (const [index, image] of images.entries()) {
 		const extension = MIME_EXTENSIONS[image.mimeType] ?? "png";
-		const base = requestedPath ?? `image-${Date.now()}`;
-		const target = images.length === 1 ? withExtension(base, extension) : `${base}-${index + 1}.${extension}`;
+		const base = requested ?? `image-${Date.now()}`;
+		const name = images.length === 1 ? withExtension(base, extension) : `${base}-${index + 1}.${extension}`;
+		const target = `${directory}/${name}`;
 		const result = await env.writeFile(target, decodeBase64(image.data), context);
 		if (result.ok) saved.push(target);
 		else {
@@ -193,7 +205,7 @@ export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaul
 	return defineTool({
 		name: "generate_image",
 		description:
-			"Generate or edit an image with the provider's image model. The image is saved in the working directory and shown in the conversation.",
+			"Generate or edit an image with the provider's image model. The image is saved under `.harness/images/` and shown in the conversation.",
 		parameters: generateImageSchema,
 		execute: async (args, api, context) => {
 			const available = await api.models.getAvailableOfType("image");
@@ -307,6 +319,7 @@ function imageSection(options: ImageToolsOptions, toolName: string) {
 			const lines = [
 				"For anything that creates or changes an image, call the generate_image tool and then reply in text. Never put an image in a reply: the chat stream cannot store one, so it would be lost.",
 				"Pass `image` with a file path to edit or reference an existing image, such as one from an earlier `Saved ...` note or from the attached-files list.",
+				"Generated images are saved under `.harness/images/`; pass `path` to name the file.",
 				`Image models: ${usable.map((model) => `${model.name} (${model.id})`).join(", ")}.`,
 			];
 			const defaultModel =

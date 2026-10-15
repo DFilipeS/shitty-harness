@@ -80,6 +80,7 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 			getAuth: async () => ({ auth: { apiKey: "test-key" } }),
 		},
 		agent: async () => ({ model: options.current }),
+		conversationId: 1,
 		env: options.env,
 		diagnostic: (diagnostic: ToolDiagnostic) => options.diagnostics?.push(diagnostic),
 	} as unknown as ToolExecutionApi;
@@ -181,9 +182,9 @@ describe("generate_image", () => {
 				modelName: IMAGE_MODEL.name,
 			});
 			const note = (result.output ?? []).find((part) => part.type === "text")?.text ?? "";
-			const saved = /`(image-\d+\.png)`/.exec(note)?.[1];
-			expect(saved).toBeDefined();
-			expect((await readFile(join(workspace, saved ?? ""))).toString("base64")).toBe(PNG);
+			const saved = /`([^`]+\.png)`/.exec(note)?.[1] ?? "";
+			expect(saved).toMatch(/^\.harness\/images\/1\/image-\d+\.png$/);
+			expect((await readFile(join(workspace, saved))).toString("base64")).toBe(PNG);
 		} finally {
 			await rm(workspace, { recursive: true, force: true });
 		}
@@ -398,8 +399,25 @@ describe("generate_image", () => {
 				BACKGROUND_CONTEXT,
 			);
 			expect(imageParts(result)).toHaveLength(2);
-			expect((await readFile(join(workspace, "apples-1.png"))).toString("base64")).toBe(PNG);
-			expect((await readFile(join(workspace, "apples-2.jpg"))).toString("base64")).toBe(OTHER_PNG);
+			expect((await readFile(join(workspace, ".harness/images/1/apples-1.png"))).toString("base64")).toBe(PNG);
+			expect((await readFile(join(workspace, ".harness/images/1/apples-2.jpg"))).toString("base64")).toBe(OTHER_PNG);
+		} finally {
+			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps a requested path inside the harness image directory", async () => {
+		const workspace = await mkdtemp(join(tmpdir(), "harness-image-"));
+		try {
+			const env = new NodeExecutionEnv({ cwd: workspace });
+			const result = await GenerateImageTool.execute(
+				{ prompt: "a red apple", path: "../../escape.png" },
+				fakeApi({ env }),
+				BACKGROUND_CONTEXT,
+			);
+			expect(result.isError).toBeUndefined();
+			expect((await readFile(join(workspace, ".harness/images/1/escape.png"))).toString("base64")).toBe(PNG);
+			await expect(readFile(join(workspace, "escape.png"))).rejects.toThrow();
 		} finally {
 			await rm(workspace, { recursive: true, force: true });
 		}

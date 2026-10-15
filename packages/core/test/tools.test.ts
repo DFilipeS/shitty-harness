@@ -125,8 +125,8 @@ describe("coding tools", () => {
 			const message = toolResults[0]?.model?.[0];
 			const content = message?.role === "toolResult" ? message.content : [];
 			expect(content.some((part) => part.type === "image" && part.data === PNG)).toBe(true);
-			expect(JSON.stringify(content)).toContain("Saved `image-");
-			const files = await readdir(workspace);
+			expect(JSON.stringify(content)).toContain("Saved `.harness/images/");
+			const files = await readdir(join(workspace, ".harness", "images", session.id));
 			expect(files.some((name) => /^image-\d+\.png$/.test(name))).toBe(true);
 		} finally {
 			await service.close();
