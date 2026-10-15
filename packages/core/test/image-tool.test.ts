@@ -69,6 +69,7 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 	return {
 		models: {
 			getAvailableOfType: async () => options.available ?? [IMAGE_MODEL],
+			getProvider: (id: string) => ({ id, name: id === "openrouter" ? "OpenRouter" : id }),
 			generateImages: async (model: ImageModel<ImageApi>, context: ImagesContext) =>
 				(options.generate ?? (() => generated()))(model, context),
 			getAuth: async () => ({ auth: { apiKey: "test-key" } }),
@@ -188,6 +189,12 @@ describe("generate_image", () => {
 			expect(result.isError).toBeUndefined();
 			expect(imageParts(result)).toHaveLength(1);
 			expect(imageParts(result)[0]?.data).toBe(PNG);
+			expect(result.details).toEqual({
+				provider: "openrouter",
+				providerName: "OpenRouter",
+				modelId: IMAGE_MODEL.id,
+				modelName: IMAGE_MODEL.name,
+			});
 			const note = (result.output ?? []).find((part) => part.type === "text")?.text ?? "";
 			const saved = /`(image-\d+\.png)`/.exec(note)?.[1];
 			expect(saved).toBeDefined();
@@ -243,6 +250,7 @@ describe("generate_image", () => {
 		);
 		expect(result.isError).toBe(true);
 		expect(JSON.stringify(result.output)).toContain("at least $1.00");
+		expect(result.details).toMatchObject({ provider: "openrouter", modelId: IMAGE_MODEL.id });
 	});
 
 	it("reports a missing image model", async () => {

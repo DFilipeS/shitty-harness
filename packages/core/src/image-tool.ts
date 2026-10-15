@@ -231,12 +231,19 @@ export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaul
 			if (model === undefined) {
 				return { output: [{ type: "text", text: `Unknown image model: ${args.model}` }], isError: true };
 			}
+			// For the transcript: which provider and model the picture came from.
+			const details = {
+				provider: model.provider,
+				providerName: api.models.getProvider(model.provider)?.name ?? model.provider,
+				modelId: model.id,
+				modelName: model.name,
+			};
 
 			const input: ImagesInputContent[] = [];
 			if (args.image !== undefined) {
 				const read = await inputImage(api, args.image, context);
 				if ("error" in read) {
-					return { output: [{ type: "text", text: read.error }], isError: true };
+					return { output: [{ type: "text", text: read.error }], isError: true, details };
 				}
 				input.push(read.input);
 			}
@@ -255,6 +262,7 @@ export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaul
 						{ type: "text", text: result.errorMessage ?? `Image generation ${result.stopReason}.` },
 					],
 					isError: true,
+					details,
 					...usageField,
 				};
 			}
@@ -263,6 +271,7 @@ export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaul
 				return {
 					output: [{ type: "text", text: "The model returned no image." }],
 					isError: true,
+					details,
 					...usageField,
 				};
 			}
@@ -272,7 +281,7 @@ export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaul
 				saved.length === 0
 					? "The image was not saved: no execution environment is configured."
 					: `Saved ${saved.map((path) => `\`${path}\``).join(", ")}.`;
-			return { output: [...images, { type: "text", text: note }], ...usageField };
+			return { output: [...images, { type: "text", text: note }], details, ...usageField };
 		},
 	});
 }
