@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import {
 	collectCommands,
 	formatKeys,
@@ -131,6 +131,45 @@ export function CommandPalette({
 	}, [open, state.prompt]);
 
 	const page = state.pages[state.pages.length - 1];
+
+	// A loading page fetches its commands and replaces itself in place.
+	useEffect(() => {
+		if (!open || page?.kind !== "loading") return;
+		let cancelled = false;
+		const replace = (next: CommandPage) =>
+			setState((current) => {
+				if (current.pages[current.pages.length - 1] !== page) return current;
+				const pages = [...current.pages];
+				pages[pages.length - 1] = next;
+				return { ...current, pages, query: "", selected: 0 };
+			});
+		void page.load().then(
+			(next) => {
+				if (!cancelled) replace(next);
+			},
+			(error: unknown) => {
+				if (cancelled) return;
+				replace({
+					kind: "commands",
+					title: page.title,
+					placeholder: "Type a command…",
+					commands: [
+						{
+							id: "loading.failed",
+							title: "Could not load this list",
+							group: "Error",
+							detail: error instanceof Error ? error.message : String(error),
+							run: () => {},
+						},
+					],
+				});
+			},
+		);
+		return () => {
+			cancelled = true;
+		};
+	}, [open, page]);
+
 	const matches = state.prompt === undefined && page?.kind === "commands" ? filter(page.commands, state.query) : [];
 	const { groups, rows } = groupCommands(matches);
 	const shortcuts =
@@ -304,6 +343,10 @@ export function CommandPalette({
 								))}
 							</ul>
 						))}
+
+					{page?.kind === "loading" && (
+						<p className="px-3 py-8 text-center text-xs text-fg-subtle">Loading…</p>
+					)}
 
 					{state.prompt === undefined &&
 						page?.kind === "commands" &&

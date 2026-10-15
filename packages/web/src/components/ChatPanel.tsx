@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { useRegisterCommands, type Command } from "../lib/commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
+import { useTargetPalette } from "../lib/target-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
@@ -9,6 +10,7 @@ import { SessionStats } from "./SessionStats.tsx";
 import {
 	BrainIcon,
 	ChevronDownIcon,
+	FolderIcon,
 	MenuIcon,
 	MessageIcon,
 	PencilIcon,
@@ -82,6 +84,7 @@ function useChatCommands() {
 		useHarness();
 	const modelPalette = useModelPalette();
 	const thinkingPalette = useThinkingPalette();
+	const targetPalette = useTargetPalette();
 	const hasSession = () => activeSessionId !== undefined;
 
 	const commands: Command[] = [
@@ -154,6 +157,15 @@ function useChatCommands() {
 			icon: <BrainIcon />,
 			when: () => hasSession() && thinkingPalette.levels.length > 1,
 			run: ({ pushPage }) => pushPage(thinkingPalette.page()),
+		},
+		{
+			id: "target.change",
+			title: "Change target…",
+			group: "Session",
+			keywords: ["folder", "directory", "workspace", "scratch", "where"],
+			icon: <FolderIcon />,
+			when: () => hasSession() && activeSession?.runActive !== true,
+			run: ({ pushPage }) => pushPage(targetPalette.page()),
 		},
 		{
 			id: "run.stop",

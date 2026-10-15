@@ -41,7 +41,9 @@ export type CommandContext = {
 
 export type CommandPage =
 	| { kind: "commands"; title: string; placeholder?: string; commands: Command[] }
-	| { kind: "shortcuts"; title: string };
+	| { kind: "shortcuts"; title: string }
+	/** A page that fetches its commands, e.g. a folder listing; the palette replaces it once it loads. */
+	| { kind: "loading"; title: string; load(): Promise<CommandPage> };
 
 export type PromptOptions = {
 	title: string;

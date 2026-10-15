@@ -13,7 +13,9 @@ import type {
 	ProviderRefreshReport,
 	SessionSummary,
 	SnapshotEvent,
+	TargetChoice,
 	UsageState,
+	WorkspacesBrowseResult,
 } from "@harness/protocol";
 import { HarnessClient, ServerCommandError, type ConnectionStatus } from "./client.ts";
 import { errorMessage, formatRefreshNotice } from "./format.ts";
@@ -261,10 +263,14 @@ type HarnessContextValue = {
 	configureModel(model: ModelRef): Promise<void>;
 	configureThinkingLevel(level: ModelThinkingLevel): Promise<void>;
 	configureProvider(providerId: string, apiKey: string | null): Promise<void>;
+	setTarget(target: TargetChoice): Promise<void>;
+	browseWorkspaces(path?: string): Promise<WorkspacesBrowseResult>;
+	createWorkspaceFolder(parent: string, name: string): Promise<{ path: string } | undefined>;
 	setDefaults(change: {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
 		imageModel?: ModelRef | null;
+		target?: TargetChoice | null;
 	}): Promise<void>;
 	refreshProviders(): Promise<void>;
 	clearError(): void;
@@ -507,11 +513,44 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		[client],
 	);
 
+	const setTarget = useCallback(
+		async (target: TargetChoice) => {
+			const id = state.activeSessionId;
+			if (id === undefined) return;
+			try {
+				const { session } = await client.send({ type: "sessions.setTarget", sessionId: id, target });
+				dispatch({ type: "sessions/upsert", session });
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, state.activeSessionId],
+	);
+
+	const browseWorkspaces = useCallback(
+		async (path?: string) =>
+			client.send({ type: "workspaces.browse", ...(path === undefined ? {} : { path }) }),
+		[client],
+	);
+
+	const createWorkspaceFolder = useCallback(
+		async (parent: string, name: string) => {
+			try {
+				return await client.send({ type: "workspaces.createFolder", parent, name });
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
+			}
+		},
+		[client],
+	);
+
 	const setDefaults = useCallback(
 		async (change: {
 			model?: ModelRef | null;
 			thinkingLevel?: ModelThinkingLevel | null;
 			imageModel?: ModelRef | null;
+			target?: TargetChoice | null;
 		}) => {
 			try {
 				const result = await client.send({ type: "defaults.set", ...change });
@@ -567,6 +606,9 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureModel,
 			configureThinkingLevel,
 			configureProvider,
+			setTarget,
+			browseWorkspaces,
+			createWorkspaceFolder,
 			setDefaults,
 			refreshProviders,
 			clearError: () => dispatch({ type: "error/clear" }),
@@ -584,6 +626,9 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureModel,
 			configureThinkingLevel,
 			configureProvider,
+			setTarget,
+			browseWorkspaces,
+			createWorkspaceFolder,
 			setDefaults,
 			refreshProviders,
 			clearNotice,

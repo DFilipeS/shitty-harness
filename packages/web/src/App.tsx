@@ -149,9 +149,9 @@ function useGlobalCommands(toggleSidebar: () => void) {
 		},
 		{
 			id: "defaults.open",
-			title: "Model defaults…",
+			title: "Defaults…",
 			group: "App",
-			keywords: ["default", "model", "thinking", "reasoning", "new session"],
+			keywords: ["default", "model", "thinking", "reasoning", "target", "folder", "new session"],
 			icon: <SlidersIcon />,
 			run: ({ pushPage }) => pushPage(defaultsPalette.page()),
 		},

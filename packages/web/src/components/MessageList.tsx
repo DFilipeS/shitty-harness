@@ -147,6 +147,12 @@ function EntryView({
 		);
 	}
 
+	if (entry.kind === "app.target") {
+		const data = entry.data as { path?: unknown; scratch?: unknown } | undefined;
+		const scratch = data?.scratch === true;
+		const path = typeof data?.path === "string" ? data.path : "";
+		return <Divider label={`Target: ${scratch ? "scratch directory" : path}`} />;
+	}
 	if (entry.kind === "pi.compaction") return <Divider label="Context compacted" />;
 	if (entry.kind === "pi.reset") return <Divider label="Context reset" />;
 	return null;

@@ -3,7 +3,8 @@ import type { ImageModelInfo, ModelInfo, ModelRef, ModelThinkingLevel } from "@h
 import { useCommandPalette, type CommandPage } from "./commands.tsx";
 import { modelCapabilities } from "./models.ts";
 import { useHarness } from "./store.tsx";
-import { BrainIcon, CpuIcon, ImageIcon, WandIcon } from "../components/icons.tsx";
+import { useDefaultTargetPalette } from "./target-commands.tsx";
+import { BrainIcon, CpuIcon, FolderIcon, ImageIcon, WandIcon } from "../components/icons.tsx";
 
 /** Capability icons for one model: reasoning, image input, and image generation. */
 function modelBadges(model: ModelInfo): ReactNode | undefined {
@@ -207,6 +208,7 @@ export function useThinkingPalette(): {
 export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 	const { models, imageModels, defaults, setDefaults } = useHarness();
 	const { openPage } = useCommandPalette();
+	const targetPalette = useDefaultTargetPalette();
 	const defaultModel = defaults.model;
 	const defaultInfo = models.find(
 		(model) => model.provider === defaultModel?.provider && model.id === defaultModel.modelId,
@@ -220,7 +222,7 @@ export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 
 	const page = (): CommandPage => ({
 		kind: "commands",
-		title: "Model defaults",
+		title: "Defaults",
 		placeholder: "Search settings…",
 		commands: [
 			{
@@ -244,6 +246,14 @@ export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 							setDefaults({ thinkingLevel: level }),
 						),
 					),
+			},
+			{
+				id: "defaults.target",
+				title: "Default target",
+				group: "Defaults",
+				detail: defaults.target?.path ?? "Scratch directory",
+				icon: <FolderIcon />,
+				run: ({ pushPage }) => pushPage(targetPalette.page()),
 			},
 			{
 				id: "defaults.image-model",

@@ -9,8 +9,19 @@ import {
 import { formatBytes } from "../lib/format.ts";
 import { useProviderPalette } from "../lib/provider-commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
+import { useTargetPalette, targetLabel } from "../lib/target-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
-import { BrainIcon, CpuIcon, FileIcon, PaperclipIcon, SendIcon, StopIcon, XIcon } from "./icons.tsx";
+import {
+	BrainIcon,
+	CpuIcon,
+	FileIcon,
+	FolderIcon,
+	PaperclipIcon,
+	SendIcon,
+	StopIcon,
+	TerminalIcon,
+	XIcon,
+} from "./icons.tsx";
 
 /** The textarea grows with its content up to this height, then scrolls. Matches `max-h-40`. */
 const MAX_TEXTAREA_HEIGHT = 160;
@@ -194,6 +205,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 					<div className="flex w-full flex-wrap items-center gap-1 px-1">
 						<ModelChip />
 						<ThinkingChip />
+						<TargetChip />
 						{imagesBlocked && (
 							<span className="text-[11px] text-warn">
 								This model cannot read images. Remove them or switch to a vision model.
@@ -287,6 +299,38 @@ function ThinkingChip() {
 		>
 			<BrainIcon className="h-3.5 w-3.5 shrink-0" />
 			<span>{activeSession?.agent.thinkingLevel ?? "off"}</span>
+		</button>
+	);
+}
+
+/** Where this session's tools run. Locked while a run is in flight, like the model and level. */
+function TargetChip() {
+	const { sessions, activeSessionId, activeSession } = useHarness();
+	const targetPalette = useTargetPalette();
+	const session = sessions.find((candidate) => candidate.id === activeSessionId);
+	const target = session?.target;
+	const runActive = activeSession?.runActive ?? false;
+	return (
+		<button
+			type="button"
+			data-target-chip
+			onClick={targetPalette.open}
+			disabled={runActive}
+			title={
+				runActive
+					? "The target is locked while the agent is working"
+					: target === undefined
+						? "Choose where tools run"
+						: `Target: ${target.scratch ? "scratch directory" : target.path}`
+			}
+			className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-50 disabled:hover:bg-transparent"
+		>
+			{target !== undefined && !target.scratch ? (
+				<FolderIcon className="h-3.5 w-3.5 shrink-0" />
+			) : (
+				<TerminalIcon className="h-3.5 w-3.5 shrink-0" />
+			)}
+			<span className="max-w-44 truncate">{targetLabel(target)}</span>
 		</button>
 	);
 }
