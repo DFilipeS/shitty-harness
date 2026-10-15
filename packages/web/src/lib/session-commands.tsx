@@ -49,16 +49,19 @@ export function buildModelPage(
 		kind: "commands",
 		title: options.title ?? "Change model",
 		placeholder: "Search models…",
-		commands: models.map((model) => ({
-			id: `${options.idPrefix ?? "model."}${model.provider}.${model.id}`,
-			title: model.name,
-			group: model.providerName,
-			badges: modelBadges(model),
-			detail: `${Math.round(model.contextWindow / 1000)}k context`,
-			keywords: [model.provider, model.providerName, model.id, ...(model.reasoning ? ["reasoning"] : [])],
-			current: current?.provider === model.provider && current.modelId === model.id,
-			run: () => void select({ provider: model.provider, modelId: model.id }),
-		})),
+		// Image-generation models are for `generate_image`; they are not offered as chat models.
+		commands: models
+			.filter((model) => !model.imageGeneration)
+			.map((model) => ({
+				id: `${options.idPrefix ?? "model."}${model.provider}.${model.id}`,
+				title: model.name,
+				group: model.providerName,
+				badges: modelBadges(model),
+				detail: `${Math.round(model.contextWindow / 1000)}k context`,
+				keywords: [model.provider, model.providerName, model.id, ...(model.reasoning ? ["reasoning"] : [])],
+				current: current?.provider === model.provider && current.modelId === model.id,
+				run: () => void select({ provider: model.provider, modelId: model.id }),
+			})),
 	};
 }
 
