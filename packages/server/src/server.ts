@@ -265,6 +265,7 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				const defaults = await service.setDefaults({
 					model: optionalModelRef(command.model),
 					thinkingLevel: optionalThinkingLevel(command.thinkingLevel),
+					imageModel: optionalModelRef(command.imageModel),
 				});
 				return { data: { defaults } };
 			}
@@ -333,6 +334,7 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 						type: "providers.changed",
 						providers: event.providers,
 						models: event.models,
+						imageModels: event.imageModels,
 						defaults: event.defaults,
 					};
 		for (const connection of connections) send(connection, message);

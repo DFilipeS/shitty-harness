@@ -7,10 +7,11 @@ export type ProviderConfig = {
 	apiKey?: string;
 };
 
-/** Model and thinking level applied to new sessions. */
+/** Model and thinking level applied to new sessions, plus the model `generate_image` uses. */
 export type DefaultsConfig = {
 	model?: { provider: string; modelId: string };
 	thinkingLevel?: ModelThinkingLevel;
+	imageModel?: { provider: string; modelId: string };
 };
 
 /** Everything stored in `data/config.json`. */
@@ -25,13 +26,19 @@ export function emptyConfig(): AppConfig {
 
 const THINKING_LEVELS: readonly ModelThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
+function parseModelRef(value: unknown): { provider: string; modelId: string } | undefined {
+	return isRecord(value) && typeof value.provider === "string" && typeof value.modelId === "string"
+		? { provider: value.provider, modelId: value.modelId }
+		: undefined;
+}
+
 function parseDefaults(value: unknown): DefaultsConfig | undefined {
 	if (!isRecord(value)) return undefined;
 	const defaults: DefaultsConfig = {};
-	const model = value.model;
-	if (isRecord(model) && typeof model.provider === "string" && typeof model.modelId === "string") {
-		defaults.model = { provider: model.provider, modelId: model.modelId };
-	}
+	const model = parseModelRef(value.model);
+	if (model !== undefined) defaults.model = model;
+	const imageModel = parseModelRef(value.imageModel);
+	if (imageModel !== undefined) defaults.imageModel = imageModel;
 	const level = value.thinkingLevel;
 	if (typeof level === "string" && (THINKING_LEVELS as readonly string[]).includes(level)) {
 		defaults.thinkingLevel = level as ModelThinkingLevel;

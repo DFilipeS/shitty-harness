@@ -47,15 +47,28 @@ export type SessionsListResult = {
 	sessions: SessionSummary[];
 };
 
-/** Model and thinking level applied to new sessions; unset means the harness picks. */
+/** Model and thinking level applied to new sessions, plus the model `generate_image` uses. */
 export type DefaultsState = {
 	model?: ModelRef;
 	thinkingLevel?: ModelThinkingLevel;
+	imageModel?: ModelRef;
+};
+
+/**
+ * An image-generation model the `generate_image` tool can drive. pi-ai's OpenRouter image API
+ * speaks chat completions, so models that answer only on `/images` are left out.
+ */
+export type ImageModelInfo = {
+	provider: string;
+	providerName: string;
+	id: string;
+	name: string;
 };
 
 export type ProvidersListResult = {
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	imageModels: ImageModelInfo[];
 	defaults: DefaultsState;
 };
 
@@ -110,7 +123,13 @@ export type ClientCommand =
 	| { id: string; type: "providers.list" }
 	| { id: string; type: "providers.configure"; providerId: string; apiKey: string | null }
 	| { id: string; type: "providers.refresh" }
-	| { id: string; type: "defaults.set"; model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }; 
+	| {
+			id: string;
+			type: "defaults.set";
+			model?: ModelRef | null;
+			thinkingLevel?: ModelThinkingLevel | null;
+			imageModel?: ModelRef | null;
+	  };
 
 export type CommandType = ClientCommand["type"];
 
@@ -148,6 +167,7 @@ export type ServerEvent =
 			type: "providers.changed";
 			providers: ProviderInfo[];
 			models: ModelInfo[];
+			imageModels: ImageModelInfo[];
 			defaults: DefaultsState;
 	  };
 

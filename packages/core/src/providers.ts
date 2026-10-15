@@ -3,6 +3,7 @@ import { builtinModels, getBuiltinModelDataGeneratedAt } from "@earendil-works/p
 import { personalizeOpenRouterCatalog } from "@earendil-works/pi-ai/providers/openrouter";
 import type {
 	DefaultsState,
+	ImageModelInfo,
 	ModelInfo,
 	ModelRef,
 	ModelThinkingLevel,
@@ -11,6 +12,7 @@ import type {
 } from "@harness/protocol";
 import { saveConfig, type AppConfig, type DefaultsConfig } from "./config.ts";
 import { ConfigCredentialStore } from "./credentials.ts";
+import { sortModelsForDisplay } from "./model-order.ts";
 import { FileModelsStore } from "./models-store.ts";
 import { withRemoteCatalog, type CatalogRefreshStatus } from "./remote-catalog.ts";
 
@@ -22,10 +24,16 @@ export interface Providers {
 	readonly models: Models;
 	listProviders(): Promise<ProviderInfo[]>;
 	listModels(): Promise<ModelInfo[]>;
+	/** Image models `generate_image` can drive. */
+	listImageModels(): Promise<ImageModelInfo[]>;
 	setApiKey(providerId: string, apiKey: string | null): Promise<void>;
 	/** Defaults for new sessions; empty means the harness picks. */
 	getDefaults(): DefaultsState;
-	setDefaults(change: { model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }): Promise<DefaultsState>;
+	setDefaults(change: {
+		model?: ModelRef | null;
+		thinkingLevel?: ModelThinkingLevel | null;
+		imageModel?: ModelRef | null;
+	}): Promise<DefaultsState>;   
 	/** Refresh remote model catalogs; `force` bypasses the freshness throttle. */
 	refresh(options?: { providerId?: string; force?: boolean }): Promise<ProviderRefreshReport[]>;
 }
@@ -109,12 +117,14 @@ export class ProviderManager implements Providers {
 		return {
 			...(defaults.model === undefined ? {} : { model: { ...defaults.model } }),
 			...(defaults.thinkingLevel === undefined ? {} : { thinkingLevel: defaults.thinkingLevel }),
+			...(defaults.imageModel === undefined ? {} : { imageModel: { ...defaults.imageModel } }),
 		};
 	}
 
 	async setDefaults(change: {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
+		imageModel?: ModelRef | null;
 	}): Promise<DefaultsState> {
 		await this.#mutate((config) => {
 			const defaults: DefaultsConfig = config.defaults ?? {};
@@ -126,10 +136,37 @@ export class ProviderManager implements Providers {
 				if (change.thinkingLevel === null) delete defaults.thinkingLevel;
 				else defaults.thinkingLevel = change.thinkingLevel;
 			}
-			if (defaults.model === undefined && defaults.thinkingLevel === undefined) delete config.defaults;
-			else config.defaults = defaults;
+			if (change.imageModel !== undefined) {
+				if (change.imageModel === null) delete defaults.imageModel;
+				else defaults.imageModel = { provider: change.imageModel.provider, modelId: change.imageModel.modelId };
+			}
+			if (
+				defaults.model === undefined &&
+				defaults.thinkingLevel === undefined &&
+				defaults.imageModel === undefined
+			) {
+				delete config.defaults;
+			} else config.defaults = defaults;
 		});
 		return this.getDefaults();
+	}
+
+	/**
+	 * Image models the tool can drive, alphabetically inside each provider. pi-ai's OpenRouter image
+	 * API speaks chat completions, so models that only answer on `/images` are left out.
+	 */
+	async listImageModels(): Promise<ImageModelInfo[]> {
+		const available = await this.models.getAvailableOfType("image");
+		return sortModelsForDisplay(
+			available
+				.filter((model) => model.output.includes("text"))
+				.map((model) => ({
+					provider: model.provider,
+					providerName: this.models.getProvider(model.provider)?.name ?? model.provider,
+					id: model.id,
+					name: model.name,
+				})),
+		);
 	}
 
 	async listProviders(): Promise<ProviderInfo[]> {

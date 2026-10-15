@@ -1,12 +1,25 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AssistantImages, ImageApi, ImageContent, ImageModel, Usage } from "@earendil-works/pi-ai";
+import type {
+	AssistantImages,
+	ImageApi,
+	ImageContent,
+	ImageModel,
+	ImagesContext,
+	Models,
+	Usage,
+} from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ToolDiagnostic, ToolExecutionApi } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { describe, expect, it, vi } from "vitest";
-import { GenerateImageTool, openRouterGenerationCost } from "../src/image-tool.ts";
+import {
+	createGenerateImageTool,
+	createImageTools,
+	GenerateImageTool,
+	openRouterGenerationCost,
+} from "../src/image-tool.ts";
 
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 const OTHER_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -46,7 +59,7 @@ function generated(overrides: Partial<AssistantImages> = {}): AssistantImages {
 
 type ApiOptions = {
 	available?: readonly ImageModel<ImageApi>[];
-	generate?: (model: ImageModel<ImageApi>) => Promise<AssistantImages>;
+	generate?: (model: ImageModel<ImageApi>, context: ImagesContext) => Promise<AssistantImages>;
 	env?: NodeExecutionEnv;
 	current?: { provider: string; modelId: string };
 	diagnostics?: ToolDiagnostic[];
@@ -56,7 +69,8 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 	return {
 		models: {
 			getAvailableOfType: async () => options.available ?? [IMAGE_MODEL],
-			generateImages: async (model: ImageModel<ImageApi>) => (options.generate ?? (() => generated()))(model),
+			generateImages: async (model: ImageModel<ImageApi>, context: ImagesContext) =>
+				(options.generate ?? (() => generated()))(model, context),
 			getAuth: async () => ({ auth: { apiKey: "test-key" } }),
 		},
 		agent: async () => ({ model: options.current }),
@@ -65,8 +79,20 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 	} as unknown as ToolExecutionApi;
 }
 
+/** Only `getAvailableOfType` is used by the prompt section. */
+function fakeModels(available: readonly ImageModel<ImageApi>[]): Models {
+	return { getAvailableOfType: async () => available } as unknown as Models;
+}
+
 function imageParts(result: { output?: readonly { type: string }[] }): ImageContent[] {
 	return (result.output ?? []).filter((part): part is ImageContent => part.type === "image");
+}
+
+function decode(data: string): Uint8Array {
+	const binary = atob(data);
+	const bytes = new Uint8Array(binary.length);
+	for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+	return bytes;
 }
 
 const ESTIMATE: Usage = {
@@ -113,6 +139,38 @@ describe("openRouterGenerationCost", () => {
 				fetch: async () => new Response(JSON.stringify({ data: {} }), { status: 200 }),
 			}),
 		).toBeUndefined();
+	});
+});
+
+describe("image section", () => {
+	const render = (available: readonly ImageModel<ImageApi>[], defaultImageModel?: () => { provider: string; modelId: string } | undefined) =>
+		createImageTools({ models: fakeModels(available), ...(defaultImageModel === undefined ? {} : { defaultImageModel }) })
+			.sections?.[0]?.render;
+	const offered = { agent: { tools: [{ name: "generate_image" }] } } as never;
+
+	it("points image requests at the tool and names the models", async () => {
+		const text = await render([IMAGE_ONLY_MODEL, IMAGE_MODEL])?.(offered, BACKGROUND_CONTEXT);
+		expect(text).toContain("generate_image");
+		expect(text).toContain(`${IMAGE_MODEL.name} (${IMAGE_MODEL.id})`);
+		// Image-only models cannot be driven through pi-ai's image API.
+		expect(text).not.toContain(IMAGE_ONLY_MODEL.id);
+	});
+
+	it("names the configured default", async () => {
+		const text = await render([IMAGE_MODEL], () => ({ provider: "openrouter", modelId: IMAGE_MODEL.id }))?.(
+			offered,
+			BACKGROUND_CONTEXT,
+		);
+		expect(text).toContain(`The configured default is ${IMAGE_MODEL.name}`);
+	});
+
+	it("stays out when the tool is not offered", async () => {
+		const input = { agent: { tools: [] } } as never;
+		expect(await render([IMAGE_MODEL])?.(input, BACKGROUND_CONTEXT)).toBeUndefined();
+	});
+
+	it("stays out when no image model can be driven", async () => {
+		expect(await render([IMAGE_ONLY_MODEL])?.(offered, BACKGROUND_CONTEXT)).toBeUndefined();
 	});
 });
 
@@ -218,6 +276,68 @@ describe("generate_image", () => {
 		);
 		expect(result.isError).toBeUndefined();
 		expect(used?.id).toBe(IMAGE_MODEL.id);
+	});
+
+	it("passes an input image through for editing", async () => {
+		const workspace = await mkdtemp(join(tmpdir(), "harness-image-"));
+		try {
+			const env = new NodeExecutionEnv({ cwd: workspace });
+			await env.writeFile("input.png", decode(PNG), BACKGROUND_CONTEXT);
+			let seen: ImagesContext | undefined;
+			const result = await GenerateImageTool.execute(
+				{ prompt: "make it green", image: "input.png" },
+				fakeApi({
+					env,
+					generate: async (_model, context) => {
+						seen = context;
+						return generated();
+					},
+				}),
+				BACKGROUND_CONTEXT,
+			);
+			expect(result.isError).toBeUndefined();
+			expect(seen?.input).toEqual([
+				{ type: "image", data: PNG, mimeType: "image/png" },
+				{ type: "text", text: "make it green" },
+			]);
+		} finally {
+			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
+	it("reports an unreadable input image", async () => {
+		const workspace = await mkdtemp(join(tmpdir(), "harness-image-"));
+		try {
+			const result = await GenerateImageTool.execute(
+				{ prompt: "x", image: "missing.png" },
+				fakeApi({ env: new NodeExecutionEnv({ cwd: workspace }) }),
+				BACKGROUND_CONTEXT,
+			);
+			expect(result.isError).toBe(true);
+			expect(JSON.stringify(result.output)).toContain("Could not read missing.png");
+		} finally {
+			await rm(workspace, { recursive: true, force: true });
+		}
+	});
+
+	it("prefers the configured default image model", async () => {
+		let used: ImageModel<ImageApi> | undefined;
+		const tool = createGenerateImageTool({
+			defaultImageModel: () => ({ provider: "openrouter", modelId: OTHER_MODEL.id }),
+		});
+		const result = await tool.execute(
+			{ prompt: "x" },
+			fakeApi({
+				available: [IMAGE_MODEL, OTHER_MODEL],
+				generate: async (model) => {
+					used = model;
+					return generated();
+				},
+			}),
+			BACKGROUND_CONTEXT,
+		);
+		expect(result.isError).toBeUndefined();
+		expect(used?.id).toBe(OTHER_MODEL.id);
 	});
 
 	it("uses a requested model even when it is image-only", async () => {

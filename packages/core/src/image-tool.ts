@@ -5,9 +5,12 @@ import {
 	type ImageApi,
 	type ImageContent,
 	type ImageModel,
+	type ImagesInputContent,
+	type Models,
 	type Usage,
 } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
+import { defineExtension, defineTool, section, type ToolExecutionApi } from "@earendil-works/pi-durable";
+import type { ModelRef } from "@harness/protocol";
 
 const MIME_EXTENSIONS: Record<string, string> = {
 	"image/png": "png",
@@ -16,18 +19,39 @@ const MIME_EXTENSIONS: Record<string, string> = {
 	"image/gif": "gif",
 };
 
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	webp: "image/webp",
+	gif: "image/gif",
+};
+
 const generateImageSchema = Type.Object({
-	prompt: Type.String({ description: "What the image should show." }),
+	prompt: Type.String({ description: "What the image should show, or how to change the input image." }),
+	image: Type.Optional(
+		Type.String({
+			description:
+				"File in the working directory to edit or use as a reference, for example a path from an earlier `Saved ...` note.",
+		}),
+	),
 	path: Type.Optional(
 		Type.String({ description: "File to write the image to, relative to the working directory." }),
 	),
 	model: Type.Optional(
 		Type.String({
 			description:
-				"Image model id to use. Default: the conversation model's image sibling, else the first available.",
+				"Image model id to use, from the list in your instructions. Default: the configured image model, the conversation model's image sibling, else the first available.",
 		}),
 	),
 });
+
+export type ImageToolsOptions = {
+	/** The catalog, so the prompt section can list the image models the tool can drive. */
+	models: Models;
+	/** The configured default image model, when one is set. */
+	defaultImageModel?: () => ModelRef | undefined;
+};
 
 function decodeBase64(data: string): Uint8Array {
 	const binary = atob(data);
@@ -36,27 +60,48 @@ function decodeBase64(data: string): Uint8Array {
 	return bytes;
 }
 
+function encodeBase64(bytes: Uint8Array): string {
+	let binary = "";
+	const chunk = 0x8000;
+	for (let index = 0; index < bytes.length; index += chunk) {
+		binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+	}
+	return btoa(binary);
+}
+
+function mimeTypeFor(path: string): string {
+	const extension = path.split(".").pop()?.toLowerCase() ?? "";
+	return EXTENSION_MIME_TYPES[extension] ?? "image/png";
+}
+
 function withExtension(path: string, extension: string): string {
 	return /\.[a-z0-9]+$/i.test(path) ? path : `${path}.${extension}`;
 }
 
 /**
- * Which image model to use: the requested one, the image sibling of the conversation's model (the
- * same id listed as an image model), else a chat-compatible one.
+ * Which image model to use: the requested one, the configured default, the image sibling of the
+ * conversation's model (the same id listed as an image model), else a chat-compatible one.
  *
  * pi-ai's OpenRouter image API speaks chat completions, so only models that also return text work
  * through it; dedicated image endpoints (FLUX, Seedream, ...) answer on `/images` instead and are
- * only used when asked for by name.
+ * left out of the list.
  */
 function resolveImageModel(
 	available: readonly ImageModel<ImageApi>[],
 	requested: string | undefined,
+	preferred: ModelRef | undefined,
 	current: { provider: string; modelId: string } | undefined,
 ): ImageModel<ImageApi> | undefined {
 	if (requested !== undefined) {
 		return available.find(
 			(model) => model.id === requested || model.id.endsWith(`/${requested}`) || model.name === requested,
 		);
+	}
+	if (preferred !== undefined) {
+		const match = available.find(
+			(model) => model.provider === preferred.provider && model.id === preferred.modelId,
+		);
+		if (match !== undefined) return match;
 	}
 	if (current !== undefined) {
 		const sibling = available.find(
@@ -153,65 +198,140 @@ async function saveImages(
 	return saved;
 }
 
+/** Reads the optional input image into the generation request. */
+async function inputImage(
+	api: ToolExecutionApi,
+	path: string,
+	context: Context,
+): Promise<{ input: ImagesInputContent } | { error: string }> {
+	const env = api.env;
+	if (env === undefined) return { error: "Cannot read an input image: no execution environment is configured." };
+	const file = await env.readBinaryFile(path, context);
+	if (!file.ok) return { error: `Could not read ${path}: ${file.error.message}` };
+	return { input: { type: "image", data: encodeBase64(file.value), mimeType: mimeTypeFor(path) } };
+}
+
 /**
  * Generates an image through the provider's image API (`Models.generateImages`) rather than the
  * chat stream, which cannot carry images. The image is written into the working directory and
- * returned as a tool result, so it shows up in the conversation.
+ * returned as a tool result, so it shows up in the conversation. With `image`, an existing file
+ * goes in as input, which is how a picture gets edited.
  */
-export const GenerateImageTool = defineTool({
-	name: "generate_image",
-	description:
-		"Generate an image from a text prompt with the provider's image model. The image is saved in the working directory and shown in the conversation.",
-	parameters: generateImageSchema,
-	execute: async (args, api, context) => {
-		const available = await api.models.getAvailableOfType("image");
-		if (available.length === 0) {
-			return {
-				output: [
-					{ type: "text", text: "No image model is available. Configure a provider that can generate images." },
-				],
-				isError: true,
-			};
-		}
-		const agent = await api.agent(context);
-		const model = resolveImageModel(available, args.model, agent.model);
-		if (model === undefined) {
-			return { output: [{ type: "text", text: `Unknown image model: ${args.model}` }], isError: true };
-		}
+export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaultImageModel"> = {}) {
+	return defineTool({
+		name: "generate_image",
+		description:
+			"Generate or edit an image with the provider's image model. The image is saved in the working directory and shown in the conversation.",
+		parameters: generateImageSchema,
+		execute: async (args, api, context) => {
+			const available = await api.models.getAvailableOfType("image");
+			if (available.length === 0) {
+				return {
+					output: [
+						{
+							type: "text",
+							text: "No image model is available. Configure a provider that can generate images.",
+						},
+					],
+					isError: true,
+				};
+			}
+			const agent = await api.agent(context);
+			const model = resolveImageModel(
+				available,
+				args.model,
+				options.defaultImageModel?.(),
+				agent.model,
+			);
+			if (model === undefined) {
+				return { output: [{ type: "text", text: `Unknown image model: ${args.model}` }], isError: true };
+			}
 
-		const result = await api.models.generateImages(
-			model,
-			{ input: [{ type: "text", text: args.prompt }] },
-			context.abortSignal === undefined ? undefined : { signal: context.abortSignal },
-		);
-		const usage = await actualUsage(result, model, api, context);
-		const usageField = usage === undefined ? {} : { usage };
-		if (result.stopReason !== "stop") {
-			return {
-				output: [
-					{ type: "text", text: result.errorMessage ?? `Image generation ${result.stopReason}.` },
-				],
-				isError: true,
-				...usageField,
-			};
-		}
-		const images = result.output.filter((part): part is ImageContent => part.type === "image");
-		if (images.length === 0) {
-			return {
-				output: [{ type: "text", text: "The model returned no image." }],
-				isError: true,
-				...usageField,
-			};
-		}
+			const input: ImagesInputContent[] = [];
+			if (args.image !== undefined) {
+				const read = await inputImage(api, args.image, context);
+				if ("error" in read) {
+					return { output: [{ type: "text", text: read.error }], isError: true };
+				}
+				input.push(read.input);
+			}
+			input.push({ type: "text", text: args.prompt });
 
-		const saved = await saveImages(api, images, args.path, context);
-		const note =
-			saved.length === 0
-				? "The image was not saved: no execution environment is configured."
-				: `Saved ${saved.map((path) => `\`${path}\``).join(", ")}.`;
-		return { output: [...images, { type: "text", text: note }], ...usageField };
-	},
-});
+			const result = await api.models.generateImages(
+				model,
+				{ input },
+				context.abortSignal === undefined ? undefined : { signal: context.abortSignal },
+			);
+			const usage = await actualUsage(result, model, api, context);
+			const usageField = usage === undefined ? {} : { usage };
+			if (result.stopReason !== "stop") {
+				return {
+					output: [
+						{ type: "text", text: result.errorMessage ?? `Image generation ${result.stopReason}.` },
+					],
+					isError: true,
+					...usageField,
+				};
+			}
+			const images = result.output.filter((part): part is ImageContent => part.type === "image");
+			if (images.length === 0) {
+				return {
+					output: [{ type: "text", text: "The model returned no image." }],
+					isError: true,
+					...usageField,
+				};
+			}
+
+			const saved = await saveImages(api, images, args.path, context);
+			const note =
+				saved.length === 0
+					? "The image was not saved: no execution environment is configured."
+					: `Saved ${saved.map((path) => `\`${path}\``).join(", ")}.`;
+			return { output: [...images, { type: "text", text: note }], ...usageField };
+		},
+	});
+}
+
+/** The tool with no configured default, for callers that do not manage settings. */
+export const GenerateImageTool = createGenerateImageTool();
+
+/**
+ * Points image work at the tool and names the models it can drive, so "use the cheap one" works.
+ * Without the section, an image-generation chat model sometimes answers with an image of its own,
+ * which the chat stream cannot carry: pi-ai drops it and the turn shows only thinking. The section
+ * renders only where the tool is offered and an image model exists.
+ */
+function imageSection(options: ImageToolsOptions, toolName: string) {
+	return section(
+		"image-generation",
+		async (input) => {
+			if (!input.agent.tools.some((tool) => tool.name === toolName)) return undefined;
+			const available = await options.models.getAvailableOfType("image");
+			const usable = available.filter((model) => model.output.includes("text"));
+			if (usable.length === 0) return undefined;
+			const preferred = options.defaultImageModel?.();
+			const lines = [
+				"For anything that creates or changes an image, call the generate_image tool and then reply in text. Never put an image in a reply: the chat stream cannot store one, so it would be lost.",
+				"Pass `image` with a file path to edit or reference an existing image, such as one from an earlier `Saved ...` note.",
+				`Image models: ${usable.map((model) => `${model.name} (${model.id})`).join(", ")}.`,
+			];
+			const defaultModel =
+				preferred === undefined
+					? undefined
+					: usable.find((model) => model.provider === preferred.provider && model.id === preferred.modelId);
+			if (defaultModel !== undefined) lines.push(`The configured default is ${defaultModel.name}.`);
+			return lines.join(" ");
+		},
+		{ tag: false },
+	);
+}
 
 /** The image tools, installed alongside the coding tools. */
-export const ImageTools = defineExtension({ name: "image-tools", tools: [GenerateImageTool] });
+export function createImageTools(options: ImageToolsOptions) {
+	const tool = createGenerateImageTool(options);
+	return defineExtension({
+		name: "image-tools",
+		tools: [tool],
+		sections: [imageSection(options, tool.name)],
+	});
+}

@@ -83,7 +83,11 @@ describe("ProviderManager", () => {
 		const dir = await mkdtemp(join(tmpdir(), "harness-defaults-"));
 		const configPath = join(dir, "config.json");
 		const modelsPath = join(dir, "models.json");
-		const expected = { model: { provider: "openrouter", modelId: ARGON_ID }, thinkingLevel: "high" } as const;
+		const expected = {
+			model: { provider: "openrouter", modelId: ARGON_ID },
+			thinkingLevel: "high",
+			imageModel: { provider: "openrouter", modelId: "google/gemini-3-pro-image" },
+		} as const;
 		try {
 			const manager = new ProviderManager(configPath, modelsPath, emptyConfig(), { localGeneratedAt: 0 });
 			await manager.setDefaults(expected);
@@ -94,7 +98,7 @@ describe("ProviderManager", () => {
 			const second = new ProviderManager(configPath, modelsPath, await loadConfig(configPath), { localGeneratedAt: 0 });
 			expect(second.getDefaults()).toEqual(expected);
 
-			await second.setDefaults({ model: null, thinkingLevel: null });
+			await second.setDefaults({ model: null, thinkingLevel: null, imageModel: null });
 			expect(second.getDefaults()).toEqual({});
 			expect(JSON.parse(await readFile(configPath, "utf8")).defaults).toBeUndefined();
 		} finally {
@@ -122,6 +126,39 @@ describe("ProviderManager", () => {
 			expect((await loadConfig(configPath)).defaults).toEqual({
 				model: { provider: "openrouter", modelId: "google/gemini-4-argon" },
 			});
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("lists only image models the tool can drive", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
+		const configPath = join(dir, "config.json");
+		const modelsPath = join(dir, "models.json");
+		const config: AppConfig = { ...emptyConfig(), providers: { fireworks: { apiKey: "test-key" } } };
+		const usable = {
+			...ARGON,
+			type: "image",
+			id: "fake/image-usable",
+			provider: "fireworks",
+			output: ["image", "text"],
+		} as unknown as AnyModel;
+		const unusable = {
+			...ARGON,
+			type: "image",
+			id: "fake/image-only",
+			provider: "fireworks",
+			output: ["image"],
+		} as unknown as AnyModel;
+		try {
+			const manager = new ProviderManager(configPath, modelsPath, config, {
+				fetch: async () => catalogResponse([usable, unusable]),
+				localGeneratedAt: 0,
+			});
+			await manager.refresh({ force: true });
+			const ids = (await manager.listImageModels()).map((model) => model.id);
+			expect(ids).toContain("fake/image-usable");
+			expect(ids).not.toContain("fake/image-only");
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}

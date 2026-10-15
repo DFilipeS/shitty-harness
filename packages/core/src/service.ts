@@ -1,7 +1,7 @@
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
-import { ImageTools } from "./image-tool.ts";
+import { createImageTools } from "./image-tool.ts";
 import {
 	createRegistry,
 	Harness,
@@ -19,6 +19,7 @@ import {
 } from "@earendil-works/pi-durable";
 import type {
 	DefaultsState,
+	ImageModelInfo,
 	ModelInfo,
 	ModelRef,
 	ModelThinkingLevel,
@@ -80,6 +81,7 @@ export type ServiceEvent =
 export type ProvidersState = {
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	imageModels: ImageModelInfo[];
 	defaults: DefaultsState;
 };
 
@@ -124,7 +126,12 @@ export class HarnessService {
 		// all it takes for agents to read, write, edit, and run commands.
 		const registry = createRegistry();
 		registry.install(CodingTools);
-		registry.install(ImageTools);
+		registry.install(
+			createImageTools({
+				models: providers.models,
+				defaultImageModel: () => providers.getDefaults().imageModel,
+			}),
+		);
 		const harness = await Harness.open(
 			dependencies.storage,
 			{
@@ -341,22 +348,42 @@ export class HarnessService {
 	}
 
 	async listProviders(): Promise<ProvidersState> {
-		const [providers, models] = await Promise.all([
+		const [providers, models, imageModels] = await Promise.all([
 			this.#providers.listProviders(),
 			this.#providers.listModels(),
+			this.#providers.listImageModels(),
 		]);
-		return { providers, models: sortModelsForDisplay(models), defaults: this.#providers.getDefaults() };
+		return {
+			providers,
+			models: sortModelsForDisplay(models),
+			imageModels,
+			defaults: this.#providers.getDefaults(),
+		};
 	}
 
 	/** Store the model and thinking level new sessions start with. */
 	async setDefaults(change: {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
+		imageModel?: ModelRef | null;
 	}): Promise<DefaultsState> {
 		if (change.model !== undefined && change.model !== null) {
 			const resolved = this.#providers.models.getModel(change.model.provider, change.model.modelId);
 			if (resolved === undefined) {
 				throw new ServiceError("unknown_model", `Unknown model: ${change.model.provider}/${change.model.modelId}`);
+			}
+		}
+		if (change.imageModel !== undefined && change.imageModel !== null) {
+			const resolved = this.#providers.models.getModelOfType(
+				"image",
+				change.imageModel.provider,
+				change.imageModel.modelId,
+			);
+			if (resolved === undefined) {
+				throw new ServiceError(
+					"unknown_model",
+					`Unknown image model: ${change.imageModel.provider}/${change.imageModel.modelId}`,
+				);
 			}
 		}
 		const defaults = await this.#providers.setDefaults(change);

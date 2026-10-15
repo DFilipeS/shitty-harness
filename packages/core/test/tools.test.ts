@@ -75,6 +75,31 @@ describe("coding tools", () => {
 		}
 	});
 
+	it("puts the image instruction in the prompt", async () => {
+		const { providers, faux } = createFauxProviders({ image: { data: PNG, mimeType: "image/png" } });
+		let prompt = "";
+		faux.setResponses([
+			(context) => {
+				// Sections ride on the system message, not in its content.
+				prompt = context.messages
+					.filter((message) => message.role === "system")
+					.map((message) => JSON.stringify(message))
+					.join("\n");
+				return fauxAssistantMessage("ok");
+			},
+		]);
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			await service.prompt(session.id, "hello", "request-prompt");
+			await waitFor(async () => (await service.listSessions())[0]?.working === true);
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+			expect(prompt).toContain("generate_image tool");
+		} finally {
+			await service.close();
+		}
+	});
+
 	it("generates an image through the harness and keeps it in the transcript", async () => {
 		const workspace = await mkdtemp(join(tmpdir(), "harness-tools-image-"));
 		const { providers, faux } = createFauxProviders({ image: { data: PNG, mimeType: "image/png" } });

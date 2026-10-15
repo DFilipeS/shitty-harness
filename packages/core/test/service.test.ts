@@ -4,6 +4,8 @@ import { HarnessService, type HarnessServiceDependencies } from "../src/index.ts
 import {
 	createFakeProviders,
 	createFauxProviders,
+	FAKE_IMAGE_MODEL_ID,
+	FAKE_IMAGE_PROVIDER_ID,
 	FAKE_MODEL_ID,
 	FAKE_PROVIDER_ID,
 	FAKE_REASONING_MODEL,
@@ -124,6 +126,29 @@ describe("HarnessService", () => {
 			},
 			{ apiKey: "test-key", models: [FAKE_REASONING_MODEL, alpha] },
 		);
+	});
+
+	it("stores a default image model", async () => {
+		const { providers } = createFauxProviders({ image: { data: "aGk=", mimeType: "image/png" } });
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const defaults = await service.setDefaults({
+				imageModel: { provider: FAKE_IMAGE_PROVIDER_ID, modelId: FAKE_IMAGE_MODEL_ID },
+			});
+			expect(defaults.imageModel).toEqual({ provider: FAKE_IMAGE_PROVIDER_ID, modelId: FAKE_IMAGE_MODEL_ID });
+			const { imageModels } = await service.listProviders();
+			expect(imageModels.map((model) => model.id)).toContain(FAKE_IMAGE_MODEL_ID);
+		} finally {
+			await service.close();
+		}
+	});
+
+	it("rejects a default image model that does not exist", async () => {
+		await withService(async (service) => {
+			await expect(
+				service.setDefaults({ imageModel: { provider: "nope", modelId: "nope" } }),
+			).rejects.toMatchObject({ code: "unknown_model" });
+		});
 	});
 
 	it("rejects a default model that does not exist", async () => {

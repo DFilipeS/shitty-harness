@@ -8,7 +8,13 @@ import {
 	type ImageModel,
 	type Model,
 } from "@earendil-works/pi-ai";
-import type { DefaultsState, ModelInfo, ProviderInfo, ProviderRefreshReport } from "@harness/protocol";
+import type {
+	DefaultsState,
+	ImageModelInfo,
+	ModelInfo,
+	ProviderInfo,
+	ProviderRefreshReport,
+} from "@harness/protocol";
 import type { Providers } from "../../src/providers.ts";
 
 export const FAKE_PROVIDER_ID = "fake";
@@ -63,6 +69,17 @@ function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Provid
 			}
 			return providers;
 		},
+		async listImageModels(): Promise<ImageModelInfo[]> {
+			const available = await models.getAvailableOfType("image");
+			return available
+				.filter((model) => model.output.includes("text"))
+				.map((model) => ({
+					provider: model.provider,
+					providerName: models.getProvider(model.provider)?.name ?? model.provider,
+					id: model.id,
+					name: model.name,
+				}));
+		},
 		async listModels(): Promise<ModelInfo[]> {
 			const available = await models.getAvailable();
 			return available.map((model) => ({
@@ -89,6 +106,10 @@ function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Provid
 			if (change.thinkingLevel !== undefined) {
 				if (change.thinkingLevel === null) delete next.thinkingLevel;
 				else next.thinkingLevel = change.thinkingLevel;
+			}
+			if (change.imageModel !== undefined) {
+				if (change.imageModel === null) delete next.imageModel;
+				else next.imageModel = { ...change.imageModel };
 			}
 			defaults = next;
 			return { ...defaults };
