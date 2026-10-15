@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { EntryRecord } from "@harness/protocol";
+import type { EntryRecord, ModelInfo } from "@harness/protocol";
 import {
 	assistantMessageOf,
+	hasHiddenOutput,
 	toolResultImages,
 	toolResultOf,
 	toolResultText,
@@ -12,10 +13,16 @@ import {
 } from "../lib/messages.ts";
 import { useHarness } from "../lib/store.tsx";
 import { LiveMessage } from "./LiveMessage.tsx";
-import { AssistantBubble, Divider, ToolResultBubble, UserBubble } from "./MessageBubbles.tsx";
+import {
+	AssistantBubble,
+	Divider,
+	HiddenOutputNotice,
+	ToolResultBubble,
+	UserBubble,
+} from "./MessageBubbles.tsx";
 
 export function MessageList() {
-	const { activeSession } = useHarness();
+	const { activeSession, models } = useHarness();
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const stickToBottom = useRef(true);
 
@@ -71,7 +78,13 @@ export function MessageList() {
 		<div ref={scrollRef} data-message-scroll className="flex-1 overflow-y-auto overscroll-contain">
 			<div className="mx-auto flex max-w-3xl flex-col gap-4 px-3 pt-4 pb-[calc(var(--composer-height,6rem)+1.5rem)] sm:px-4 sm:pt-6">
 				{visibleEntries.map((entry) => (
-					<EntryView key={entry.id} entry={entry} toolResults={toolResults} toolCallIds={toolCallIds} />
+					<EntryView
+						key={entry.id}
+						entry={entry}
+						toolResults={toolResults}
+						toolCallIds={toolCallIds}
+						models={models}
+					/>
 				))}
 				{live !== undefined && activeSession !== undefined && (
 					<LiveMessage
@@ -94,10 +107,12 @@ function EntryView({
 	entry,
 	toolResults,
 	toolCallIds,
+	models,
 }: {
 	entry: EntryRecord;
 	toolResults: ReadonlyMap<string, ToolResultView>;
 	toolCallIds: ReadonlySet<string>;
+	models: readonly ModelInfo[];
 }) {
 	const user = userMessageOf(entry);
 	if (user !== undefined) return <UserBubble text={userText(user)} />;
@@ -105,12 +120,15 @@ function EntryView({
 	const assistant = assistantMessageOf(entry);
 	if (assistant !== undefined) {
 		return (
-			<AssistantBubble
-				messageKey={String(assistant.timestamp)}
-				blocks={assistant.content.map(toLiveBlock)}
-				usage={assistant.usage}
-				toolResults={toolResults}
-			/>
+			<>
+				<AssistantBubble
+					messageKey={String(assistant.timestamp)}
+					blocks={assistant.content.map(toLiveBlock)}
+					usage={assistant.usage}
+					toolResults={toolResults}
+				/>
+				{hasHiddenOutput(assistant, models) && <HiddenOutputNotice />}
+			</>
 		);
 	}
 

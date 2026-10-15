@@ -1,5 +1,5 @@
 import type { AssistantMessage, ImageContent, ToolResultMessage, Usage, UserMessage } from "@earendil-works/pi-ai";
-import type { AgentEvent, EntryRecord } from "@harness/protocol";
+import type { AgentEvent, EntryRecord, ModelInfo } from "@harness/protocol";
 
 /** A content block of the assistant message currently being streamed. */
 export type LiveBlock =
@@ -129,6 +129,21 @@ export function toolResultText(message: ToolResultMessage): string {
 		.map((part) => (part.type === "text" ? part.text : ""))
 		.filter((text) => text !== "")
 		.join("\n");
+}
+
+/**
+ * True when a reply looks like it produced something the transcript cannot hold: a chat model that
+ * generates images inline leaves only thinking behind, because an assistant message has no image
+ * content. Only models with an image sibling can answer that way, and the billed output tokens that
+ * no reasoning or text accounts for are the tell.
+ */
+export function hasHiddenOutput(message: AssistantMessage, models: readonly ModelInfo[]): boolean {
+	if (message.content.some((block) => block.type === "text" || block.type === "toolCall")) return false;
+	const model = models.find(
+		(candidate) => candidate.provider === message.provider && candidate.id === message.model,
+	);
+	if (model?.imageGeneration !== true) return false;
+	return message.usage.output - (message.usage.reasoning ?? 0) > 200;
 }
 
 /** Images the tool returned, in order. */

@@ -316,6 +316,20 @@ function ToolResultImages({ images }: { images: readonly ToolResultImage[] }) {
 	);
 }
 
+/**
+ * Explains a reply that billed output the transcript could not store: an image-generation model
+ * answered with an image of its own, which a chat message cannot carry.
+ */
+export function HiddenOutputNotice() {
+	return (
+		<div data-hidden-output className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
+			Nothing to show for this reply: the model produced an image of its own, which a chat message
+			cannot store. Ask it to use the <span className="font-mono">generate_image</span> tool, or
+			switch to a text model.
+		</div>
+	);
+}
+
 export function ToolResultBubble({
 	text,
 	images,
