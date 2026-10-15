@@ -4,7 +4,16 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize, resolve, sep } from "node:path";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { HarnessService, ServiceError } from "@harness/core";
-import type { AgentEvent, ClientCommand, CommandResult, ModelRef, ServerError, ServerMessage } from "@harness/protocol";
+import {
+	ATTACHMENT_LIMITS,
+	type AgentEvent,
+	type ClientCommand,
+	type CommandResult,
+	type ModelRef,
+	type PromptAttachment,
+	type ServerError,
+	type ServerMessage,
+} from "@harness/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 
 type Connection = {
@@ -95,6 +104,22 @@ function optionalThinkingLevel(value: unknown): ModelThinkingLevel | null | unde
 		throw new ServiceError("invalid", "thinkingLevel is not a known thinking level");
 	}
 	return value as ModelThinkingLevel;
+}
+
+function optionalAttachments(value: unknown): PromptAttachment[] {
+	if (value === undefined) return [];
+	if (!Array.isArray(value)) throw new ServiceError("invalid", "attachments must be an array");
+	if (value.length > ATTACHMENT_LIMITS.maxPerMessage) {
+		throw new ServiceError("invalid", `attachments must contain at most ${ATTACHMENT_LIMITS.maxPerMessage} files`);
+	}
+	return value.map((item, index) => {
+		if (!isRecord(item)) throw new ServiceError("invalid", `attachments[${index}] must be an object`);
+		return {
+			name: requireString(item.name, `attachments[${index}].name`),
+			mimeType: requireString(item.mimeType, `attachments[${index}].mimeType`),
+			data: requireString(item.data, `attachments[${index}].data`),
+		};
+	});
 }
 
 function toServerError(error: unknown): ServerError {
@@ -233,7 +258,8 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				const sessionId = requireString(command.sessionId, "sessionId");
 				const text = requireString(command.text, "text");
 				const requestId = requireString(command.requestId, "requestId");
-				return { data: await service.prompt(sessionId, text, requestId) };
+				const attachments = optionalAttachments(command.attachments);
+				return { data: await service.prompt(sessionId, text, requestId, attachments) };
 			}
 			case "sessions.abort": {
 				const sessionId = requireString(command.sessionId, "sessionId");
