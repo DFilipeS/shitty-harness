@@ -76,6 +76,28 @@ _Avoid_: job
 Replacing older entries with a summary so a conversation fits its model's context window.
 _Avoid_: truncation, summarization
 
+### Execution
+
+**Sandbox**:
+A remote execution environment created and managed by a sandbox provider. Its files and processes can be paused, resumed, and attached to a session again later.
+_Avoid_: container, VM, remote machine
+
+**Sandbox provider**:
+A vendor that creates and manages sandboxes, such as E2B.
+_Avoid_: provider (unqualified), backend
+
+**Target**:
+Where a session's tools run: the local machine or a sandbox. A session can change its target between runs.
+_Avoid_: environment, host, runner
+
+**Workspace**:
+The directory a session's tools operate in, inside its target.
+_Avoid_: project, working directory
+
+**Connect**:
+To bind a session to an existing sandbox, so its tools run there.
+_Avoid_: attach (a client attaches to a session)
+
 ### Models and providers
 
 **Provider**:
@@ -95,7 +117,7 @@ The set of models known for each provider, from the bundled pi-ai data plus an o
 _Avoid_: model list
 
 **Defaults**:
-The model and thinking level a new session starts with. Unset means the harness picks the first available model.
+The model, thinking level, and target a new session starts with. Unset means the harness picks the first available model and the local machine.
 _Avoid_: settings
 
 **Thinking level**:
