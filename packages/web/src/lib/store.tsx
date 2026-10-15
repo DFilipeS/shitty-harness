@@ -4,6 +4,7 @@ import type {
 	AgentState,
 	DefaultsState,
 	EntryRecord,
+	ImageModelInfo,
 	ModelInfo,
 	ModelRef,
 	ModelThinkingLevel,
@@ -46,6 +47,7 @@ type State = {
 	sessionsLoaded: boolean;
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	imageModels: ImageModelInfo[];
 	defaults: DefaultsState;
 	activeSessionId?: string;
 	sessionsById: Record<string, SessionState>;
@@ -63,7 +65,13 @@ type Action =
 	| { type: "status"; status: ConnectionStatus }
 	| { type: "sessions/set"; sessions: SessionSummary[] }
 	| { type: "sessions/upsert"; session: SessionSummary }
-	| { type: "providers/set"; providers: ProviderInfo[]; models: ModelInfo[]; defaults: DefaultsState }
+	| {
+			type: "providers/set";
+			providers: ProviderInfo[];
+			models: ModelInfo[];
+			imageModels: ImageModelInfo[];
+			defaults: DefaultsState;
+	  }
 	| { type: "defaults/set"; defaults: DefaultsState }
 	| { type: "session/activate"; id: string }
 	| { type: "session/deactivate" }
@@ -82,6 +90,7 @@ const initialState: State = {
 	sessionsLoaded: false,
 	providers: [],
 	models: [],
+	imageModels: [],
 	defaults: {},
 	sessionsById: {},
 };
@@ -179,7 +188,13 @@ function reducer(state: State, action: Action): State {
 			return { ...state, sessions: [action.session, ...without], sessionsLoaded: true };
 		}
 		case "providers/set":
-			return { ...state, providers: action.providers, models: action.models, defaults: action.defaults };
+			return {
+				...state,
+				providers: action.providers,
+				models: action.models,
+				imageModels: action.imageModels,
+				defaults: action.defaults,
+			};
 		case "defaults/set":
 			return { ...state, defaults: action.defaults };
 		case "session/activate":
@@ -229,6 +244,7 @@ type HarnessContextValue = {
 	sessionsLoaded: boolean;
 	providers: ProviderInfo[];
 	models: ModelInfo[];
+	imageModels: ImageModelInfo[];
 	defaults: DefaultsState;
 	activeSessionId?: string;
 	activeSession?: SessionState;
@@ -244,7 +260,11 @@ type HarnessContextValue = {
 	configureModel(model: ModelRef): Promise<void>;
 	configureThinkingLevel(level: ModelThinkingLevel): Promise<void>;
 	configureProvider(providerId: string, apiKey: string | null): Promise<void>;
-	setDefaults(change: { model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }): Promise<void>;
+	setDefaults(change: {
+		model?: ModelRef | null;
+		thinkingLevel?: ModelThinkingLevel | null;
+		imageModel?: ModelRef | null;
+	}): Promise<void>;
 	refreshProviders(): Promise<void>;
 	clearError(): void;
 	clearNotice(): void;
@@ -270,6 +290,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					type: "providers/set",
 					providers: event.providers,
 					models: event.models,
+					imageModels: event.imageModels,
 					defaults: event.defaults,
 				});
 			}
@@ -296,6 +317,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					type: "providers/set",
 					providers: providers.providers,
 					models: providers.models,
+					imageModels: providers.imageModels,
 					defaults: providers.defaults,
 				});
 			} catch (error) {
@@ -468,6 +490,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					type: "providers/set",
 					providers: providers.providers,
 					models: providers.models,
+					imageModels: providers.imageModels,
 					defaults: providers.defaults,
 				});
 			} catch (error) {
@@ -478,7 +501,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	);
 
 	const setDefaults = useCallback(
-		async (change: { model?: ModelRef | null; thinkingLevel?: ModelThinkingLevel | null }) => {
+		async (change: {
+			model?: ModelRef | null;
+			thinkingLevel?: ModelThinkingLevel | null;
+			imageModel?: ModelRef | null;
+		}) => {
 			try {
 				const result = await client.send({ type: "defaults.set", ...change });
 				dispatch({ type: "defaults/set", defaults: result.defaults });
@@ -496,6 +523,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				type: "providers/set",
 				providers: result.providers,
 				models: result.models,
+				imageModels: result.imageModels,
 				defaults: result.defaults,
 			});
 			const notice = formatRefreshNotice(result.refresh);
@@ -514,6 +542,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			sessionsLoaded: state.sessionsLoaded,
 			providers: state.providers,
 			models: state.models,
+			imageModels: state.imageModels,
 			defaults: state.defaults,
 			...(state.activeSessionId === undefined ? {} : { activeSessionId: state.activeSessionId }),
 			...(state.activeSessionId === undefined || state.sessionsById[state.activeSessionId] === undefined

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ModelInfo, ModelRef, ModelThinkingLevel } from "@harness/protocol";
+import type { ImageModelInfo, ModelInfo, ModelRef, ModelThinkingLevel } from "@harness/protocol";
 import { useCommandPalette, type CommandPage } from "./commands.tsx";
 import { modelCapabilities } from "./models.ts";
 import { useHarness } from "./store.tsx";
@@ -109,6 +109,38 @@ export function buildDefaultModelPage(
 	};
 }
 
+/** The image models `generate_image` can drive, plus "First available" to clear the default. */
+export function buildDefaultImageModelPage(
+	models: readonly ImageModelInfo[],
+	current: ModelRef | undefined,
+	setDefaultModel: (model: ModelRef | null) => Promise<void>,
+): CommandList {
+	return {
+		kind: "commands",
+		title: "Default image model",
+		placeholder: "Search image models…",
+		commands: [
+			{
+				id: "default.image-model.first",
+				title: "First available",
+				group: "Defaults",
+				detail: "No default image model",
+				current: current === undefined,
+				run: () => void setDefaultModel(null),
+			},
+			...models.map((model) => ({
+				id: `default.image-model.${model.provider}.${model.id}`,
+				title: model.name,
+				group: model.providerName,
+				detail: model.id,
+				keywords: [model.provider, model.providerName, model.id],
+				current: current?.provider === model.provider && current.modelId === model.id,
+				run: () => void setDefaultModel({ provider: model.provider, modelId: model.id }),
+			})),
+		],
+	};
+}
+
 /** The thinking page plus "Model default", which clears the stored level. */
 export function buildDefaultThinkingPage(
 	levels: readonly ModelThinkingLevel[],
@@ -170,7 +202,7 @@ export function useThinkingPalette(): {
  * come from the model a new session will actually use, so the list matches what gets applied.
  */
 export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
-	const { models, defaults, setDefaults } = useHarness();
+	const { models, imageModels, defaults, setDefaults } = useHarness();
 	const { openPage } = useCommandPalette();
 	const defaultModel = defaults.model;
 	const defaultInfo = models.find(
@@ -178,6 +210,10 @@ export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 	);
 	const resolved = defaultInfo ?? models[0];
 	const levels = resolved?.thinkingLevels ?? [];
+	const defaultImageModel = defaults.imageModel;
+	const imageInfo = imageModels.find(
+		(model) => model.provider === defaultImageModel?.provider && model.id === defaultImageModel.modelId,
+	);
 
 	const page = (): CommandPage => ({
 		kind: "commands",
@@ -203,6 +239,19 @@ export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 					pushPage(
 						buildDefaultThinkingPage(levels, defaults.thinkingLevel, (level) =>
 							setDefaults({ thinkingLevel: level }),
+						),
+					),
+			},
+			{
+				id: "defaults.image-model",
+				title: "Default image model",
+				group: "Defaults",
+				detail: imageInfo?.name ?? "First available",
+				icon: <WandIcon />,
+				run: ({ pushPage }) =>
+					pushPage(
+						buildDefaultImageModelPage(imageModels, defaultImageModel, (model) =>
+							setDefaults({ imageModel: model }),
 						),
 					),
 			},
