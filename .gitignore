@@ -1,5 +1,6 @@
 node_modules/
 data/
 packages/web/dist/
+.harness/
 *.log
 .DS_Store
