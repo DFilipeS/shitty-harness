@@ -80,6 +80,15 @@ reloading the page, bookmarking it, or sending the link to another browser opens
 Back and forward move between the sessions you visited.
 4. Chat. Double-click a session title to rename it, or use the trash icon to delete it.
 
+Attach files with the paperclip button, by dropping them on the message box, or by pasting from the
+clipboard. Images go to the model as image content, so only models with image input accept them;
+the composer says so and blocks Send otherwise. Text files are inlined into the message as an
+`<attached-file>` block and shown collapsed in the transcript. Every attachment is also saved in
+the working directory under `.harness/attachments/<session>/`, and the message lists those paths,
+so the agent can hand them to tools (for example, `generate_image` editing a picture you attached).
+A message can carry up to ten attachments, up to 5 MB per image and 512 KB per text file. Other
+file types (PDFs, archives, …) are rejected: pi-ai messages only carry text and images.
+
 The header keeps a running tally for the open session on the right: cost, tokens, context use,
 and cache hit rate. Each percentage gets a small ring that fills to the value; the context ring
 turns amber past 80% and red past 95%, and the cache ring turns green once a call hits the cache.
