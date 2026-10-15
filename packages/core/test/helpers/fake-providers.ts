@@ -7,6 +7,7 @@ import {
 	type FauxProviderHandle,
 	type ImageModel,
 	type Model,
+	type Usage,
 } from "@earendil-works/pi-ai";
 import type {
 	DefaultsState,
@@ -160,7 +161,7 @@ export const FAKE_IMAGE_MODEL_ID = "fake-image-model";
 const FAKE_IMAGE_API = "openrouter-images";
 
 /** An image model whose generation returns the given image without any network access. */
-function createFakeImageProvider(image: { data: string; mimeType: string }) {
+function createFakeImageProvider(image: { data: string; mimeType: string; usage?: Usage }) {
 	const model: ImageModel<typeof FAKE_IMAGE_API> = {
 		type: "image",
 		id: FAKE_IMAGE_MODEL_ID,
@@ -184,6 +185,7 @@ function createFakeImageProvider(image: { data: string; mimeType: string }) {
 					provider: FAKE_IMAGE_PROVIDER_ID,
 					model: FAKE_IMAGE_MODEL_ID,
 					output: [{ type: "image", data: image.data, mimeType: image.mimeType }],
+					...(image.usage === undefined ? {} : { usage: image.usage }),
 					stopReason: "stop",
 					timestamp: Date.now(),
 				}),
@@ -200,7 +202,7 @@ function createFakeImageProvider(image: { data: string; mimeType: string }) {
 export function createFauxProviders(options: {
 	text?: string;
 	tokensPerSecond?: number;
-	image?: { data: string; mimeType: string };
+	image?: { data: string; mimeType: string; usage?: Usage };
 } = {}): {
 	providers: Providers;
 	faux: FauxProviderHandle;

@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { MemoryStorage } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { describe, expect, it } from "vitest";
@@ -38,6 +39,15 @@ async function withService(run: (service: HarnessService) => Promise<void>, opti
 		await service.close();
 	}
 }
+
+const FAKE_IMAGE_USAGE = {
+	input: 10,
+	output: 20,
+	cacheRead: 0,
+	cacheWrite: 0,
+	totalTokens: 30,
+	cost: { input: 0, output: 0.5, cacheRead: 0, cacheWrite: 0, total: 0.5 },
+};
 
 /** Poll a predicate until it holds or `timeoutMs` passes. */
 async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 10_000): Promise<boolean> {
@@ -304,6 +314,33 @@ describe("HarnessService", () => {
 			},
 			{ apiKey: "test-key" },
 		);
+	});
+
+	it("gives a client that attaches later the current snapshot and usage", async () => {
+		const { providers, faux } = createFauxProviders({
+			image: { data: "aGk=", mimeType: "image/png", usage: FAKE_IMAGE_USAGE },
+		});
+		faux.setResponses([
+			fauxAssistantMessage([fauxToolCall("generate_image", { prompt: "a cat" })], { stopReason: "toolUse" }),
+			fauxAssistantMessage("Done."),
+		]);
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			// Hold one stream open while the run finishes, like a browser that stays attached.
+			const first = await service.subscribeSession(session.id, () => {});
+			await service.prompt(session.id, "Draw a cat", "request-late-attach");
+			const idle = await waitFor(async () => (await service.listSessions())[0]?.working === false);
+			expect(idle).toBe(true);
+
+			const second = await service.subscribeSession(session.id, () => {});
+			expect(second.snapshot.entries.length).toBeGreaterThan(0);
+			expect(second.snapshot.usage.tools?.generate_image?.cost.total).toBeCloseTo(0.5);
+			first.unsubscribe();
+			second.unsubscribe();
+		} finally {
+			await service.close();
+		}
 	});
 
 	it("marks a session as working while a run is active", async () => {

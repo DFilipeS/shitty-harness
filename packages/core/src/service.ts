@@ -80,11 +80,6 @@ export type ProvidersState = {
 	defaults: DefaultsState;
 };
 
-type SessionSubscription = {
-	stream: AgentEventStream;
-	listeners: Set<(events: readonly AgentEvent[]) => void>;
-};
-
 export type HarnessServiceDependencies = {
 	storage: Storage;
 	providers: Providers;
@@ -100,7 +95,8 @@ export class HarnessService {
 	readonly #harness: Harness;
 	readonly #providers: Providers;
 	readonly #environment: EnvironmentFactory | undefined;
-	readonly #subscriptions = new Map<ConversationId, Promise<SessionSubscription>>();
+	/** Live session event streams, one per `subscribeSession` caller. */
+	readonly #streams = new Set<AgentEventStream>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
 	#indexWatch: DocumentWatch<SessionIndexState> | undefined;
 	#taskGraphWatch: TaskGraphWatch | undefined;
@@ -252,17 +248,6 @@ export class HarnessService {
 			}
 		}
 
-		const pending = this.#subscriptions.get(conversationId);
-		if (pending !== undefined) {
-			this.#subscriptions.delete(conversationId);
-			try {
-				const subscription = await pending;
-				await subscription.stream.stop();
-			} catch (error) {
-				console.warn(`[core] stopping session ${id} events before delete failed:`, error);
-			}
-		}
-
 		await this.#harness.commit(async (tx) => {
 			const index = await tx.doc(SessionIndex);
 			index.sessions = index.sessions.filter((entry) => entry.id !== id);
@@ -338,26 +323,25 @@ export class HarnessService {
 		return { model: agent.model, thinkingLevel: agent.thinkingLevel };
 	}
 
+	/**
+	 * Attach a listener to one conversation. Each caller gets its own event stream, so its snapshot
+	 * is captured at attach time: a client that joins while another is already attached sees the
+	 * current transcript and usage, not the state from when the first stream was created.
+	 */
 	async subscribeSession(
 		id: string,
 		listener: (events: readonly AgentEvent[]) => void,
 	): Promise<{ snapshot: SnapshotEvent; unsubscribe: () => void }> {
 		const conversationId = parseConversationId(id);
 		await this.#requireConversation(conversationId);
-		const subscription = await this.#getSubscription(conversationId);
-		subscription.listeners.add(listener);
+		const stream = await watchEvents(this.#harness, conversationId, BACKGROUND_CONTEXT);
+		this.#streams.add(stream);
+		stream.start(async (events) => listener(events));
 		return {
-			snapshot: subscription.stream.snapshot,
+			snapshot: stream.snapshot,
 			unsubscribe: () => {
-				const pending = this.#subscriptions.get(conversationId);
-				if (pending === undefined) return;
-				void pending.then((current) => {
-					current.listeners.delete(listener);
-					if (current.listeners.size === 0 && this.#subscriptions.get(conversationId) === pending) {
-						this.#subscriptions.delete(conversationId);
-						void current.stream.stop();
-					}
-				});
+				if (!this.#streams.delete(stream)) return;
+				void stream.stop();
 			},
 		};
 	}
@@ -429,35 +413,16 @@ export class HarnessService {
 		} catch (error) {
 			console.warn("[core] stopping task graph watch failed:", error);
 		}
-		const pending = [...this.#subscriptions.values()];
-		this.#subscriptions.clear();
-		for (const subscription of pending) {
+		const streams = [...this.#streams];
+		this.#streams.clear();
+		for (const stream of streams) {
 			try {
-				const current = await subscription;
-				await current.stream.stop();
+				await stream.stop();
 			} catch (error) {
 				console.warn("[core] stopping session subscription failed:", error);
 			}
 		}
 		await this.#harness.close(BACKGROUND_CONTEXT);
-	}
-
-	#getSubscription(id: ConversationId): Promise<SessionSubscription> {
-		const existing = this.#subscriptions.get(id);
-		if (existing !== undefined) return existing;
-		const created = (async () => {
-			const stream = await watchEvents(this.#harness, id, BACKGROUND_CONTEXT);
-			const subscription: SessionSubscription = { stream, listeners: new Set() };
-			stream.start(async (events) => {
-				for (const listener of [...subscription.listeners]) listener(events);
-			});
-			return subscription;
-		})();
-		created.catch(() => {
-			if (this.#subscriptions.get(id) === created) this.#subscriptions.delete(id);
-		});
-		this.#subscriptions.set(id, created);
-		return created;
 	}
 
 	/** Build the environment a conversation's tools run in, or undefined when none is configured. */
