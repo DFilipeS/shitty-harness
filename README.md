@@ -161,8 +161,8 @@ Sessions are durable conversations. The sidebar order and titles come from a ses
 Agents get pi-durable's default coding tools: `read`, `write`, `edit`, and `bash`. They come from
 the `CodingTools` extension, which `packages/core/src/service.ts` installs in the registry; every
 conversation selects it by default. A `generate_image` tool is installed alongside them: it calls
-the provider's image API (the chat stream cannot carry images), saves the picture in the working
-directory, and returns it as a tool result, so it shows up in the conversation. Pass `image` with
+the provider's image API (the chat stream cannot carry images), saves the picture under
+`.harness/images/<session>/`, and returns it as a tool result, so it shows up in the conversation. Pass `image` with
 a file path to edit or reference an existing picture, such as one from an earlier `Saved ...`
 note.
 
