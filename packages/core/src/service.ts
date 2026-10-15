@@ -1,3 +1,6 @@
+import { mkdir, readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
@@ -7,6 +10,7 @@ import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
 import {
 	createRegistry,
+	defineExtension,
 	Harness,
 	watchEvents,
 	type AgentEvent,
@@ -15,12 +19,14 @@ import {
 	type Conversation,
 	type ConversationId,
 	type DocumentWatch,
+	type EnvTarget,
 	type SnapshotEvent,
 	type Storage,
 	type TaskGraph,
 	type TaskGraphWatch,
 } from "@earendil-works/pi-durable";
 import type {
+	BrowseDirectory,
 	DefaultsState,
 	ImageModelInfo,
 	ModelInfo,
@@ -30,11 +36,22 @@ import type {
 	ProviderInfo,
 	ProviderRefreshReport,
 	SessionSummary,
+	TargetChoice,
+	TargetInfo,
+	WorkspacesBrowseResult,
 } from "@harness/protocol";
 import type { EnvironmentFactory } from "./environment.ts";
 import { sortModelsForDisplay } from "./model-order.ts";
 import type { Providers } from "./providers.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
+import {
+	createTargetSection,
+	resolveTarget,
+	scratchPath,
+	SessionTargetDoc,
+	TargetChangeEntry,
+	type ResolvedTarget,
+} from "./targets.ts";
 
 const NEW_SESSION_TITLE = "New session";
 const TITLE_MAX_LENGTH = 48;
@@ -85,7 +102,29 @@ export type HarnessServiceDependencies = {
 	providers: Providers;
 	/** Builds each conversation's execution environment. Without one, the coding tools fail. */
 	environment?: EnvironmentFactory;
+	/** Root directory that holds per-session scratch workspaces. */
+	workspacesDir?: string;
 };
+
+/** The protocol view of a resolved target. */
+function targetInfo(target: ResolvedTarget): TargetInfo {
+	return { kind: "local", path: target.path, scratch: target.scratch };
+}
+
+/** Resolve the session's target, then build the local environment at its directory. */
+function composeEnvironment(
+	local: EnvironmentFactory,
+	workspacesDir: string | undefined,
+	providers: Providers,
+): EnvironmentFactory {
+	return async (target, context) => {
+		const resolved = await resolveTarget(target.read, target.conversationId, context, {
+			...(workspacesDir === undefined ? {} : { workspacesDir }),
+			defaultTarget: providers.getDefaults().target,
+		});
+		return local({ ...target, ...(resolved.path === "" ? {} : { cwd: resolved.path }) }, context);
+	};
+}
 
 /**
  * The core of the harness: it owns the durable `Harness`, provider credentials, and the session
@@ -95,6 +134,7 @@ export class HarnessService {
 	readonly #harness: Harness;
 	readonly #providers: Providers;
 	readonly #environment: EnvironmentFactory | undefined;
+	readonly #workspacesDir: string | undefined;
 	/** Live session event streams, one per `subscribeSession` caller. */
 	readonly #streams = new Set<AgentEventStream>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
@@ -103,10 +143,16 @@ export class HarnessService {
 	#working = new Set<string>();
 	#closed = false;
 
-	private constructor(harness: Harness, providers: Providers, environment: EnvironmentFactory | undefined) {
+	private constructor(
+		harness: Harness,
+		providers: Providers,
+		environment: EnvironmentFactory | undefined,
+		workspacesDir: string | undefined,
+	) {
 		this.#harness = harness;
 		this.#providers = providers;
 		this.#environment = environment;
+		this.#workspacesDir = workspacesDir;
 	}
 
 	/**
@@ -125,12 +171,29 @@ export class HarnessService {
 				defaultImageModel: () => providers.getDefaults().imageModel,
 			}),
 		);
+		registry.install(
+			defineExtension({
+				name: "execution-target",
+				sections: [
+					createTargetSection({
+						...(dependencies.workspacesDir === undefined
+							? {}
+							: { workspacesDir: dependencies.workspacesDir }),
+						defaultTarget: () => providers.getDefaults().target,
+					}),
+				],
+			}),
+		);
+		const environment =
+			dependencies.environment === undefined
+				? undefined
+				: composeEnvironment(dependencies.environment, dependencies.workspacesDir, providers);
 		const harness = await Harness.open(
 			dependencies.storage,
 			{
 				models: providers.models,
 				registry,
-				...(dependencies.environment === undefined ? {} : { env: dependencies.environment }),
+				...(environment === undefined ? {} : { env: environment }),
 				conversationCreated: async (tx, conversation) => {
 					if (conversation.owner !== undefined) return;
 					const index = await tx.doc(SessionIndex);
@@ -151,7 +214,7 @@ export class HarnessService {
 		}, BACKGROUND_CONTEXT);
 		harness.resume();
 
-		const service = new HarnessService(harness, providers, dependencies.environment);
+		const service = new HarnessService(harness, providers, environment, dependencies.workspacesDir);
 		await service.#watchSessionIndex();
 		await service.#watchTaskGraph();
 		// Startup uses the cached catalog when it is fresh; the client can force a refresh.
@@ -170,6 +233,10 @@ export class HarnessService {
 
 	#emit(event: ServiceEvent): void {
 		for (const listener of [...this.#listeners]) listener(event);
+	}
+
+	async #emitSessions(): Promise<void> {
+		this.#emit({ type: "sessions", sessions: await this.listSessions() });
 	}
 
 	async #watchSessionIndex(): Promise<void> {
@@ -201,15 +268,25 @@ export class HarnessService {
 
 	async listSessions(): Promise<SessionSummary[]> {
 		const index = await this.#harness.snapshot(SessionIndex, BACKGROUND_CONTEXT);
-		return (index?.sessions ?? [])
-			.map((entry) => ({
+		const entries = [...(index?.sessions ?? [])].sort((a, b) => b.updatedAt - a.updatedAt);
+		return Promise.all(
+			entries.map(async (entry) => ({
 				id: entry.id,
 				title: entry.title,
 				createdAt: entry.createdAt,
 				updatedAt: entry.updatedAt,
 				working: this.#working.has(entry.id),
-			}))
-			.sort((a, b) => b.updatedAt - a.updatedAt);
+				target: targetInfo(await this.#resolveTarget(parseConversationId(entry.id))),
+			})),
+		);
+	}
+
+	/** Where one session's tools run, following the default when the session stores none. */
+	async #resolveTarget(conversationId: ConversationId): Promise<ResolvedTarget> {
+		return resolveTarget(this.#harness, conversationId, BACKGROUND_CONTEXT, {
+			...(this.#workspacesDir === undefined ? {} : { workspacesDir: this.#workspacesDir }),
+			defaultTarget: this.#providers.getDefaults().target,
+		});
 	}
 
 	async createSession(): Promise<SessionSummary> {
@@ -219,6 +296,12 @@ export class HarnessService {
 		);
 		const change = await this.#initialAgentChange();
 		if (Object.keys(change).length > 0) await conversation.configure(change, BACKGROUND_CONTEXT);
+		// Snapshot the default target, so changing the setting later leaves this session alone.
+		await this.#harness.commit(async (tx) => {
+			const target = await tx.doc(SessionTargetDoc, conversation.id);
+			target.kind = "local";
+			target.path = this.#providers.getDefaults().target?.path ?? null;
+		}, BACKGROUND_CONTEXT);
 		return this.#requireSession(String(conversation.id));
 	}
 
@@ -269,8 +352,7 @@ export class HarnessService {
 		const agent = await conversation.agent(BACKGROUND_CONTEXT);
 		if (agent.model === undefined) throw new ServiceError("no_model", "Select a model before sending a message");
 		const model = this.#providers.models.getModel(agent.model.provider, agent.model.modelId);
-		const env =
-			attachments.length === 0 ? undefined : await this.#buildEnvironment(conversationId, agent.cwd);
+		const env = attachments.length === 0 ? undefined : await this.#buildEnvironment(conversationId);
 		const content = await buildPromptContent(trimmed, attachments, model?.input, (attachment, index) =>
 			env === undefined ? Promise.resolve(undefined) : saveAttachment(env, id, attachment, index, BACKGROUND_CONTEXT),
 		);
@@ -324,6 +406,78 @@ export class HarnessService {
 	}
 
 	/**
+	 * Point a session at a local folder, or back at its scratch directory. The change takes effect on
+	 * the next run; a visible entry records it so the transcript and the model stay honest.
+	 */
+	async setTarget(id: string, choice: TargetChoice): Promise<SessionSummary> {
+		const conversationId = parseConversationId(id);
+		await this.#requireConversation(conversationId);
+		if (this.#working.has(id)) {
+			throw new ServiceError("busy", "Wait for the run to finish before changing the target");
+		}
+		const path = choice.path?.trim();
+		if (path !== undefined && path !== "") {
+			const info = await stat(path).catch(() => undefined);
+			if (info === undefined || !info.isDirectory()) {
+				throw new ServiceError("invalid", `Not a directory: ${path}`);
+			}
+		}
+		const target: ResolvedTarget =
+			path === undefined || path === ""
+				? { kind: "local", path: scratchPath(this.#workspacesDir, conversationId), scratch: true }
+				: { kind: "local", path, scratch: false };
+		await this.#harness.commit(async (tx) => {
+			const doc = await tx.doc(SessionTargetDoc, conversationId);
+			doc.kind = "local";
+			doc.path = target.scratch ? null : target.path;
+			await tx.appendEntry(TargetChangeEntry, conversationId, {
+				data: { path: target.path, scratch: target.scratch },
+			});
+		}, BACKGROUND_CONTEXT);
+		await this.#emitSessions();
+		return this.#requireSession(id);
+	}
+
+	/** List the directories under `path` for the local folder picker; defaults to the home directory. */
+	async browseWorkspaces(path?: string): Promise<WorkspacesBrowseResult> {
+		const directory = path === undefined || path === "" ? homedir() : resolve(path);
+		const info = await stat(directory).catch(() => undefined);
+		if (info === undefined || !info.isDirectory()) {
+			throw new ServiceError("not_found", `Not a directory: ${directory}`);
+		}
+		const entries = await readdir(directory, { withFileTypes: true });
+		const directories: BrowseDirectory[] = [];
+		for (const entry of entries) {
+			const entryPath = join(directory, entry.name);
+			const isDirectory =
+				entry.isDirectory() ||
+				(entry.isSymbolicLink() && (await stat(entryPath).catch(() => undefined))?.isDirectory() === true);
+			if (isDirectory) directories.push({ name: entry.name, path: entryPath });
+		}
+		directories.sort((a, b) => a.name.localeCompare(b.name));
+		const parent = dirname(directory);
+		return { path: directory, ...(parent === directory ? {} : { parent }), directories };
+	}
+
+	/** Create one directory inside an existing folder, for the picker's "new folder" flow. */
+	async createWorkspaceFolder(parent: string, name: string): Promise<{ path: string }> {
+		const clean = name.trim();
+		if (clean === "" || clean === "." || clean === ".." || /[/\\]/.test(clean)) {
+			throw new ServiceError("invalid", "Folder name must not be empty or contain path separators");
+		}
+		const path = join(resolve(parent), clean);
+		try {
+			await mkdir(path);
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code;
+			if (code === "EEXIST") throw new ServiceError("invalid", `A file or folder named ${clean} already exists`);
+			if (code === "ENOENT") throw new ServiceError("not_found", `Not a directory: ${parent}`);
+			throw error;
+		}
+		return { path };
+	}
+
+	/**
 	 * Attach a listener to one conversation. Each caller gets its own event stream, so its snapshot
 	 * is captured at attach time: a client that joins while another is already attached sees the
 	 * current transcript and usage, not the state from when the first stream was created.
@@ -360,11 +514,12 @@ export class HarnessService {
 		};
 	}
 
-	/** Store the model and thinking level new sessions start with. */
+	/** Store the model, thinking level, and target new sessions start with. */
 	async setDefaults(change: {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
 		imageModel?: ModelRef | null;
+		target?: TargetChoice | null;
 	}): Promise<DefaultsState> {
 		if (change.model !== undefined && change.model !== null) {
 			const resolved = this.#providers.models.getModel(change.model.provider, change.model.modelId);
@@ -383,6 +538,15 @@ export class HarnessService {
 					"unknown_model",
 					`Unknown image model: ${change.imageModel.provider}/${change.imageModel.modelId}`,
 				);
+			}
+		}
+		if (change.target !== undefined && change.target !== null) {
+			const path = change.target.path?.trim();
+			if (path !== undefined && path !== "") {
+				const info = await stat(path).catch(() => undefined);
+				if (info === undefined || !info.isDirectory()) {
+					throw new ServiceError("invalid", `Not a directory: ${path}`);
+				}
 			}
 		}
 		const defaults = await this.#providers.setDefaults(change);
@@ -426,13 +590,11 @@ export class HarnessService {
 	}
 
 	/** Build the environment a conversation's tools run in, or undefined when none is configured. */
-	async #buildEnvironment(conversationId: ConversationId, cwd: string | undefined): Promise<ExecutionEnv | undefined> {
+	async #buildEnvironment(conversationId: ConversationId): Promise<ExecutionEnv | undefined> {
 		if (this.#environment === undefined) return undefined;
 		try {
-			return await this.#environment(
-				{ conversationId, ...(cwd === undefined ? {} : { cwd }), read: this.#harness },
-				BACKGROUND_CONTEXT,
-			);
+			const target: EnvTarget = { conversationId, read: this.#harness };
+			return await this.#environment(target, BACKGROUND_CONTEXT);
 		} catch (error) {
 			console.warn("[core] building the attachment environment failed:", error);
 			return undefined;

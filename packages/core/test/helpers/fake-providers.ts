@@ -112,6 +112,11 @@ function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Provid
 				if (change.imageModel === null) delete next.imageModel;
 				else next.imageModel = { ...change.imageModel };
 			}
+			if (change.target !== undefined) {
+				if (change.target === null) delete next.target;
+				else if (change.target.path === undefined || change.target.path === "") next.target = { kind: "local" };
+				else next.target = { kind: "local", path: change.target.path };
+			}
 			defaults = next;
 			return { ...defaults };
 		},

@@ -9,6 +9,7 @@ import type {
 	ModelThinkingLevel,
 	ProviderInfo,
 	ProviderRefreshReport,
+	TargetChoice,
 } from "@harness/protocol";
 import { saveConfig, type AppConfig, type DefaultsConfig } from "./config.ts";
 import { ConfigCredentialStore } from "./credentials.ts";
@@ -33,7 +34,8 @@ export interface Providers {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
 		imageModel?: ModelRef | null;
-	}): Promise<DefaultsState>;   
+		target?: TargetChoice | null;
+	}): Promise<DefaultsState>;
 	/** Refresh remote model catalogs; `force` bypasses the freshness throttle. */
 	refresh(options?: { providerId?: string; force?: boolean }): Promise<ProviderRefreshReport[]>;
 }
@@ -118,6 +120,7 @@ export class ProviderManager implements Providers {
 			...(defaults.model === undefined ? {} : { model: { ...defaults.model } }),
 			...(defaults.thinkingLevel === undefined ? {} : { thinkingLevel: defaults.thinkingLevel }),
 			...(defaults.imageModel === undefined ? {} : { imageModel: { ...defaults.imageModel } }),
+			...(defaults.target === undefined ? {} : { target: { ...defaults.target } }),
 		};
 	}
 
@@ -125,6 +128,7 @@ export class ProviderManager implements Providers {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
 		imageModel?: ModelRef | null;
+		target?: TargetChoice | null;
 	}): Promise<DefaultsState> {
 		await this.#mutate((config) => {
 			const defaults: DefaultsConfig = config.defaults ?? {};
@@ -140,10 +144,16 @@ export class ProviderManager implements Providers {
 				if (change.imageModel === null) delete defaults.imageModel;
 				else defaults.imageModel = { provider: change.imageModel.provider, modelId: change.imageModel.modelId };
 			}
+			if (change.target !== undefined) {
+				if (change.target === null) delete defaults.target;
+				else if (change.target.path === undefined || change.target.path === "") defaults.target = { kind: "local" };
+				else defaults.target = { kind: "local", path: change.target.path };
+			}
 			if (
 				defaults.model === undefined &&
 				defaults.thinkingLevel === undefined &&
-				defaults.imageModel === undefined
+				defaults.imageModel === undefined &&
+				defaults.target === undefined
 			) {
 				delete config.defaults;
 			} else config.defaults = defaults;

@@ -7,11 +7,19 @@ export type ProviderConfig = {
 	apiKey?: string;
 };
 
+/** Where new sessions run. Local only for now; sandboxes arrive next. */
+export type DefaultTargetConfig = {
+	kind: "local";
+	/** Absolute folder; absent means the session's scratch directory. */
+	path?: string;
+};
+
 /** Model and thinking level applied to new sessions, plus the model `generate_image` uses. */
 export type DefaultsConfig = {
 	model?: { provider: string; modelId: string };
 	thinkingLevel?: ModelThinkingLevel;
 	imageModel?: { provider: string; modelId: string };
+	target?: DefaultTargetConfig;
 };
 
 /** Everything stored in `data/config.json`. */
@@ -43,7 +51,16 @@ function parseDefaults(value: unknown): DefaultsConfig | undefined {
 	if (typeof level === "string" && (THINKING_LEVELS as readonly string[]).includes(level)) {
 		defaults.thinkingLevel = level as ModelThinkingLevel;
 	}
+	const target = parseDefaultTarget(value.target);
+	if (target !== undefined) defaults.target = target;
 	return Object.keys(defaults).length === 0 ? undefined : defaults;
+}
+
+/** A default target is valid only when it names a local folder, or nothing at all. */
+function parseDefaultTarget(value: unknown): DefaultTargetConfig | undefined {
+	if (!isRecord(value) || value.kind !== "local") return undefined;
+	if (value.path === undefined) return { kind: "local" };
+	return typeof value.path === "string" && value.path !== "" ? { kind: "local", path: value.path } : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

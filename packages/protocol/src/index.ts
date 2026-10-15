@@ -22,6 +22,26 @@ export type ModelRef = {
 	modelId: string;
 };
 
+/** Where a session's tools run. Local only for now; sandboxes arrive next. */
+export type TargetInfo = {
+	kind: "local";
+	path: string;
+	/** True when the path is the session's own scratch directory. */
+	scratch: boolean;
+};
+
+/** What the client asks for: a local folder, or the session's scratch directory when `path` is absent. */
+export type TargetChoice = {
+	kind: "local";
+	path?: string;
+};
+
+/** One directory offered by the local folder browser. */
+export type BrowseDirectory = {
+	name: string;
+	path: string;
+};
+
 /** One session as shown in the sidebar. */
 export type SessionSummary = {
 	id: string;
@@ -30,6 +50,8 @@ export type SessionSummary = {
 	updatedAt: number;
 	/** True while the durable harness has live work for this session. */
 	working: boolean;
+	/** Where this session's tools run. */
+	target: TargetInfo;
 };
 
 /** A model the client may offer for selection. */
@@ -65,6 +87,8 @@ export type DefaultsState = {
 	model?: ModelRef;
 	thinkingLevel?: ModelThinkingLevel;
 	imageModel?: ModelRef;
+	/** Where new sessions run; unset means the local machine in a scratch directory. */
+	target?: TargetChoice;
 };
 
 /**
@@ -116,6 +140,21 @@ export type SessionsConfigureResult = {
 	agent: AgentState;
 };
 
+export type SessionsSetTargetResult = {
+	session: SessionSummary;
+};
+
+export type WorkspacesBrowseResult = {
+	path: string;
+	/** Parent directory; absent at the filesystem root. */
+	parent?: string;
+	directories: BrowseDirectory[];
+};
+
+export type WorkspacesCreateFolderResult = {
+	path: string;
+};
+
 /** Commands the client sends to the server. Every command carries a correlation `id`. */
 export type ClientCommand =
 	| { id: string; type: "sessions.list" }
@@ -140,6 +179,9 @@ export type ClientCommand =
 			model?: ModelRef | null;
 			thinkingLevel?: ModelThinkingLevel | null;
 	  }
+	| { id: string; type: "sessions.setTarget"; sessionId: string; target: TargetChoice }
+	| { id: string; type: "workspaces.browse"; path?: string }
+	| { id: string; type: "workspaces.createFolder"; parent: string; name: string }
 	| { id: string; type: "providers.list" }
 	| { id: string; type: "providers.configure"; providerId: string; apiKey: string | null }
 	| { id: string; type: "providers.refresh" }
@@ -149,6 +191,7 @@ export type ClientCommand =
 			model?: ModelRef | null;
 			thinkingLevel?: ModelThinkingLevel | null;
 			imageModel?: ModelRef | null;
+			target?: TargetChoice | null;
 	  };
 
 export type CommandType = ClientCommand["type"];
@@ -164,6 +207,9 @@ export type CommandResult = {
 	"sessions.prompt": { submissionId: string };
 	"sessions.abort": Record<string, never>;
 	"sessions.configure": SessionsConfigureResult;
+	"sessions.setTarget": SessionsSetTargetResult;
+	"workspaces.browse": WorkspacesBrowseResult;
+	"workspaces.createFolder": WorkspacesCreateFolderResult;
 	"providers.list": ProvidersListResult;
 	"providers.configure": ProvidersListResult;
 	"providers.refresh": ProvidersRefreshResult;
