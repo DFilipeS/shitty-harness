@@ -100,59 +100,46 @@ function resolveImageModel(
 }
 
 /**
- * What OpenRouter actually charged for a generation.
+ * What OpenRouter actually charged for a generation, read from the chat completion response.
  *
  * pi-ai prices image tokens at the model's text output rate, but OpenRouter bills them at the
- * model's `image_output` rate — 10x the text rate for Nano Banana Pro — so pi-ai's estimate can be
- * far too low. The generation endpoint has the real number; undefined when it cannot be read.
+ * model's `image_output` rate — several times higher for image models — so pi-ai's estimate can be
+ * far too low. The response's `usage.cost` is the real charge; OpenRouter's `/generation` endpoint
+ * has it too, but only minutes after the request, too late for the tool call.
  */
-export async function openRouterGenerationCost(
-	responseId: string,
-	baseUrl: string,
-	apiKey: string,
-	options: { signal?: AbortSignal; fetch?: typeof fetch } = {},
-): Promise<number | undefined> {
-	const request = options.fetch ?? fetch;
-	try {
-		const url = `${baseUrl.replace(/\/+$/, "")}/generation?id=${encodeURIComponent(responseId)}`;
-		const response = await request(url, {
-			headers: { accept: "application/json", authorization: `Bearer ${apiKey}` },
-			...(options.signal === undefined ? {} : { signal: options.signal }),
-		});
-		if (!response.ok) return undefined;
-		const body: unknown = await response.json();
-		if (typeof body !== "object" || body === null) return undefined;
-		const data = "data" in body ? (body as { data: unknown }).data : body;
-		if (typeof data !== "object" || data === null) return undefined;
-		const total = (data as { total_cost?: unknown }).total_cost;
-		return typeof total === "number" && Number.isFinite(total) ? total : undefined;
-	} catch {
-		return undefined;
-	}
+export function openRouterResponseCost(body: unknown): number | undefined {
+	if (typeof body !== "object" || body === null) return undefined;
+	const usage = (body as { usage?: unknown }).usage;
+	if (typeof usage !== "object" || usage === null) return undefined;
+	const cost = (usage as { cost?: unknown }).cost;
+	return typeof cost === "number" && Number.isFinite(cost) ? cost : undefined;
 }
 
-/** pi-ai's usage with the cost OpenRouter reports, when it can be read. */
-async function actualUsage(
-	result: AssistantImages,
-	model: ImageModel<ImageApi>,
-	api: ToolExecutionApi,
-	context: Context,
-): Promise<Usage | undefined> {
+/**
+ * A fetch that reads the cost out of the response body before pi-ai gets it, without disturbing
+ * the response pi-ai parses. Only used for OpenRouter image models.
+ */
+function captureResponseCost(capture: { cost?: number }): typeof fetch {
+	return async (input, init) => {
+		const response = await fetch(input, init);
+		try {
+			const cost = openRouterResponseCost(await response.clone().json());
+			if (cost !== undefined) capture.cost = cost;
+		} catch {
+			// A response that cannot be read stays usable; the estimate is the fallback.
+		}
+		return response;
+	};
+}
+
+/** pi-ai's usage with the cost OpenRouter reported in the response, when it could be read. */
+function actualUsage(result: AssistantImages, reportedCost: number | undefined): Usage | undefined {
 	const usage = result.usage;
-	if (usage === undefined || result.api !== "openrouter-images" || result.responseId === undefined) {
-		return usage;
-	}
-	const auth = await api.models.getAuth(model.provider);
-	const apiKey = auth?.auth.apiKey;
-	if (apiKey === undefined) return usage;
-	const total = await openRouterGenerationCost(result.responseId, model.baseUrl, apiKey, {
-		...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
-	});
-	if (total === undefined) return usage;
+	if (usage === undefined || reportedCost === undefined) return usage;
 	// The image charge is an output charge; keep the parts summing to the real total.
 	const cost = { ...usage.cost };
-	cost.output = Math.max(0, total - cost.input - cost.cacheRead - cost.cacheWrite);
-	cost.total = total;
+	cost.output = Math.max(0, reportedCost - cost.input - cost.cacheRead - cost.cacheWrite);
+	cost.total = reportedCost;
 	return { ...usage, cost };
 }
 
@@ -249,12 +236,25 @@ export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaul
 			}
 			input.push({ type: "text", text: args.prompt });
 
+			const capture: { cost?: number } = {};
+
 			const result = await api.models.generateImages(
 				model,
 				{ input },
-				context.abortSignal === undefined ? undefined : { signal: context.abortSignal },
+				{
+					...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+					...(model.api === "openrouter-images"
+						? {
+								fetch: captureResponseCost(capture),
+								onPayload: (payload: unknown) =>
+									typeof payload === "object" && payload !== null
+										? { ...payload, usage: { include: true } }
+										: undefined,
+							}
+						: {}),
+				},
 			);
-			const usage = await actualUsage(result, model, api, context);
+			const usage = actualUsage(result, capture.cost);
 			const usageField = usage === undefined ? {} : { usage };
 			if (result.stopReason !== "stop") {
 				return {

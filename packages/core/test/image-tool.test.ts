@@ -7,6 +7,7 @@ import type {
 	ImageContent,
 	ImageModel,
 	ImagesContext,
+	ImagesOptions,
 	Models,
 	Usage,
 } from "@earendil-works/pi-ai";
@@ -18,7 +19,7 @@ import {
 	createGenerateImageTool,
 	createImageTools,
 	GenerateImageTool,
-	openRouterGenerationCost,
+	openRouterResponseCost,
 } from "../src/image-tool.ts";
 
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -59,7 +60,11 @@ function generated(overrides: Partial<AssistantImages> = {}): AssistantImages {
 
 type ApiOptions = {
 	available?: readonly ImageModel<ImageApi>[];
-	generate?: (model: ImageModel<ImageApi>, context: ImagesContext) => Promise<AssistantImages>;
+	generate?: (
+		model: ImageModel<ImageApi>,
+		context: ImagesContext,
+		options?: ImagesOptions,
+	) => Promise<AssistantImages>;
 	env?: NodeExecutionEnv;
 	current?: { provider: string; modelId: string };
 	diagnostics?: ToolDiagnostic[];
@@ -70,8 +75,8 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 		models: {
 			getAvailableOfType: async () => options.available ?? [IMAGE_MODEL],
 			getProvider: (id: string) => ({ id, name: id === "openrouter" ? "OpenRouter" : id }),
-			generateImages: async (model: ImageModel<ImageApi>, context: ImagesContext) =>
-				(options.generate ?? (() => generated()))(model, context),
+			generateImages: async (model: ImageModel<ImageApi>, context: ImagesContext, requestOptions?: ImagesOptions) =>
+				(options.generate ?? (() => generated()))(model, context, requestOptions),
 			getAuth: async () => ({ auth: { apiKey: "test-key" } }),
 		},
 		agent: async () => ({ model: options.current }),
@@ -105,41 +110,21 @@ const ESTIMATE: Usage = {
 	cost: { input: 0.00003, output: 0.014844, cacheRead: 0, cacheWrite: 0, total: 0.014874 },
 };
 
-function generationLookup(total: number): typeof fetch {
-	return async () => new Response(JSON.stringify({ data: { total_cost: total } }), { status: 200 });
+/** A chat completion response whose usage carries the real charge, as OpenRouter returns it. */
+function pricedResponse(cost: number): typeof fetch {
+	return async () => new Response(JSON.stringify({ id: "gen-1", usage: { cost } }), { status: 200 });
 }
 
-describe("openRouterGenerationCost", () => {
-	it("reads total_cost from the generation endpoint", async () => {
-		const urls: string[] = [];
-		const cost = await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1/", "key", {
-			fetch: async (input) => {
-				urls.push(String(input));
-				return new Response(JSON.stringify({ data: { total_cost: 0.135834 } }), { status: 200 });
-			},
-		});
-		expect(cost).toBeCloseTo(0.135834);
-		expect(urls).toEqual(["https://openrouter.ai/api/v1/generation?id=gen-1"]);
+describe("openRouterResponseCost", () => {
+	it("reads the cost OpenRouter put in the response usage", () => {
+		expect(openRouterResponseCost({ usage: { cost: 0.135834 } })).toBeCloseTo(0.135834);
 	});
 
-	it("returns undefined when the lookup fails", async () => {
-		expect(
-			await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1", "key", {
-				fetch: async () => new Response("nope", { status: 500 }),
-			}),
-		).toBeUndefined();
-		expect(
-			await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1", "key", {
-				fetch: async () => {
-					throw new Error("offline");
-				},
-			}),
-		).toBeUndefined();
-		expect(
-			await openRouterGenerationCost("gen-1", "https://openrouter.ai/api/v1", "key", {
-				fetch: async () => new Response(JSON.stringify({ data: {} }), { status: 200 }),
-			}),
-		).toBeUndefined();
+	it("returns undefined without a numeric cost", () => {
+		expect(openRouterResponseCost({ usage: {} })).toBeUndefined();
+		expect(openRouterResponseCost({ usage: { cost: "free" } })).toBeUndefined();
+		expect(openRouterResponseCost({})).toBeUndefined();
+		expect(openRouterResponseCost(null)).toBeUndefined();
 	});
 });
 
@@ -205,11 +190,17 @@ describe("generate_image", () => {
 	});
 
 	it("uses what OpenRouter charged instead of pi-ai's estimate", async () => {
-		vi.stubGlobal("fetch", generationLookup(0.135834));
+		vi.stubGlobal("fetch", pricedResponse(0.135834));
 		try {
 			const result = await GenerateImageTool.execute(
 				{ prompt: "a red apple" },
-				fakeApi({ generate: async () => generated({ usage: ESTIMATE, responseId: "gen-1" }) }),
+				fakeApi({
+					generate: async (_model, _context, options) => {
+						// The real provider sends its request through the fetch the tool injected.
+						await options?.fetch?.("https://openrouter.ai/api/v1/chat/completions", { method: "POST" });
+						return generated({ usage: ESTIMATE, responseId: "gen-1" });
+					},
+				}),
 				BACKGROUND_CONTEXT,
 			);
 			expect(result.isError).toBeUndefined();
@@ -221,12 +212,17 @@ describe("generate_image", () => {
 		}
 	});
 
-	it("keeps pi-ai's estimate when the lookup fails", async () => {
-		vi.stubGlobal("fetch", async () => new Response("nope", { status: 500 }));
+	it("keeps pi-ai's estimate when the response has no cost", async () => {
+		vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ id: "gen-1" }), { status: 200 }));
 		try {
 			const result = await GenerateImageTool.execute(
 				{ prompt: "a red apple" },
-				fakeApi({ generate: async () => generated({ usage: ESTIMATE, responseId: "gen-1" }) }),
+				fakeApi({
+					generate: async (_model, _context, options) => {
+						await options?.fetch?.("https://openrouter.ai/api/v1/chat/completions", { method: "POST" });
+						return generated({ usage: ESTIMATE, responseId: "gen-1" });
+					},
+				}),
 				BACKGROUND_CONTEXT,
 			);
 			expect(result.usage?.cost.total).toBeCloseTo(0.014874);
