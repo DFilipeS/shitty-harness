@@ -42,7 +42,7 @@ function loadSdk(): ReturnType<typeof importSdk> {
 }
 
 /** Map any SDK failure to the harness's provider error codes, by class name so no SDK import is needed. */
-function mapError(error: unknown): SandboxError {
+export function mapError(error: unknown): SandboxError {
 	if (error instanceof SandboxError) return error;
 	const name = error instanceof Error ? error.name : "";
 	const message = error instanceof Error ? error.message : String(error);
@@ -51,9 +51,15 @@ function mapError(error: unknown): SandboxError {
 	if (name === "NotFoundError" || name === "FileNotFoundError" || name === "SandboxNotFoundError") {
 		return new SandboxError("not_found", message, options);
 	}
-	if (name === "TimeoutError" || name === "SandboxNotRunningError" || name === "SandboxUnreachableError") {
-		return new SandboxError("timeout", message, options);
+	// Both are `TimeoutError` subclasses, but they mean the sandbox stopped or the connection
+	// dropped, not that the command reached its own timeout. Keep the two cases apart.
+	if (name === "SandboxNotRunningError") {
+		return new SandboxError("unavailable", `The sandbox paused or stopped before the command finished (${message})`, options);
 	}
+	if (name === "SandboxUnreachableError") {
+		return new SandboxError("unavailable", `The sandbox became unreachable before the command finished (${message})`, options);
+	}
+	if (name === "TimeoutError") return new SandboxError("timeout", message, options);
 	if (name === "InvalidArgumentError") return new SandboxError("invalid", message, options);
 	return new SandboxError("unknown", message, options);
 }
