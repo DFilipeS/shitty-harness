@@ -205,10 +205,29 @@ The sandbox runs the same `ExecutionEnv` contract over the provider's file and s
 (`SandboxExecutionEnv`), so `read`, `write`, `edit`, and `bash` behave the same as locally. Files
 written by a session — attachments, generated images — live in the sandbox, not on this machine.
 
+### SSH agent forwarding
+
+New sandboxes forward the host SSH agent by default, so private repositories clone and `git push`
+works inside the sandbox. The private key never enters the sandbox: the harness forwards the host
+agent socket over an SSH tunnel and the sandbox sees only that socket.
+
+**While forwarding is active, anything in the sandbox can use every key in the forwarded agent
+against any host.** Use a dedicated agent with a destination constraint:
+
+```bash
+eval "$(ssh-agent -a /tmp/harness-agent.sock)"
+ssh-add -h github.com ~/.ssh/id_ed25519
+```
+
+Then set the socket under **Manage sandboxes… → Sandbox defaults… → SSH agent socket**. Without a
+configured socket, the harness uses `SSH_AUTH_SOCK` when it has identities, then the OpenSSH
+`IdentityAgent` setting (1Password, Secretive, ...). The new-sandbox picker has a per-sandbox
+toggle, and the sandboxes page shows `SSH agent` while a forward is live. Forwarding stops when a
+sandbox pauses or is killed, and when the server shuts down.
+
 ## Current scope
 
-- Targets are the local machine or an E2B sandbox. Git clone into a sandbox is public HTTPS only:
-  SSH agent forwarding, Docker, and other providers are not implemented yet.
+- Targets are the local machine or an E2B sandbox; E2B is the only sandbox provider so far.
 - API keys only: no OAuth login flows.
 - Built-in providers only: no custom OpenAI/Anthropic-compatible endpoints.
 - Single user, local-first: the server trusts every client on localhost.
