@@ -1,6 +1,6 @@
 # Plan: workspaces and remote sandboxes
 
-Status: M1 (local targets and scratch workspaces), M2 (sandbox seam and E2B), and M3 (SSH agent forwarding) implemented.
+Status: M1 (local targets and scratch workspaces), M2 (sandbox seam and E2B), M3 (SSH agent forwarding), and M4 (polish) implemented.
 
 The harness keeps running on the user's machine. Tools run either on the local machine or in a
 remote sandbox, chosen by the user per session. This plan turns that into code. The vocabulary is
@@ -257,7 +257,8 @@ enters the sandbox, and the tunnel stops on pause and kill.
 
 - Copying a local workspace into a sandbox (git is the transport in v1).
 - Snapshots and forks.
-- A prebuilt `harness` template with sshd and websocat.
+- Renaming a sandbox: E2B metadata is set at creation and cannot be updated, so the harness would
+  need its own alias store.
 - Docker and other providers.
 - Model-requested sandboxes; the user owns the target.
 

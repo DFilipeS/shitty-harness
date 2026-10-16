@@ -201,6 +201,11 @@ sandbox, and any session can connect to one. **Manage sandboxes…** lists them 
 lets you pause, resume, kill, and read metrics. When a sandbox is gone, tool calls fail with a
 clear error; the harness never falls back to running them on this machine.
 
+Two sessions can share one sandbox. The list shows when a sandbox is working, and the target chip
+turns amber when another session is working in the sandbox this session is attached to. Run **Build
+sandbox template…** under Sandbox defaults to build the `harness-base` template with websocat
+preinstalled, so new sandboxes skip the first-use download and start faster.
+
 The sandbox runs the same `ExecutionEnv` contract over the provider's file and shell APIs
 (`SandboxExecutionEnv`), so `read`, `write`, `edit`, and `bash` behave the same as locally. Files
 written by a session — attachments, generated images — live in the sandbox, not on this machine.
