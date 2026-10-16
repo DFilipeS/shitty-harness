@@ -13,7 +13,8 @@
 		"@earendil-works/chord": "^1.2.0",
 		"@earendil-works/pi-ai": "^1.2.0",
 		"@earendil-works/pi-durable": "^1.2.0",
-		"@harness/protocol": "*"
+		"@harness/protocol": "*",
+		"e2b": "^2.55.0"
 	},
 	"devDependencies": {
 		"vitest": "^5.0.4"

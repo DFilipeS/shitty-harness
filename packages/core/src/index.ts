@@ -10,9 +10,47 @@ export {
 } from "./remote-catalog.ts";
 export { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 export { lazyEnvironment, type EnvironmentFactory } from "./environment.ts";
+export { SandboxExecutionEnv } from "./sandboxes/env.ts";
+export {
+	SandboxManager,
+	SANDBOX_LABELS,
+	type ResolvedSandboxTarget,
+	type SandboxManagerOptions,
+	type SandboxStatus,
+	type SandboxSummary,
+} from "./sandboxes/manager.ts";
+export {
+	SandboxError,
+	type SandboxErrorCode,
+	type SandboxExecOptions,
+	type SandboxFileInfo,
+	type SandboxHandle,
+	type SandboxInfo,
+	type SandboxMetrics,
+	type SandboxProvider,
+	type SandboxProviderConfig,
+	type SandboxProviderFactory,
+	type SandboxSource,
+	type SandboxSpec,
+	type SandboxState,
+} from "./sandboxes/provider.ts";
+export {
+	createSandboxProvider,
+	registerSandboxProvider,
+	sandboxProviderFactory,
+	sandboxProviderNames,
+} from "./sandboxes/registry.ts";
+export {
+	DEFAULT_SANDBOX_SETTINGS,
+	DEFAULT_SANDBOX_WORKSPACE,
+	type SandboxSettings,
+	type SandboxSettingsChange,
+	type SandboxSettingsStore,
+} from "./sandboxes/settings.ts";
 export {
 	createTargetSection,
 	resolveTarget,
+	sandboxTargetState,
 	scratchPath,
 	SessionTargetDoc,
 	TargetChangeEntry,

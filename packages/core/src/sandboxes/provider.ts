@@ -1,0 +1,143 @@
+/**
+ * Provider-agnostic sandbox contract. Nothing here imports a provider SDK; adapters under
+ * `sandboxes/` implement these types. The harness talks to sandboxes only through this contract,
+ * and `SandboxExecutionEnv` turns one into a pi-durable `ExecutionEnv`.
+ */
+
+export type SandboxState = "running" | "paused" | "stopped";
+
+/** Where a new sandbox gets its files. */
+export type SandboxSource = { kind: "empty" } | { kind: "git"; url: string };
+
+export type SandboxSpec = {
+	/** Provider template or image; the provider decides the default. */
+	template?: string;
+	/** Directory that holds the project inside the sandbox. */
+	workspaceDir: string;
+	source?: SandboxSource;
+	env?: Record<string, string>;
+	/** Discovery labels, mapped to provider metadata. */
+	labels?: Record<string, string>;
+	idleTimeoutMs?: number;
+	/** Pause on idle instead of killing. */
+	autoPause?: boolean;
+};
+
+export type SandboxInfo = {
+	id: string;
+	provider: string;
+	state: SandboxState;
+	name?: string;
+	labels: Record<string, string>;
+	workspaceDir: string;
+	template?: string;
+	/** Milliseconds since the epoch. */
+	createdAt?: number;
+	lastUsedAt?: number;
+};
+
+export type SandboxFileKind = "file" | "directory" | "symlink";
+
+export type SandboxFileInfo = {
+	name: string;
+	path: string;
+	kind: SandboxFileKind;
+	size: number;
+	/** Milliseconds since the epoch. */
+	mtimeMs: number;
+	/** Target of a symbolic link, when the provider reports one. */
+	symlinkTarget?: string;
+};
+
+export type SandboxExecOptions = {
+	cwd?: string;
+	env?: Record<string, string>;
+	/** 0 disables any provider-side timeout. */
+	timeoutMs?: number;
+	signal?: AbortSignal;
+	onStdout?: (text: string) => void;
+	onStderr?: (text: string) => void;
+};
+
+export type SandboxMetrics = {
+	cpuCount?: number;
+	/** CPU usage percentage across all cores. */
+	cpuUsedPct?: number;
+	memoryUsedBytes?: number;
+	memoryTotalBytes?: number;
+	diskUsedBytes?: number;
+	diskTotalBytes?: number;
+};
+
+export interface SandboxHandle {
+	readonly id: string;
+	readonly provider: string;
+	readonly workspaceDir: string;
+
+	exec(command: string, options?: SandboxExecOptions): Promise<{ exitCode: number | null }>;
+	readFile(path: string): Promise<Uint8Array>;
+	writeFile(path: string, data: string | Uint8Array): Promise<void>;
+	listDir(path: string): Promise<SandboxFileInfo[]>;
+	/** `undefined` when the path does not exist; other failures throw. */
+	stat(path: string): Promise<SandboxFileInfo | undefined>;
+	makeDir(path: string): Promise<void>;
+	remove(path: string): Promise<void>;
+	rename(source: string, destination: string): Promise<void>;
+
+	/** Pause keeps the files and, with E2B, the memory. */
+	pause?(): Promise<void>;
+	kill(): Promise<void>;
+	metrics?(): Promise<SandboxMetrics | undefined>;
+}
+
+export interface SandboxProvider {
+	readonly name: string;
+	readonly capabilities: {
+		pauseResume: boolean;
+		metrics: boolean;
+	};
+
+	create(spec: SandboxSpec): Promise<SandboxHandle>;
+	/** Connect to a sandbox; the provider resumes it when paused. */
+	connect(id: string, options?: { workspaceDir?: string }): Promise<SandboxHandle>;
+	list(filter?: { labels?: Record<string, string> }): Promise<SandboxInfo[]>;
+	kill(id: string): Promise<void>;
+}
+
+export type SandboxErrorCode =
+	| "auth"
+	| "not_found"
+	| "timeout"
+	| "aborted"
+	| "unavailable"
+	| "invalid"
+	| "unknown";
+
+/** Every failure an adapter reports; the harness maps it to a `FileError` or `ExecutionError`. */
+export class SandboxError extends Error {
+	readonly code: SandboxErrorCode;
+
+	constructor(code: SandboxErrorCode, message: string, options?: { cause?: unknown }) {
+		super(message, options);
+		this.name = "SandboxError";
+		this.code = code;
+	}
+}
+
+export type SandboxProviderConfig = {
+	/** Default template when a spec names none. */
+	template?: string;
+	/** Directory for provider state, e.g. SSH keys; unused until agent forwarding lands. */
+	stateDir?: string;
+};
+
+export interface SandboxProviderFactory {
+	readonly name: string;
+	/** Environment variable the adapter also honors, e.g. "E2B_API_KEY". */
+	readonly envVar?: string;
+	/** False when the provider works without a credential, e.g. a local Docker daemon. */
+	readonly needsApiKey: boolean;
+	create(config: SandboxProviderConfig, credentials: { apiKey?: string }): SandboxProvider;
+	/** Cheap call that throws when the credentials are invalid. */
+	validate(credentials: { apiKey?: string }): Promise<void>;
+}
