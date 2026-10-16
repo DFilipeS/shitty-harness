@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
-import { HarnessService, ServiceError } from "@harness/core";
+import { HarnessService, SandboxError, ServiceError } from "@harness/core";
 import {
 	ATTACHMENT_LIMITS,
 	type AgentEvent,
@@ -16,6 +16,8 @@ import {
 	type ServerError,
 	type ServerMessage,
 	type TargetChoice,
+	type TemplateRecipeInput,
+	type TemplateSourceChoice,
 } from "@harness/protocol";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -62,6 +64,15 @@ const COMMAND_TYPES = new Set<string>([
 	"sandboxes.metrics",
 	"sandboxes.configure",
 	"sandboxes.settings",
+	"templates.list",
+	"templates.create",
+	"templates.createStarter",
+	"templates.update",
+	"templates.build",
+	"templates.logs",
+	"templates.remove",
+	"templates.delete",
+	"templates.deleteProvider",
 	"providers.list",
 	"providers.configure",
 	"providers.refresh",
@@ -194,8 +205,36 @@ function optionalAttachments(value: unknown): PromptAttachment[] {
 	});
 }
 
+function optionalTemplateRecipe(value: unknown): TemplateRecipeInput {
+	if (value === undefined) return {};
+	if (!isRecord(value)) throw new ServiceError("invalid", "recipe must be an object");
+	const recipe: TemplateRecipeInput = {};
+	if (value.description !== undefined) recipe.description = requireString(value.description, "recipe.description");
+	if (value.source !== undefined) recipe.source = optionalTemplateSource(value.source);
+	if (value.run !== undefined) {
+		if (!Array.isArray(value.run)) throw new ServiceError("invalid", "recipe.run must be an array of commands");
+		recipe.run = value.run.map((command, index) => requireString(command, `recipe.run[${index}]`));
+	}
+	return recipe;
+}
+
+function optionalTemplateSource(value: unknown): TemplateSourceChoice {
+	if (!isRecord(value) || typeof value.kind !== "string") {
+		throw new ServiceError("invalid", "recipe.source must be an object with a kind");
+	}
+	if (value.kind === "default") return { kind: "default" };
+	if (value.kind === "template") {
+		return { kind: "template", name: requireString(value.name, "recipe.source.name") };
+	}
+	if (value.kind === "image") {
+		return { kind: "image", image: requireString(value.image, "recipe.source.image") };
+	}
+	throw new ServiceError("invalid", "recipe.source.kind must be default, template, or image");
+}
+
 function toServerError(error: unknown): ServerError {
 	if (error instanceof ServiceError) return { code: error.code, message: error.message };
+	if (error instanceof SandboxError) return { code: error.code, message: error.message };
 	if (error instanceof Error) return { code: "internal", message: error.message };
 	return { code: "internal", message: String(error) };
 }
@@ -435,6 +474,42 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 			case "providers.list": {
 				return { data: await service.listProviders() };
 			}
+			case "templates.list": {
+				return { data: await service.listTemplates() };
+			}
+			case "templates.create": {
+				const name = requireString(command.name, "name");
+				const recipe = command.recipe === undefined ? undefined : optionalTemplateRecipe(command.recipe);
+				return { data: await service.createTemplate(name, recipe) };
+			}
+			case "templates.createStarter": {
+				return { data: await service.createStarterTemplate() };
+			}
+			case "templates.update": {
+				const name = requireString(command.name, "name");
+				const recipe = optionalTemplateRecipe(command.recipe);
+				return { data: await service.updateTemplate(name, recipe) };
+			}
+			case "templates.build": {
+				const name = requireString(command.name, "name");
+				return { data: await service.buildTemplate(name) };
+			}
+			case "templates.logs": {
+				const name = requireString(command.name, "name");
+				return { data: await service.templateLogs(name) };
+			}
+			case "templates.remove": {
+				const name = requireString(command.name, "name");
+				return { data: await service.removeTemplate(name) };
+			}
+			case "templates.delete": {
+				const name = requireString(command.name, "name");
+				return { data: await service.deleteTemplate(name) };
+			}
+			case "templates.deleteProvider": {
+				const templateId = requireString(command.templateId, "templateId");
+				return { data: await service.deleteProviderTemplate(templateId) };
+			}
 			case "providers.configure": {
 				const providerId = requireString(command.providerId, "providerId");
 				const apiKey = command.apiKey === null ? null : requireString(command.apiKey, "apiKey");
@@ -522,7 +597,16 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				sandboxes: event.sandboxes,
 			};
 		} else if (event.type === "target") message = { type: "session.target", status: event.status };
-		else {
+		else if (event.type === "templates") {
+			message = {
+				type: "templates.changed",
+				provider: event.provider,
+				providerName: event.providerName,
+				configured: event.configured,
+				templates: event.templates,
+				other: event.other,
+			};
+		} else {
 			message = {
 				type: "providers.changed",
 				providers: event.providers,

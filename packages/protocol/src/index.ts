@@ -122,6 +122,69 @@ export type TargetStatus = {
 	message?: string;
 };
 
+/** Where a sandbox template build starts. */
+export type TemplateSourceChoice =
+	| { kind: "default" }
+	| { kind: "template"; name: string }
+	| { kind: "image"; image: string };
+
+/** A template recipe as a client sends it. */
+export type TemplateRecipeInput = {
+	description?: string;
+	source?: TemplateSourceChoice;
+	run?: string[];
+};
+
+/** The lifecycle state of a sandbox template. */
+export type TemplateState = "draft" | "building" | "ready" | "stale" | "failed" | "missing";
+
+export type TemplateBuildInfo = {
+	templateId?: string;
+	buildId?: string;
+	startedAt: number;
+	finishedAt?: number;
+	error?: string;
+};
+
+/** One sandbox template the harness manages. */
+export type TemplateInfo = {
+	name: string;
+	description?: string;
+	source: TemplateSourceChoice;
+	run: string[];
+	state: TemplateState;
+	/** Set when the recipe file cannot be read or parsed. */
+	error?: string;
+	lastBuild?: TemplateBuildInfo;
+};
+
+/** A template the provider knows about that the harness does not manage. */
+export type ProviderTemplateInfo = {
+	names: string[];
+	templateId: string;
+	buildId?: string;
+	buildStatus?: string;
+	createdAt?: number;
+	updatedAt?: number;
+	lastSpawnedAt?: number;
+	spawnCount?: number;
+	public?: boolean;
+};
+
+export type TemplatesState = {
+	provider: string;
+	providerName: string;
+	configured: boolean;
+	templates: TemplateInfo[];
+	other: ProviderTemplateInfo[];
+};
+
+export type TemplatesLogsResult = {
+	lines: string[];
+	/** True when no build is running for this template. */
+	done: boolean;
+};
+
 /** One directory offered by the local folder browser. */
 export type BrowseDirectory = {
 	name: string;
@@ -247,6 +310,10 @@ export type SandboxesMetricsResult = {
 	metrics?: SandboxMetricsInfo;
 };
 
+export type TemplatesListResult = TemplatesState;
+
+export type TemplatesLogsCommandResult = TemplatesLogsResult;
+
 /** Commands the client sends to the server. Every command carries a correlation `id`. */
 export type ClientCommand =
 	| { id: string; type: "sessions.list" }
@@ -281,6 +348,15 @@ export type ClientCommand =
 	| { id: string; type: "sandboxes.kill"; provider: string; sandboxId: string }
 	| { id: string; type: "sandboxes.metrics"; provider: string; sandboxId: string }
 	| { id: string; type: "sandboxes.configure"; provider: string; apiKey: string | null }
+	| { id: string; type: "templates.list" }
+	| { id: string; type: "templates.create"; name: string; recipe?: TemplateRecipeInput }
+	| { id: string; type: "templates.createStarter" }
+	| { id: string; type: "templates.update"; name: string; recipe: TemplateRecipeInput }
+	| { id: string; type: "templates.build"; name: string }
+	| { id: string; type: "templates.logs"; name: string }
+	| { id: string; type: "templates.remove"; name: string }
+	| { id: string; type: "templates.delete"; name: string }
+	| { id: string; type: "templates.deleteProvider"; templateId: string }
 	| {
 			id: string;
 			type: "sandboxes.settings";
@@ -326,6 +402,15 @@ export type CommandResult = {
 	"sandboxes.kill": SandboxesListResult;
 	"sandboxes.metrics": SandboxesMetricsResult;
 	"sandboxes.configure": SandboxesListResult;
+	"templates.list": TemplatesListResult;
+	"templates.create": TemplatesListResult;
+	"templates.createStarter": TemplatesListResult;
+	"templates.update": TemplatesListResult;
+	"templates.build": TemplatesListResult;
+	"templates.logs": TemplatesLogsCommandResult;
+	"templates.remove": TemplatesListResult;
+	"templates.delete": TemplatesListResult;
+	"templates.deleteProvider": TemplatesListResult;
 	"sandboxes.settings": SandboxesListResult;
 	"providers.list": ProvidersListResult;
 	"providers.configure": ProvidersListResult;
@@ -347,6 +432,7 @@ export type ServerEvent =
 	| { type: "session.event"; sessionId: string; event: AgentEvent }
 	| { type: "sessions.changed"; sessions: SessionSummary[] }
 	| ({ type: "sandboxes.changed" } & SandboxesState)
+	| ({ type: "templates.changed" } & TemplatesState)
 	| { type: "session.target"; status: TargetStatus }
 	| {
 			type: "providers.changed";
