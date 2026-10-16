@@ -180,6 +180,10 @@ export class ProviderManager implements Providers, SandboxSettingsStore {
 			...(config?.template === undefined ? {} : { template: config.template }),
 			idleTimeoutMs: config?.idleTimeoutMs ?? DEFAULT_SANDBOX_SETTINGS.idleTimeoutMs,
 			autoPause: config?.autoPause ?? DEFAULT_SANDBOX_SETTINGS.autoPause,
+			ssh: {
+				...(config?.ssh?.agentSocket === undefined ? {} : { agentSocket: config.ssh.agentSocket }),
+				forwardAgent: config?.ssh?.forwardAgent ?? DEFAULT_SANDBOX_SETTINGS.ssh.forwardAgent,
+			},
 			providers: { ...(config?.providers ?? {}) },
 		};
 	}
@@ -199,6 +203,19 @@ export class ProviderManager implements Providers, SandboxSettingsStore {
 			if (change.autoPause !== undefined) {
 				if (change.autoPause === null) delete sandboxes.autoPause;
 				else sandboxes.autoPause = change.autoPause;
+			}
+			if (change.sshAgentSocket !== undefined || change.forwardAgent !== undefined) {
+				const ssh: { agentSocket?: string; forwardAgent?: boolean } = sandboxes.ssh ?? {};
+				if (change.sshAgentSocket !== undefined) {
+					if (change.sshAgentSocket === null || change.sshAgentSocket === "") delete ssh.agentSocket;
+					else ssh.agentSocket = change.sshAgentSocket;
+				}
+				if (change.forwardAgent !== undefined) {
+					if (change.forwardAgent === null) delete ssh.forwardAgent;
+					else ssh.forwardAgent = change.forwardAgent;
+				}
+				if (Object.keys(ssh).length === 0) delete sandboxes.ssh;
+				else sandboxes.ssh = ssh;
 			}
 			if (change.apiKey !== undefined) {
 				const providers = sandboxes.providers ?? {};

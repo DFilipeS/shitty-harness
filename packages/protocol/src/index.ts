@@ -39,6 +39,8 @@ export type TargetInfo =
 			sandboxId?: string;
 			name?: string;
 			workspaceDir: string;
+			/** Whether this target asks for the host SSH agent. */
+			forwardAgent?: boolean;
 		};
 
 /** Where a new sandbox gets its files. */
@@ -53,6 +55,8 @@ export type SandboxChoice = {
 	template?: string;
 	source?: SandboxSourceChoice;
 	workspaceDir?: string;
+	/** Whether the sandbox forwards the host SSH agent; defaults to the stored setting. */
+	forwardAgent?: boolean;
 };
 
 /** What the client asks for: a local folder, a scratch directory, or a sandbox. */
@@ -74,6 +78,8 @@ export type SandboxInfo = {
 	lastUsedAt?: number;
 	/** Ids of sessions whose current target is this sandbox. */
 	sessions: string[];
+	/** True while the harness holds a live SSH agent forward into this sandbox. */
+	forwarding: boolean;
 };
 
 export type SandboxSettingsInfo = {
@@ -83,6 +89,10 @@ export type SandboxSettingsInfo = {
 	template?: string;
 	idleTimeoutMs: number;
 	autoPause: boolean;
+	/** Host SSH agent socket to forward; unset means discovery. */
+	sshAgentSocket?: string;
+	/** Whether new sandboxes forward the host agent unless their target says otherwise. */
+	forwardAgent: boolean;
 	/** True when the provider has a usable credential. */
 	configured: boolean;
 };
@@ -276,6 +286,8 @@ export type ClientCommand =
 			template?: string | null;
 			idleTimeoutMs?: number | null;
 			autoPause?: boolean | null;
+			sshAgentSocket?: string | null;
+			forwardAgent?: boolean | null;
 	  }
 	| { id: string; type: "providers.list" }
 	| { id: string; type: "providers.configure"; providerId: string; apiKey: string | null }

@@ -6,6 +6,7 @@ export const DEFAULT_SANDBOX_SETTINGS: SandboxSettings = {
 	provider: "e2b",
 	idleTimeoutMs: 5 * 60 * 1000,
 	autoPause: true,
+	ssh: { forwardAgent: true },
 	providers: {},
 };
 
@@ -14,6 +15,12 @@ export type SandboxSettings = {
 	template?: string;
 	idleTimeoutMs: number;
 	autoPause: boolean;
+	ssh: {
+		/** Host agent socket to forward; when unset, detection finds one. */
+		agentSocket?: string;
+		/** Whether new sandboxes forward the host agent unless a target says otherwise. */
+		forwardAgent: boolean;
+	};
 	/** Stored API keys per provider; environment variables remain a fallback. */
 	providers: Record<string, { apiKey?: string }>;
 };
@@ -23,6 +30,8 @@ export type SandboxSettingsChange = {
 	template?: string | null;
 	idleTimeoutMs?: number | null;
 	autoPause?: boolean | null;
+	sshAgentSocket?: string | null;
+	forwardAgent?: boolean | null;
 	apiKey?: { provider: string; key: string | null };
 };
 

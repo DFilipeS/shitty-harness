@@ -1,5 +1,11 @@
+import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import {
 	SandboxError,
+	type AgentForwarding,
 	type SandboxExecOptions,
 	type SandboxFileInfo,
 	type SandboxHandle,
@@ -8,10 +14,18 @@ import {
 	type SandboxProvider,
 	type SandboxProviderConfig,
 	type SandboxProviderFactory,
-	type SandboxSource,
 	type SandboxSpec,
 } from "../provider.ts";
 import { shellQuote } from "../shell.ts";
+
+const execFileAsync = promisify(execFile);
+
+/** Port inside the sandbox where websocat bridges WebSocket to sshd. */
+const WEBSOCAT_PORT = 8081;
+/** Path of the forwarded agent socket inside the sandbox. */
+const AGENT_SOCKET = "/tmp/harness-agent.sock";
+const WEBSOCAT_BASE_URL = "https://github.com/vi/websocat/releases/latest/download";
+const WS_PROXY_PATH = fileURLToPath(new URL("./ws-proxy.mjs", import.meta.url));
 
 /** The `e2b` module, loaded only when a sandbox is actually used. */
 function importSdk() {
@@ -50,17 +64,221 @@ function fileKind(type: string | undefined): SandboxFileInfo["kind"] {
 	return "file";
 }
 
+interface RawResult {
+	exitCode: number;
+	stdout: string;
+	stderr: string;
+}
+
+/** Run a command and return its result instead of throwing on failure. */
+async function runRaw(sandbox: import("e2b").Sandbox, command: string, timeoutMs = 120_000): Promise<RawResult> {
+	try {
+		const result = await sandbox.commands.run(command, { timeoutMs });
+		return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+	} catch (error) {
+		const exitCode = (error as { exitCode?: number }).exitCode;
+		if (typeof exitCode === "number") {
+			const raw = error as { stdout?: string; stderr?: string };
+			return { exitCode, stdout: raw.stdout ?? "", stderr: raw.stderr ?? "" };
+		}
+		throw error;
+	}
+}
+
+/**
+ * Create the hop key on first use. It only authenticates the host to the sandbox; it is never used
+ * against a forge.
+ */
+async function ensureHopKey(stateDir: string): Promise<{ privateKeyPath: string; publicKey: string }> {
+	const privateKeyPath = join(stateDir, "hop-key");
+	await mkdir(stateDir, { recursive: true, mode: 0o700 });
+	try {
+		await readFile(privateKeyPath);
+	} catch {
+		await execFileAsync("ssh-keygen", ["-t", "ed25519", "-N", "", "-C", "harness hop", "-f", privateKeyPath]);
+	}
+	const { stdout } = await execFileAsync("ssh-keygen", ["-y", "-f", privateKeyPath]);
+	return { privateKeyPath, publicKey: stdout.trim() };
+}
+
+/** Trust the hop key in the sandbox. Idempotent. */
+async function authorizeHopKey(sandbox: import("e2b").Sandbox, publicKey: string): Promise<void> {
+	const result = await runRaw(
+		sandbox,
+		[
+			"umask 077",
+			"mkdir -p ~/.ssh",
+			"touch ~/.ssh/authorized_keys",
+			`grep -qxF ${shellQuote(publicKey)} ~/.ssh/authorized_keys || printf '%s\\n' ${shellQuote(publicKey)} >> ~/.ssh/authorized_keys`,
+		].join("; "),
+	);
+	if (result.exitCode !== 0) {
+		throw new SandboxError("unknown", `Could not authorize the hop key: ${result.stderr.trim() || "unknown error"}`);
+	}
+}
+
+/** The base image has sshd but not websocat. Install it on first use. */
+async function ensureWebsocat(sandbox: import("e2b").Sandbox): Promise<void> {
+	const existing = await runRaw(sandbox, "command -v websocat", 15_000);
+	if (existing.exitCode === 0) return;
+	const arch = (await runRaw(sandbox, "uname -m", 15_000)).stdout.trim();
+	const asset =
+		arch === "aarch64" || arch === "arm64"
+			? "websocat.aarch64-unknown-linux-musl"
+			: "websocat.x86_64-unknown-linux-musl";
+	const install = await runRaw(
+		sandbox,
+		`sudo curl -fsSL -o /usr/local/bin/websocat ${WEBSOCAT_BASE_URL}/${asset} && sudo chmod +x /usr/local/bin/websocat`,
+		180_000,
+	);
+	if (install.exitCode !== 0) {
+		throw new SandboxError("unknown", `Could not install websocat: ${install.stderr.trim() || "unknown error"}`);
+	}
+}
+
+/** True when something listens on the websocat port inside the sandbox. */
+async function websocatListening(sandbox: import("e2b").Sandbox): Promise<boolean> {
+	const result = await runRaw(
+		sandbox,
+		`(ss -tln 2>/dev/null || netstat -tln 2>/dev/null) | grep -q ':${WEBSOCAT_PORT} '`,
+		15_000,
+	);
+	return result.exitCode === 0;
+}
+
+/** Start the WebSocket-to-sshd bridge inside the sandbox. Idempotent. */
+async function startWebsocat(sandbox: import("e2b").Sandbox): Promise<void> {
+	if (await websocatListening(sandbox)) return;
+	await runRaw(
+		sandbox,
+		`sudo nohup websocat -b --exit-on-eof ws-l:0.0.0.0:${WEBSOCAT_PORT} tcp:127.0.0.1:22 >/tmp/harness-websocat.log 2>&1 &`,
+		15_000,
+	);
+	const deadline = Date.now() + 15_000;
+	while (Date.now() < deadline) {
+		if (await websocatListening(sandbox)) return;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	const log = await runRaw(sandbox, "tail -n 5 /tmp/harness-websocat.log", 15_000);
+	const detail = log.stdout.trim() || log.stderr.trim();
+	throw new SandboxError("unknown", `websocat did not listen on port ${WEBSOCAT_PORT}${detail ? `: ${detail}` : ""}`);
+}
+
+interface TunnelOptions {
+	sandboxId: string;
+	/** Public host for the websocat port, e.g. "8081-abc.e2b.app". */
+	host: string;
+	privateKeyPath: string;
+	hostSocket: string;
+	knownHostsPath: string;
+	remoteSocket: string;
+	/** Collects the last stderr lines, for error reporting. */
+	errors: string[];
+	/** Called before each connection attempt. */
+	onceBeforeConnect: () => Promise<void>;
+}
+
+/**
+ * Keep an SSH connection alive that forwards the host agent socket into the sandbox. Restarts with
+ * backoff when it drops.
+ */
+function startTunnel(options: TunnelOptions): AgentForwarding {
+	let closed = false;
+	let child: ChildProcess | undefined;
+	let failures = 0;
+
+	const spawnOnce = async (): Promise<void> => {
+		try {
+			await options.onceBeforeConnect();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error(`[sandbox] ssh bridge: ${message}`);
+		}
+		if (closed) return;
+
+		const proxyCommand = `${shellQuote(process.execPath)} ${shellQuote(WS_PROXY_PATH)} wss://${options.host}`;
+		child = spawn(
+			"ssh",
+			[
+				"-N",
+				"-i",
+				options.privateKeyPath,
+				"-o",
+				`ProxyCommand=${proxyCommand}`,
+				"-o",
+				"StrictHostKeyChecking=accept-new",
+				"-o",
+				`UserKnownHostsFile=${options.knownHostsPath}`,
+				"-o",
+				"StreamLocalBindUnlink=yes",
+				"-o",
+				"ExitOnForwardFailure=yes",
+				"-o",
+				"ServerAliveInterval=15",
+				"-o",
+				"ServerAliveCountMax=3",
+				"-o",
+				"LogLevel=ERROR",
+				"-R",
+				`${options.remoteSocket}:${options.hostSocket}`,
+				`user@${options.sandboxId}`,
+			],
+			{ stdio: ["ignore", "ignore", "pipe"] },
+		);
+		child.stderr?.on("data", (chunk) => {
+			for (const line of chunk.toString().trim().split("\n")) {
+				if (!line) continue;
+				options.errors.push(line);
+				if (options.errors.length > 20) options.errors.shift();
+			}
+		});
+		child.on("exit", () => {
+			if (closed) return;
+			failures += 1;
+			const delay = Math.min(1000 * 2 ** Math.min(failures - 1, 5), 30_000);
+			const timer = setTimeout(() => void spawnOnce(), delay);
+			timer.unref();
+		});
+	};
+
+	void spawnOnce();
+
+	return {
+		sandboxSocket: options.remoteSocket,
+		close: async () => {
+			closed = true;
+			child?.kill("SIGTERM");
+		},
+	};
+}
+
+/** Wait until the forwarded socket exists inside the sandbox. */
+async function waitForSocket(
+	sandbox: SandboxHandle,
+	socketPath: string,
+	errors: string[],
+): Promise<void> {
+	const deadline = Date.now() + 15_000;
+	while (Date.now() < deadline) {
+		const result = await sandbox.exec(`test -S ${shellQuote(socketPath)}`);
+		if (result.exitCode === 0) return;
+		await new Promise((resolve) => setTimeout(resolve, 300));
+	}
+	const detail = errors.at(-1);
+	throw new SandboxError("unknown", `Forwarded agent socket did not appear at ${socketPath}${detail ? `: ${detail}` : ""}`);
+}
+
 /** One connected E2B sandbox. */
 class E2BSandboxHandle implements SandboxHandle {
 	readonly id: string;
 	readonly provider = "e2b";
 	readonly workspaceDir: string;
 	readonly #sandbox: import("e2b").Sandbox;
-	readonly #apiKey: string | undefined;
+	readonly #stateDir: string | undefined;
 
-	constructor(sandbox: import("e2b").Sandbox, workspaceDir: string, apiKey: string | undefined) {
+	constructor(sandbox: import("e2b").Sandbox, workspaceDir: string, stateDir: string | undefined) {
 		this.#sandbox = sandbox;
-		this.#apiKey = apiKey;
+		this.#stateDir = stateDir;
 		this.id = sandbox.sandboxId;
 		this.workspaceDir = workspaceDir;
 	}
@@ -193,9 +411,38 @@ class E2BSandboxHandle implements SandboxHandle {
 		}
 	}
 
-	/** Kept so a future agent-forwarding step can reuse the connection. */
-	get apiKey(): string | undefined {
-		return this.#apiKey;
+	async forwardAgent(hostSocket: string): Promise<AgentForwarding> {
+		const stateDir = this.#stateDir;
+		if (stateDir === undefined) {
+			throw new SandboxError("invalid", "The E2B provider is missing its state directory");
+		}
+		try {
+			const { privateKeyPath, publicKey } = await ensureHopKey(stateDir);
+			await ensureWebsocat(this.#sandbox);
+			await authorizeHopKey(this.#sandbox, publicKey);
+			await startWebsocat(this.#sandbox);
+			const host = this.#sandbox.getHost(WEBSOCAT_PORT);
+			const errors: string[] = [];
+			const forwarding = startTunnel({
+				sandboxId: this.id,
+				host,
+				privateKeyPath,
+				hostSocket,
+				knownHostsPath: join(stateDir, "known_hosts"),
+				remoteSocket: AGENT_SOCKET,
+				errors,
+				onceBeforeConnect: async () => {
+					await startWebsocat(this.#sandbox);
+					// Clear a stale socket left by a previous connection.
+					await runRaw(this.#sandbox, `rm -f ${shellQuote(AGENT_SOCKET)}`, 15_000);
+				},
+			});
+			await waitForSocket(this, AGENT_SOCKET, errors);
+			return forwarding;
+		} catch (error) {
+			if (error instanceof SandboxError) throw error;
+			throw mapError(error);
+		}
 	}
 }
 
@@ -210,24 +457,10 @@ function describe(info: import("e2b").EntryInfo): SandboxFileInfo {
 	};
 }
 
-async function cloneInto(
-	sandbox: import("e2b").Sandbox,
-	workspaceDir: string,
-	url: string,
-): Promise<void> {
-	const result = await sandbox.commands.run(`git clone ${shellQuote(url)} .`, {
-		cwd: workspaceDir,
-		timeoutMs: 10 * 60 * 1000,
-	});
-	if (result.exitCode !== 0) {
-		throw new SandboxError("unknown", `git clone failed: ${result.stderr.trim() || `exit ${result.exitCode}`}`);
-	}
-}
-
 class E2BProvider implements SandboxProvider {
 	readonly name = "e2b";
 	readonly displayName = "E2B";
-	readonly capabilities = { pauseResume: true, metrics: true };
+	readonly capabilities = { pauseResume: true, metrics: true, agentForwarding: true };
 	readonly #config: SandboxProviderConfig;
 	readonly #credentials: { apiKey?: string };
 
@@ -252,8 +485,7 @@ class E2BProvider implements SandboxProvider {
 				},
 			});
 			await sandbox.files.makeDir(spec.workspaceDir);
-			if (spec.source?.kind === "git") await cloneInto(sandbox, spec.workspaceDir, spec.source.url);
-			return new E2BSandboxHandle(sandbox, spec.workspaceDir, this.#credentials.apiKey);
+			return new E2BSandboxHandle(sandbox, spec.workspaceDir, this.#config.stateDir);
 		} catch (error) {
 			await sandbox?.kill().catch(() => undefined);
 			throw mapError(error);
@@ -268,7 +500,7 @@ class E2BProvider implements SandboxProvider {
 			});
 			const workspaceDir = options?.workspaceDir ?? "/home/user/workspace";
 			await sandbox.files.makeDir(workspaceDir);
-			return new E2BSandboxHandle(sandbox, workspaceDir, this.#credentials.apiKey);
+			return new E2BSandboxHandle(sandbox, workspaceDir, this.#config.stateDir);
 		} catch (error) {
 			throw mapError(error);
 		}

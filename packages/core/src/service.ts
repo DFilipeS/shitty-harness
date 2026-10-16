@@ -135,6 +135,7 @@ function targetInfo(target: ResolvedTarget, providerName?: string): TargetInfo {
 		...(target.sandboxId === undefined ? {} : { sandboxId: target.sandboxId }),
 		...(target.name === undefined ? {} : { name: target.name }),
 		workspaceDir: target.workspaceDir,
+		forwardAgent: target.forwardAgent,
 	};
 }
 
@@ -143,12 +144,14 @@ function sandboxDefaults(manager: SandboxManager | undefined): {
 	provider: string;
 	template?: string;
 	workspaceDir: string;
+	forwardAgent: boolean;
 } {
 	const settings = manager?.settings;
 	return {
 		provider: settings?.provider ?? DEFAULT_SANDBOX_SETTINGS.provider,
 		...(settings?.template === undefined ? {} : { template: settings.template }),
 		workspaceDir: DEFAULT_SANDBOX_WORKSPACE,
+		forwardAgent: settings?.ssh.forwardAgent ?? DEFAULT_SANDBOX_SETTINGS.ssh.forwardAgent,
 	};
 }
 
@@ -163,6 +166,8 @@ function sandboxSettingsInfo(
 		...(settings.template === undefined ? {} : { template: settings.template }),
 		idleTimeoutMs: settings.idleTimeoutMs,
 		autoPause: settings.autoPause,
+		...(settings.ssh.agentSocket === undefined ? {} : { sshAgentSocket: settings.ssh.agentSocket }),
+		forwardAgent: settings.ssh.forwardAgent,
 		configured,
 	};
 }
@@ -437,6 +442,7 @@ export class HarnessService {
 				provider: sandbox.provider,
 				...(sandbox.template === undefined ? {} : { template: sandbox.template }),
 				workspaceDir: sandbox.workspaceDir,
+				forwardAgent: sandbox.forwardAgent,
 			});
 			return;
 		}
@@ -605,17 +611,32 @@ export class HarnessService {
 		const workspaceDir = choice.workspaceDir ?? DEFAULT_SANDBOX_WORKSPACE;
 		if (choice.sandboxId !== undefined) {
 			return {
-				target: { kind: "sandbox", provider, sandboxId: choice.sandboxId, workspaceDir },
-				entry: { kind: "sandbox", path: workspaceDir, scratch: false, provider, sandboxId: choice.sandboxId },
+				target: {
+					kind: "sandbox",
+					provider,
+					sandboxId: choice.sandboxId,
+					workspaceDir,
+					forwardAgent: choice.forwardAgent ?? manager.settings.ssh.forwardAgent,
+				},
+				entry: {
+					kind: "sandbox",
+					path: workspaceDir,
+					scratch: false,
+					provider,
+					providerName: manager.displayName(provider),
+					sandboxId: choice.sandboxId,
+				},
 			};
 		}
 		const name = choice.name?.trim();
 		const template = choice.template?.trim();
 		const source = this.#sandboxSource(choice.source);
+		const forwardAgent = choice.forwardAgent ?? manager.settings.ssh.forwardAgent;
 		const target: ResolvedSandboxTarget = {
 			kind: "sandbox",
 			provider,
 			workspaceDir,
+			forwardAgent,
 			...(name === undefined || name === "" ? {} : { name }),
 			...(template === undefined || template === "" ? {} : { template }),
 			...(source === undefined ? {} : { source }),
@@ -628,6 +649,7 @@ export class HarnessService {
 				scratch: false,
 				provider,
 				providerName: manager.displayName(provider),
+				forwardAgent,
 				...(target.name === undefined ? {} : { name: target.name }),
 			},
 		};
@@ -680,6 +702,7 @@ export class HarnessService {
 			...(name === undefined || name === "" ? {} : { name }),
 			...(template === undefined || template === "" ? {} : { template }),
 			...(source === undefined ? {} : { source }),
+			...(choice.forwardAgent === undefined ? {} : { forwardAgent: choice.forwardAgent }),
 		});
 		await this.#emitSandboxes();
 		return this.listSandboxes();
@@ -718,6 +741,8 @@ export class HarnessService {
 		template?: string | null;
 		idleTimeoutMs?: number | null;
 		autoPause?: boolean | null;
+		sshAgentSocket?: string | null;
+		forwardAgent?: boolean | null;
 	}): Promise<SandboxesState> {
 		await this.#requireSandboxes().setSettings(change);
 		await this.#emitSandboxes();
@@ -887,6 +912,7 @@ export class HarnessService {
 			}
 		}
 		await this.#harness.close(BACKGROUND_CONTEXT);
+		await this.#sandboxes?.close();
 	}
 
 	/** Build the environment a conversation's tools run in, or undefined when none is configured. */

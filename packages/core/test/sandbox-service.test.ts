@@ -165,6 +165,44 @@ describe("sandbox targets", () => {
 		}
 	});
 
+	it("forwards the host SSH agent into a sandbox session", async () => {
+		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-sandbox-service-"));
+		const sandboxRoot = await mkdtemp(join(tmpdir(), "harness-sandbox-root-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const manager = new SandboxManager({
+			store: new FakeSandboxSettingsStore(),
+			resolveHostAgentSocket: async () => "/tmp/host-agent.sock",
+		});
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers: toolCallingService("bash", { command: "true" }),
+			environment: localEnvironment(),
+			workspacesDir,
+			sandboxes: manager,
+		});
+		try {
+			const session = await service.createSession();
+			await service.setTarget(session.id, {
+				kind: "sandbox",
+				source: { kind: "empty" },
+				workspaceDir: sandboxRoot,
+				forwardAgent: true,
+			});
+			await service.prompt(session.id, "Run true", "request-agent");
+			await waitFor(async () => (await service.listSessions())[0]?.working === true);
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+
+			expect(provider.handles[0]?.lastExecEnv).toEqual({ SSH_AUTH_SOCK: "/tmp/fake-agent.sock" });
+			const state = await service.listSandboxes();
+			expect(state.sandboxes[0]?.forwarding).toBe(true);
+		} finally {
+			await service.close();
+			await rm(workspacesDir, { recursive: true, force: true });
+			await rm(sandboxRoot, { recursive: true, force: true });
+		}
+	});
+
 	it("refuses a sandbox target without a configured provider", async () => {
 		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore({ providers: {} }) });
 		const { providers } = createFauxProviders();

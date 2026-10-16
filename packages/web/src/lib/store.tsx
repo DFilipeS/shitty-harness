@@ -319,6 +319,8 @@ type HarnessContextValue = {
 		template?: string | null;
 		idleTimeoutMs?: number | null;
 		autoPause?: boolean | null;
+		sshAgentSocket?: string | null;
+		forwardAgent?: boolean | null;
 	}): Promise<void>;
 	sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined>;
 	setDefaults(change: {
@@ -684,6 +686,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			template?: string | null;
 			idleTimeoutMs?: number | null;
 			autoPause?: boolean | null;
+			sshAgentSocket?: string | null;
+			forwardAgent?: boolean | null;
 		}) => {
 			try {
 				applySandboxes(await client.send({ type: "sandboxes.settings", ...change }));

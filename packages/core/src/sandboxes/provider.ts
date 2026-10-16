@@ -14,7 +14,6 @@ export type SandboxSpec = {
 	template?: string;
 	/** Directory that holds the project inside the sandbox. */
 	workspaceDir: string;
-	source?: SandboxSource;
 	env?: Record<string, string>;
 	/** Discovery labels, mapped to provider metadata. */
 	labels?: Record<string, string>;
@@ -69,6 +68,14 @@ export type SandboxMetrics = {
 	diskTotalBytes?: number;
 };
 
+/** A live forward of the host SSH agent into a sandbox. */
+export interface AgentForwarding {
+	/** Path of the forwarded agent socket inside the sandbox. */
+	sandboxSocket: string;
+	/** Stop forwarding. Safe to call more than once. */
+	close(): Promise<void>;
+}
+
 export interface SandboxHandle {
 	readonly id: string;
 	readonly provider: string;
@@ -88,6 +95,12 @@ export interface SandboxHandle {
 	pause?(): Promise<void>;
 	kill(): Promise<void>;
 	metrics?(): Promise<SandboxMetrics | undefined>;
+
+	/**
+	 * Optional. Forward the host SSH agent into the sandbox. The private key stays on the host; the
+	 * sandbox can only use it while connected.
+	 */
+	forwardAgent?(hostSocket: string): Promise<AgentForwarding>;
 }
 
 export interface SandboxProvider {
@@ -97,6 +110,7 @@ export interface SandboxProvider {
 	readonly capabilities: {
 		pauseResume: boolean;
 		metrics: boolean;
+		agentForwarding: boolean;
 	};
 
 	create(spec: SandboxSpec): Promise<SandboxHandle>;
@@ -129,7 +143,7 @@ export class SandboxError extends Error {
 export type SandboxProviderConfig = {
 	/** Default template when a spec names none. */
 	template?: string;
-	/** Directory for provider state, e.g. SSH keys; unused until agent forwarding lands. */
+	/** Directory for provider state, e.g. the SSH hop key and known hosts. */
 	stateDir?: string;
 };
 

@@ -8,6 +8,7 @@ import {
 	FakeSandboxProvider,
 	FakeSandboxSettingsStore,
 	registerFakeSandboxProvider,
+	type FakeSandboxHandle,
 } from "./helpers/fake-sandbox.ts";
 
 describe("SandboxManager", () => {
@@ -24,7 +25,7 @@ describe("SandboxManager", () => {
 		};
 		try {
 			const env = await manager.environment(
-				{ kind: "sandbox", provider: "fake", workspaceDir: root },
+				{ kind: "sandbox", provider: "fake", workspaceDir: root, forwardAgent: false },
 				"7",
 				BACKGROUND_CONTEXT,
 			);
@@ -34,7 +35,7 @@ describe("SandboxManager", () => {
 
 			// A second use returns the same environment without a new sandbox.
 			const again = await manager.environment(
-				{ kind: "sandbox", provider: "fake", workspaceDir: root },
+				{ kind: "sandbox", provider: "fake", workspaceDir: root, forwardAgent: false },
 				"7",
 				BACKGROUND_CONTEXT,
 			);
@@ -44,7 +45,7 @@ describe("SandboxManager", () => {
 			// After forget, the target connects to the sandbox that already exists.
 			manager.forget("7");
 			const connected = await manager.environment(
-				{ kind: "sandbox", provider: "fake", sandboxId: env.sandboxId, workspaceDir: root },
+				{ kind: "sandbox", provider: "fake", sandboxId: env.sandboxId, workspaceDir: root, forwardAgent: false },
 				"7",
 				BACKGROUND_CONTEXT,
 			);
@@ -86,7 +87,7 @@ describe("SandboxManager", () => {
 		try {
 			await expect(
 				manager.environment(
-					{ kind: "sandbox", provider: "fake", sandboxId: "missing", workspaceDir: root },
+					{ kind: "sandbox", provider: "fake", sandboxId: "missing", workspaceDir: root, forwardAgent: false },
 					"9",
 					BACKGROUND_CONTEXT,
 				),
@@ -104,5 +105,38 @@ describe("SandboxManager", () => {
 			store: new FakeSandboxSettingsStore({ providers: {} }),
 		});
 		expect(bare.configured()).toBe(false);
+	});
+
+	it("forwards the SSH agent and stops it on pause and kill", async () => {
+		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-manager-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const manager = new SandboxManager({
+			store: new FakeSandboxSettingsStore(),
+			resolveHostAgentSocket: async () => "/tmp/host-agent.sock",
+		});
+		try {
+			const env = await manager.environment(
+				{ kind: "sandbox", provider: "fake", workspaceDir: root, forwardAgent: true },
+				"11",
+				BACKGROUND_CONTEXT,
+			);
+			const handle = env.handle as FakeSandboxHandle;
+			expect(env.agentSocket).toBe("/tmp/fake-agent.sock");
+			expect(handle.forwarding).toEqual({ hostSocket: "/tmp/host-agent.sock", closed: false });
+			expect((await manager.list())[0]?.forwarding).toBe(true);
+
+			await manager.pause("fake", env.sandboxId);
+			expect(handle.forwarding?.closed).toBe(true);
+			expect((await manager.list())[0]?.forwarding).toBe(false);
+
+			await manager.resume("fake", env.sandboxId);
+			expect(handle.forwarding).toEqual({ hostSocket: "/tmp/host-agent.sock", closed: false });
+
+			await manager.kill("fake", env.sandboxId);
+			expect(handle.forwarding?.closed).toBe(true);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 });

@@ -20,6 +20,8 @@ export type SandboxTargetState = {
 	sourceKind: "empty" | "git" | null;
 	sourceUrl: string | null;
 	workspaceDir: string;
+	/** null follows the stored setting; true forwards the host SSH agent. */
+	forwardAgent: boolean | null;
 };
 
 /**
@@ -56,6 +58,8 @@ export type ResolvedTarget =
 			template?: string;
 			source?: SandboxSource;
 			workspaceDir: string;
+			/** Whether this sandbox forwards the host SSH agent. */
+			forwardAgent: boolean;
 		};
 
 export type TargetResolutionOptions = {
@@ -63,7 +67,7 @@ export type TargetResolutionOptions = {
 	/** Root that holds per-session scratch directories. Without it, scratch paths resolve to "". */
 	workspacesDir?: string;
 	/** Defaults for a default-target sandbox that names no provider or workspace of its own. */
-	sandboxDefaults?: { provider: string; template?: string; workspaceDir?: string };
+	sandboxDefaults?: { provider: string; template?: string; workspaceDir?: string; forwardAgent?: boolean };
 };
 
 /** The stored state for a sandbox target. */
@@ -74,6 +78,7 @@ export function sandboxTargetState(target: {
 	template?: string;
 	source?: SandboxSource;
 	workspaceDir: string;
+	forwardAgent?: boolean;
 }): SandboxTargetState {
 	return {
 		provider: target.provider,
@@ -83,6 +88,7 @@ export function sandboxTargetState(target: {
 		sourceKind: target.source?.kind ?? null,
 		sourceUrl: target.source?.kind === "git" ? target.source.url : null,
 		workspaceDir: target.workspaceDir,
+		forwardAgent: target.forwardAgent ?? null,
 	};
 }
 
@@ -107,6 +113,7 @@ export async function resolveTarget(
 			provider: options.sandboxDefaults?.provider ?? "e2b",
 			...(options.sandboxDefaults?.template === undefined ? {} : { template: options.sandboxDefaults.template }),
 			workspaceDir: options.sandboxDefaults?.workspaceDir ?? DEFAULT_SANDBOX_WORKSPACE,
+			forwardAgent: options.sandboxDefaults?.forwardAgent ?? true,
 		};
 	}
 	return localFromPath(options.defaultTarget?.path ?? null, options.workspacesDir, conversationId);
@@ -132,6 +139,7 @@ function sandboxFromState(state: SandboxTargetState): ResolvedTarget {
 			? {}
 			: { source: state.sourceKind === "git" && state.sourceUrl !== null ? { kind: "git", url: state.sourceUrl } : { kind: "empty" } }),
 		workspaceDir: state.workspaceDir,
+		forwardAgent: state.forwardAgent ?? true,
 	};
 }
 
@@ -145,6 +153,8 @@ export type TargetChangeData = {
 	providerName?: string;
 	sandboxId?: string;
 	name?: string;
+	/** Whether the sandbox forwards the host SSH agent. */
+	forwardAgent?: boolean;
 };
 
 export const TargetChangeEntry = defineEntry<TargetChangeData>("app.target");
@@ -154,7 +164,8 @@ export function targetPrompt(target: ResolvedTarget, providerName?: string): str
 	if (target.kind === "sandbox") {
 		const name = providerName ?? target.provider;
 		const where = target.sandboxId === undefined ? "a new sandbox" : `sandbox ${name}:${target.sandboxId}`;
-		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.`;
+		const agent = target.forwardAgent ? " The host SSH agent is forwarded, so `git` over SSH works." : "";
+		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.${agent}`;
 	}
 	const note = target.scratch ? " (the session's scratch directory)" : "";
 	return `Your tools run on the local machine in \`${target.path}\`${note}. Saved file paths refer to this target.`;
@@ -163,7 +174,7 @@ export function targetPrompt(target: ResolvedTarget, providerName?: string): str
 export type TargetSectionOptions = {
 	workspacesDir?: string;
 	defaultTarget: () => DefaultTargetConfig | undefined;
-	sandboxDefaults: () => { provider: string; template?: string; workspaceDir?: string };
+	sandboxDefaults: () => { provider: string; template?: string; workspaceDir?: string; forwardAgent?: boolean };
 	/** Human-readable provider name for the prompt. */
 	providerName?: (provider: string) => string;
 };

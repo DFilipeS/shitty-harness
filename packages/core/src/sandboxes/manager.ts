@@ -1,7 +1,10 @@
 import type { Context } from "@earendil-works/chord";
+import { resolveHostAgentSocket } from "./agent.ts";
 import { SandboxExecutionEnv } from "./env.ts";
+import { applyGitIdentity, cloneIntoWorkspace, hostGitIdentity } from "./git.ts";
 import {
 	SandboxError,
+	type AgentForwarding,
 	type SandboxHandle,
 	type SandboxInfo,
 	type SandboxMetrics,
@@ -20,6 +23,8 @@ export type ResolvedSandboxTarget = {
 	template?: string;
 	source?: SandboxSource;
 	workspaceDir: string;
+	/** Whether this sandbox forwards the host SSH agent. */
+	forwardAgent: boolean;
 };
 
 /** One sandbox as the UI lists it. */
@@ -33,6 +38,8 @@ export type SandboxSummary = {
 	template?: string;
 	createdAt?: number;
 	lastUsedAt?: number;
+	/** True while this process holds a live SSH agent forward into the sandbox. */
+	forwarding: boolean;
 };
 
 /** Progress of a sandbox a session is lazily opening, pushed to the UI. */
@@ -47,6 +54,8 @@ export type SandboxManagerOptions = {
 	store: SandboxSettingsStore;
 	/** Directory for provider state, e.g. SSH keys; unused until agent forwarding lands. */
 	stateDir?: string;
+	/** Overrides host agent discovery; tests use this to stay deterministic. */
+	resolveHostAgentSocket?: () => Promise<string | undefined>;
 };
 
 /** The labels that mark a sandbox as this harness's, so the list never shows foreign sandboxes. */
@@ -70,6 +79,9 @@ export class SandboxManager {
 	readonly #providers = new Map<string, SandboxProvider>();
 	readonly #handles = new Map<string, SandboxHandle>();
 	readonly #environments = new Map<string, EnvironmentEntry>();
+	readonly #forwardings = new Map<string, AgentForwarding>();
+	/** Sandboxes whose targets asked for forwarding, so a resume can start it again. */
+	readonly #forwardEnabled = new Set<string>();
 
 	constructor(options: SandboxManagerOptions) {
 		this.#options = options;
@@ -81,15 +93,21 @@ export class SandboxManager {
 
 	async setSettings(change: SandboxSettingsChange): Promise<SandboxSettings> {
 		const settings = await this.#options.store.setSandboxSettings(change);
-		this.invalidate();
+		await this.invalidate();
 		return settings;
 	}
 
-	/** Drop provider instances and cached environments, e.g. after credentials change. */
-	invalidate(): void {
+	/** Drop provider instances, cached environments, and forwards, e.g. after credentials change. */
+	async invalidate(): Promise<void> {
+		await this.close();
 		this.#providers.clear();
 		this.#handles.clear();
 		this.#environments.clear();
+	}
+
+	/** Stop every forwarded agent. The sandboxes themselves keep running. */
+	async close(): Promise<void> {
+		for (const id of [...this.#forwardings.keys()]) await this.#stopForwarding(id);
 	}
 
 	/** Forget one session's environment, e.g. after its target changes. */
@@ -127,6 +145,7 @@ export class SandboxManager {
 	): Promise<SandboxExecutionEnv> {
 		const provider = this.#provider(target.provider);
 		let handle: SandboxHandle;
+		let created = false;
 		if (target.sandboxId !== undefined) {
 			try {
 				handle = await provider.connect(target.sandboxId, { workspaceDir: target.workspaceDir });
@@ -135,14 +154,12 @@ export class SandboxManager {
 				this.onStatus?.({ conversationId, phase: "gone", sandboxId: target.sandboxId, message });
 				throw error;
 			}
-			this.onStatus?.({ conversationId, phase: "ready", sandboxId: handle.id });
 		} else {
 			this.onStatus?.({ conversationId, phase: "starting" });
 			try {
 				handle = await provider.create({
 					...(target.template === undefined ? {} : { template: target.template }),
 					workspaceDir: target.workspaceDir,
-					...(target.source === undefined ? {} : { source: target.source }),
 					labels: { ...SANDBOX_LABELS, ...(target.name === undefined ? {} : { name: target.name }) },
 					idleTimeoutMs: this.settings.idleTimeoutMs,
 					autoPause: this.settings.autoPause,
@@ -152,10 +169,61 @@ export class SandboxManager {
 				this.onStatus?.({ conversationId, phase: "error", message });
 				throw error;
 			}
-			await this.rememberSandboxId?.(conversationId, handle.id);
-			this.onStatus?.({ conversationId, phase: "ready", sandboxId: handle.id });
+			created = true;
 		}
-		return new SandboxExecutionEnv(handle);
+
+		if (target.forwardAgent) this.onStatus?.({ conversationId, phase: "starting", message: "Forwarding the SSH agent" });
+		const agentSocket = await this.#startForwarding(handle, target.forwardAgent);
+
+		if (created) {
+			try {
+				if (target.source !== undefined && target.source.kind === "git") {
+					await cloneIntoWorkspace(handle, target.source.url, agentSocket === undefined ? {} : { env: { SSH_AUTH_SOCK: agentSocket } });
+				}
+				const identity = await hostGitIdentity();
+				await applyGitIdentity(handle, identity).catch((error: unknown) => {
+					console.warn("[sandbox] could not copy the host Git identity:", error);
+				});
+			} catch (error) {
+				await this.#stopForwarding(handle.id);
+				await handle.kill().catch(() => undefined);
+				const message = error instanceof Error ? error.message : String(error);
+				this.onStatus?.({ conversationId, phase: "error", message });
+				throw error;
+			}
+			await this.rememberSandboxId?.(conversationId, handle.id);
+		}
+
+		this.onStatus?.({ conversationId, phase: "ready", sandboxId: handle.id });
+		return new SandboxExecutionEnv(handle, agentSocket === undefined ? {} : { agentSocket });
+	}
+
+	/** Start forwarding when asked, resolving the host socket first. Failures are not fatal. */
+	async #startForwarding(handle: SandboxHandle, forward: boolean): Promise<string | undefined> {
+		if (!forward || handle.forwardAgent === undefined) return undefined;
+		const existing = this.#forwardings.get(handle.id);
+		if (existing !== undefined) return existing.sandboxSocket;
+		const hostSocket = await (this.#options.resolveHostAgentSocket?.() ??
+			resolveHostAgentSocket(this.settings.ssh.agentSocket));
+		if (hostSocket === undefined) {
+			console.warn("[sandbox] no host SSH agent found; forwarding is off");
+			return undefined;
+		}
+		try {
+			const forwarding = await handle.forwardAgent(hostSocket);
+			this.#forwardings.set(handle.id, forwarding);
+			this.#forwardEnabled.add(handle.id);
+			return forwarding.sandboxSocket;
+		} catch (error) {
+			console.warn("[sandbox] SSH agent forwarding failed:", error);
+			return undefined;
+		}
+	}
+
+	async #stopForwarding(sandboxId: string): Promise<void> {
+		const forwarding = this.#forwardings.get(sandboxId);
+		this.#forwardings.delete(sandboxId);
+		await forwarding?.close().catch(() => undefined);
 	}
 
 	/** Human-readable provider name for user-facing text. */
@@ -180,7 +248,7 @@ export class SandboxManager {
 		const provider = this.#provider(settings.provider);
 		const infos = await provider.list({ labels: SANDBOX_LABELS });
 		return infos
-			.map((info) => summaryOf(info, provider.displayName))
+			.map((info) => summaryOf(info, provider.displayName, this.#forwardings.has(info.id)))
 			.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 	}
 
@@ -189,6 +257,7 @@ export class SandboxManager {
 		template?: string;
 		source?: SandboxSource;
 		workspaceDir: string;
+		forwardAgent?: boolean;
 	}): Promise<SandboxSummary> {
 		const settings = this.settings;
 		const provider = this.#provider(settings.provider);
@@ -196,12 +265,19 @@ export class SandboxManager {
 		const handle = await provider.create({
 			...(template === undefined ? {} : { template }),
 			workspaceDir: choice.workspaceDir,
-			...(choice.source === undefined ? {} : { source: choice.source }),
 			labels: { ...SANDBOX_LABELS, ...(choice.name === undefined ? {} : { name: choice.name }) },
 			idleTimeoutMs: settings.idleTimeoutMs,
 			autoPause: settings.autoPause,
 		});
 		this.#handles.set(handle.id, handle);
+		const agentSocket = await this.#startForwarding(handle, choice.forwardAgent ?? settings.ssh.forwardAgent);
+		if (choice.source !== undefined && choice.source.kind === "git") {
+			await cloneIntoWorkspace(handle, choice.source.url, agentSocket === undefined ? {} : { env: { SSH_AUTH_SOCK: agentSocket } });
+		}
+		const identity = await hostGitIdentity();
+		await applyGitIdentity(handle, identity).catch((error: unknown) => {
+			console.warn("[sandbox] could not copy the host Git identity:", error);
+		});
 		return {
 			provider: handle.provider,
 			providerName: provider.displayName,
@@ -210,6 +286,7 @@ export class SandboxManager {
 			state: "running",
 			workspaceDir: handle.workspaceDir,
 			...(template === undefined ? {} : { template }),
+			forwarding: this.#forwardings.has(handle.id),
 		};
 	}
 
@@ -218,6 +295,7 @@ export class SandboxManager {
 		if (handle.pause === undefined) {
 			throw new SandboxError("invalid", `Provider ${providerName} cannot pause sandboxes`);
 		}
+		await this.#stopForwarding(sandboxId);
 		await handle.pause();
 	}
 
@@ -226,9 +304,12 @@ export class SandboxManager {
 		const provider = this.#provider(providerName);
 		const handle = await provider.connect(sandboxId);
 		this.#handles.set(handle.id, handle);
+		if (this.#forwardEnabled.has(sandboxId)) await this.#startForwarding(handle, true);
 	}
 
 	async kill(providerName: string, sandboxId: string): Promise<void> {
+		await this.#stopForwarding(sandboxId);
+		this.#forwardEnabled.delete(sandboxId);
 		const provider = this.#provider(providerName);
 		await provider.kill(sandboxId);
 		this.#handles.delete(sandboxId);
@@ -252,7 +333,10 @@ export class SandboxManager {
 			(factory.envVar === undefined ? undefined : process.env[factory.envVar]);
 		const provider = createSandboxProvider(
 			name,
-			{ ...(settings.template === undefined ? {} : { template: settings.template }), ...(this.#options.stateDir === undefined ? {} : { stateDir: this.#options.stateDir }) },
+			{
+				...(settings.template === undefined ? {} : { template: settings.template }),
+				...(this.#options.stateDir === undefined ? {} : { stateDir: this.#options.stateDir }),
+			},
 			{ ...(apiKey === undefined || apiKey === "" ? {} : { apiKey }) },
 		);
 		this.#providers.set(name, provider);
@@ -268,7 +352,7 @@ export class SandboxManager {
 	}
 }
 
-function summaryOf(info: SandboxInfo, providerName: string): SandboxSummary {
+function summaryOf(info: SandboxInfo, providerName: string, forwarding: boolean): SandboxSummary {
 	return {
 		provider: info.provider,
 		providerName,
@@ -279,5 +363,6 @@ function summaryOf(info: SandboxInfo, providerName: string): SandboxSummary {
 		...(info.template === undefined ? {} : { template: info.template }),
 		...(info.createdAt === undefined ? {} : { createdAt: info.createdAt }),
 		...(info.lastUsedAt === undefined ? {} : { lastUsedAt: info.lastUsedAt }),
+		forwarding,
 	};
 }

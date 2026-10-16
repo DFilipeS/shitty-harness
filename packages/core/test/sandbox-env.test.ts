@@ -44,6 +44,19 @@ describe("SandboxExecutionEnv", () => {
 		);
 	}
 
+	it("passes the forwarded agent socket to commands", async () => {
+		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-agent-"));
+		const provider = new FakeSandboxProvider();
+		const handle = await provider.create({ workspaceDir: root });
+		try {
+			const env = new SandboxExecutionEnv(handle, { agentSocket: "/tmp/agent.sock" });
+			getOrThrow(await env.exec("true", undefined, BACKGROUND_CONTEXT));
+			expect(handle.lastExecEnv).toEqual({ SSH_AUTH_SOCK: "/tmp/agent.sock" });
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("runs commands in the workspace by default", async () => {
 		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-cwd-"));
 		const provider = new FakeSandboxProvider();

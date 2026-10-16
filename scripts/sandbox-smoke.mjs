@@ -2,10 +2,11 @@
 //   node scripts/sandbox-smoke.mjs
 // Reads E2B_API_KEY, or the key pi-remote-sandbox stored. Creates one small sandbox and kills it.
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { getOrThrow } from "@earendil-works/pi-durable/env";
+import { resolveHostAgentSocket } from "../packages/core/src/sandboxes/agent.ts";
 import { SandboxExecutionEnv } from "../packages/core/src/sandboxes/env.ts";
 import { E2BProviderFactory } from "../packages/core/src/sandboxes/e2b/provider.ts";
 
@@ -28,7 +29,10 @@ if (apiKey === undefined || apiKey === "") {
 }
 
 const workspaceDir = "/home/user/workspace";
-const provider = E2BProviderFactory.create({}, { apiKey });
+const provider = E2BProviderFactory.create(
+	{ stateDir: join(tmpdir(), "harness-sandbox-smoke-state") },
+	{ apiKey },
+);
 
 const created = Date.now();
 const sandbox = await provider.create({
@@ -68,6 +72,37 @@ try {
 	console.log("metrics:", JSON.stringify(await sandbox.metrics()));
 	await new Promise((resolve) => setTimeout(resolve, 6_000));
 	console.log("metrics after 6s:", JSON.stringify(await sandbox.metrics()));
+
+	// SSH agent forwarding: the host keys never enter the sandbox; only the socket is forwarded.
+	const hostSocket = await resolveHostAgentSocket();
+	const agentCheck = async (command) => {
+		let stdout = "";
+		let stderr = "";
+		const result = await sandbox.exec(command, {
+			timeoutMs: 30_000,
+			onStdout: (text) => {
+				stdout += text;
+			},
+			onStderr: (text) => {
+				stderr += text;
+			},
+		});
+		return { exitCode: result.exitCode, output: (stdout + stderr).trim() };
+	};
+	if (hostSocket === undefined) {
+		console.log("forwarding: no host SSH agent found, skipped");
+	} else {
+		const forwarding = await sandbox.forwardAgent(hostSocket);
+		const listed = await agentCheck(`SSH_AUTH_SOCK=${forwarding.sandboxSocket} ssh-add -l`);
+		console.log("agent inside the sandbox:");
+		console.log(listed.output || "(no output)");
+		if (listed.exitCode !== 0) throw new Error("the forwarded agent did not answer inside the sandbox");
+		await forwarding.close();
+		const after = await agentCheck(`SSH_AUTH_SOCK=${forwarding.sandboxSocket} ssh-add -l`);
+		console.log(`after close: exit ${after.exitCode}`);
+		if (after.exitCode === 0) throw new Error("the forwarded agent still answered after close");
+		console.log("forwarding closed");
+	}
 
 	await sandbox.pause();
 	console.log("paused");

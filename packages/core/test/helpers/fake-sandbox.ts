@@ -4,6 +4,7 @@ import { getOrThrow } from "@earendil-works/pi-durable/env";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import {
 	SandboxError,
+	type AgentForwarding,
 	type SandboxExecOptions,
 	type SandboxFileInfo,
 	type SandboxHandle,
@@ -30,6 +31,8 @@ export class FakeSandboxHandle implements SandboxHandle {
 	readonly #env: NodeExecutionEnv;
 	#paused = false;
 	#killed = false;
+	#forwarding: { hostSocket: string; closed: boolean } | undefined;
+	#lastExecEnv: Record<string, string> | undefined;
 
 	constructor(id: string, workspaceDir: string) {
 		this.id = id;
@@ -45,8 +48,19 @@ export class FakeSandboxHandle implements SandboxHandle {
 		return this.#killed;
 	}
 
+	/** The last `forwardAgent` call, for tests. */
+	get forwarding(): { hostSocket: string; closed: boolean } | undefined {
+		return this.#forwarding;
+	}
+
+	/** The environment of the last command, for tests. */
+	get lastExecEnv(): Record<string, string> | undefined {
+		return this.#lastExecEnv;
+	}
+
 	async exec(command: string, options: SandboxExecOptions = {}): Promise<{ exitCode: number | null }> {
 		this.#requireAlive();
+		this.#lastExecEnv = options.env;
 		const context =
 			options.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(options.signal, BACKGROUND_CONTEXT);
 		const result = await this.#env.exec(
@@ -128,6 +142,18 @@ export class FakeSandboxHandle implements SandboxHandle {
 		return { cpuCount: 2, memoryUsedBytes: 64 * 1024 * 1024 };
 	}
 
+	async forwardAgent(hostSocket: string): Promise<AgentForwarding> {
+		this.#requireAlive();
+		const state = { hostSocket, closed: false };
+		this.#forwarding = state;
+		return {
+			sandboxSocket: "/tmp/fake-agent.sock",
+			close: async () => {
+				state.closed = true;
+			},
+		};
+	}
+
 	#requireAlive(): void {
 		if (this.#killed) throw new SandboxError("not_found", `Sandbox ${this.id} is gone`);
 	}
@@ -152,9 +178,14 @@ export class FakeSandboxHandle implements SandboxHandle {
 export class FakeSandboxProvider implements SandboxProvider {
 	readonly name = "fake";
 	readonly displayName = "Fake";
-	readonly capabilities = { pauseResume: true, metrics: true };
+	readonly capabilities = { pauseResume: true, metrics: true, agentForwarding: true };
 	readonly #sandboxes = new Map<string, FakeSandboxHandle>();
 	#nextId = 1;
+
+	/** Every sandbox this provider created, for tests. */
+	get handles(): readonly FakeSandboxHandle[] {
+		return [...this.#sandboxes.values()];
+	}
 
 	async create(spec: SandboxSpec): Promise<FakeSandboxHandle> {
 		await mkdir(spec.workspaceDir, { recursive: true });
@@ -233,6 +264,13 @@ export class FakeSandboxSettingsStore implements SandboxSettingsStore {
 		if (change.apiKey !== undefined) {
 			if (change.apiKey.key === null || change.apiKey.key === "") delete next.providers[change.apiKey.provider];
 			else next.providers[change.apiKey.provider] = { apiKey: change.apiKey.key };
+		}
+		if (change.sshAgentSocket !== undefined) {
+			if (change.sshAgentSocket === null || change.sshAgentSocket === "") delete next.ssh.agentSocket;
+			else next.ssh.agentSocket = change.sshAgentSocket;
+		}
+		if (change.forwardAgent !== undefined) {
+			next.ssh.forwardAgent = change.forwardAgent ?? DEFAULT_SANDBOX_SETTINGS.ssh.forwardAgent;
 		}
 		this.#settings = next;
 		return next;

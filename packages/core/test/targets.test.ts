@@ -29,7 +29,10 @@ async function exists(path: string): Promise<boolean> {
 describe("targets", () => {
 	it("names the provider in the target prompt", () => {
 		expect(
-			targetPrompt({ kind: "sandbox", provider: "e2b", sandboxId: "abc123", workspaceDir: "/home/user/workspace" }, "E2B"),
+			targetPrompt(
+				{ kind: "sandbox", provider: "e2b", sandboxId: "abc123", workspaceDir: "/home/user/workspace", forwardAgent: true },
+				"E2B",
+			),
 		).toContain("sandbox E2B:abc123");
 	});
 

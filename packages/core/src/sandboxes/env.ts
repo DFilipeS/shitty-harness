@@ -209,6 +209,11 @@ function fingerprint(info: SandboxFileInfo): string {
 	return `${info.kind}:${info.size}:${info.mtimeMs}`;
 }
 
+export type SandboxExecutionEnvOptions = {
+	/** Path of the forwarded SSH agent socket inside the sandbox, when forwarding is active. */
+	agentSocket?: string;
+};
+
 /**
  * A pi-durable `ExecutionEnv` over one sandbox. Readers and line scans work on a file snapshot, the
  * watcher polls, and commands run through the provider's exec API.
@@ -219,14 +224,21 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 	readonly sandboxId: string;
 	readonly provider: string;
 	readonly handle: SandboxHandle;
+	readonly #agentSocket: string | undefined;
 	readonly #active = new Set<AbortController>();
 
-	constructor(sandbox: SandboxHandle) {
+	constructor(sandbox: SandboxHandle, options: SandboxExecutionEnvOptions = {}) {
 		this.handle = sandbox;
 		this.sandboxId = sandbox.id;
 		this.provider = sandbox.provider;
 		this.id = `sandbox:${sandbox.provider}:${sandbox.id}`;
 		this.cwd = sandbox.workspaceDir;
+		this.#agentSocket = options.agentSocket;
+	}
+
+	/** The forwarded agent socket, when one is active. */
+	get agentSocket(): string | undefined {
+		return this.#agentSocket;
 	}
 
 	#absolute(path: string): string {
@@ -659,11 +671,15 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		const signals = [controller.signal];
 		if (context.abortSignal !== undefined) signals.push(context.abortSignal);
 		const signal = AbortSignal.any(signals);
+		const env = {
+			...(options?.env ?? {}),
+			...(this.#agentSocket === undefined ? {} : { SSH_AUTH_SOCK: this.#agentSocket }),
+		};
 		let full = "";
 		try {
 			const result = await this.handle.exec(script, {
 				cwd: options?.cwd === undefined ? this.cwd : this.#absolute(options.cwd),
-				...(options?.env === undefined ? {} : { env: options.env }),
+				...(Object.keys(env).length === 0 ? {} : { env }),
 				...(options?.timeout === undefined || options.timeout <= 0 ? {} : { timeoutMs: options.timeout * 1000 }),
 				signal,
 				onStdout: (text) => {

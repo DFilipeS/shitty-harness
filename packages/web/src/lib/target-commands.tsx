@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { TargetInfo } from "@harness/protocol";
 import { CheckIcon, FilePlusIcon, FolderIcon, KeyIcon, LayersIcon, TerminalIcon } from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
@@ -97,6 +98,9 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 	const session = sessions.find((candidate) => candidate.id === activeSessionId);
 	const current = session?.target;
 	const configured = sandboxSettings?.configured === true;
+	// The new-sandbox toggle; undefined follows the stored default.
+	const [forwardOverride, setForwardOverride] = useState<boolean | undefined>(undefined);
+	const forwardAgent = forwardOverride ?? sandboxSettings?.forwardAgent ?? true;
 
 	const browse = (path?: string): CommandPage =>
 		folderPage(async () =>
@@ -108,7 +112,7 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 			),
 		);
 
-	const newSandbox = (): CommandPage => ({
+	const newSandbox = (forward: boolean): CommandPage => ({
 		kind: "commands",
 		title: "New sandbox",
 		placeholder: "Choose the starting point…",
@@ -119,7 +123,7 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 				group: "New sandbox",
 				detail: "Start with an empty directory",
 				icon: <TerminalIcon />,
-				run: () => void setTarget({ kind: "sandbox", source: { kind: "empty" } }),
+				run: () => void setTarget({ kind: "sandbox", source: { kind: "empty" }, forwardAgent: forward }),
 			},
 			{
 				id: "sandbox.new.git",
@@ -134,9 +138,22 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 						onSubmit: (value) => {
 							const url = value.trim();
 							if (url === "") return false;
-							void setTarget({ kind: "sandbox", source: { kind: "git", url } });
+							void setTarget({ kind: "sandbox", source: { kind: "git", url }, forwardAgent: forward });
 						},
 					}),
+			},
+			{
+				id: "sandbox.new.forward",
+				title: forward ? "Forward SSH agent: on" : "Forward SSH agent: off",
+				group: "New sandbox",
+				detail: forward ? "Private repositories and git push work" : "The host keys stay out of the sandbox",
+				icon: <KeyIcon />,
+				current: forward,
+				run: ({ pushPage }) => {
+					const next = !forward;
+					setForwardOverride(next);
+					pushPage(newSandbox(next));
+				},
 			},
 		],
 	});
@@ -168,6 +185,7 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 								provider: sandbox.provider,
 								sandboxId: sandbox.id,
 								workspaceDir: sandbox.workspaceDir,
+								forwardAgent,
 							}),
 					})),
 	});
@@ -181,7 +199,7 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 					detail: "Create a fresh sandbox for this session",
 					icon: <TerminalIcon />,
 					current: current?.kind === "sandbox" && current.sandboxId === undefined,
-					run: ({ pushPage }) => pushPage(newSandbox()),
+					run: ({ pushPage }) => pushPage(newSandbox(forwardAgent)),
 				},
 				{
 					id: "target.sandbox.existing",

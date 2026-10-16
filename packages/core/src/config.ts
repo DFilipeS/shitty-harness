@@ -16,6 +16,10 @@ export type SandboxConfig = {
 	template?: string;
 	idleTimeoutMs?: number;
 	autoPause?: boolean;
+	ssh?: {
+		agentSocket?: string;
+		forwardAgent?: boolean;
+	};
 	providers?: Record<string, { apiKey?: string }>;
 };
 
@@ -80,6 +84,14 @@ function parseSandboxConfig(value: unknown): SandboxConfig | undefined {
 		config.idleTimeoutMs = value.idleTimeoutMs;
 	}
 	if (typeof value.autoPause === "boolean") config.autoPause = value.autoPause;
+	if (isRecord(value.ssh)) {
+		const ssh: { agentSocket?: string; forwardAgent?: boolean } = {};
+		if (typeof value.ssh.agentSocket === "string" && value.ssh.agentSocket !== "") {
+			ssh.agentSocket = value.ssh.agentSocket;
+		}
+		if (typeof value.ssh.forwardAgent === "boolean") ssh.forwardAgent = value.ssh.forwardAgent;
+		if (Object.keys(ssh).length > 0) config.ssh = ssh;
+	}
 	if (isRecord(value.providers)) {
 		const providers: Record<string, { apiKey?: string }> = {};
 		for (const [id, entry] of Object.entries(value.providers)) {

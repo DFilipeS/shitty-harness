@@ -164,6 +164,7 @@ function optionalSandboxChoice(value: unknown): SandboxChoice {
 	if (value.name !== undefined) choice.name = requireString(value.name, "sandbox.name");
 	if (value.template !== undefined) choice.template = requireString(value.template, "sandbox.template");
 	if (value.workspaceDir !== undefined) choice.workspaceDir = requireString(value.workspaceDir, "sandbox.workspaceDir");
+	if (value.forwardAgent !== undefined) choice.forwardAgent = requireBoolean(value.forwardAgent, "sandbox.forwardAgent");
 	const source = optionalSandboxSource(value.source);
 	if (source !== undefined) choice.source = source;
 	return choice;
@@ -417,6 +418,17 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 						...(command.autoPause === undefined
 							? {}
 							: { autoPause: command.autoPause === null ? null : requireBoolean(command.autoPause, "autoPause") }),
+						...(command.sshAgentSocket === undefined
+							? {}
+							: {
+									sshAgentSocket:
+										command.sshAgentSocket === null
+											? null
+											: requireString(command.sshAgentSocket, "sshAgentSocket"),
+								}),
+						...(command.forwardAgent === undefined
+							? {}
+							: { forwardAgent: command.forwardAgent === null ? null : requireBoolean(command.forwardAgent, "forwardAgent") }),
 					}),
 				};
 			}

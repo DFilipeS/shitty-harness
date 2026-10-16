@@ -16,6 +16,7 @@ import {
 	CpuIcon,
 	FileIcon,
 	FolderIcon,
+	KeyIcon,
 	LayersIcon,
 	PaperclipIcon,
 	SendIcon,
@@ -323,7 +324,7 @@ function TargetChip() {
 					: targetLabel(target);
 	const title =
 		phase === "starting"
-			? "Creating the sandbox…"
+			? (status?.message ?? "Creating the sandbox…")
 			: phase === "gone"
 				? (status?.message ?? "The sandbox is gone")
 				: phase === "error"
@@ -352,6 +353,9 @@ function TargetChip() {
 				<TerminalIcon className="h-3.5 w-3.5 shrink-0" />
 			)}
 			<span className="max-w-44 truncate">{label}</span>
+			{target?.kind === "sandbox" && target.forwardAgent === true && (
+				<KeyIcon className="h-3 w-3 shrink-0 text-fg-faint" />
+			)}
 		</button>
 	);
 }

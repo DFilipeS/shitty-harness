@@ -104,6 +104,31 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 				icon: <SlidersIcon />,
 				run: () => void setSandboxSettings({ autoPause: sandboxSettings?.autoPause !== true }),
 			},
+			{
+				id: "sandbox.settings.forward",
+				title: sandboxSettings?.forwardAgent === true ? "Forward SSH agent: on" : "Forward SSH agent: off",
+				group: "Defaults",
+				detail: "Default for new sandboxes",
+				icon: <KeyIcon />,
+				run: () => void setSandboxSettings({ forwardAgent: sandboxSettings?.forwardAgent !== true }),
+			},
+			{
+				id: "sandbox.settings.agent-socket",
+				title: "SSH agent socket",
+				group: "Defaults",
+				detail: sandboxSettings?.sshAgentSocket ?? "Detected automatically",
+				icon: <KeyIcon />,
+				run: ({ prompt }) =>
+					prompt({
+						title: "SSH agent socket",
+						initialValue: sandboxSettings?.sshAgentSocket ?? "",
+						placeholder: "$SSH_AUTH_SOCK",
+						onSubmit: (value) => {
+							const socket = value.trim();
+							void setSandboxSettings({ sshAgentSocket: socket === "" ? null : socket });
+						},
+					}),
+			},
 		],
 	});
 
@@ -211,7 +236,7 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 				id: `sandbox.manage.${sandbox.id}`,
 				title: sandbox.name ?? sandbox.id.slice(0, 12),
 				group: "Sandboxes",
-				detail: `${sandbox.state}${sandbox.sessions.length > 0 ? ` · ${sandbox.sessions.length} session${sandbox.sessions.length === 1 ? "" : "s"}` : ""}`,
+				detail: `${sandbox.state}${sandbox.forwarding ? " · SSH agent" : ""}${sandbox.sessions.length > 0 ? ` · ${sandbox.sessions.length} session${sandbox.sessions.length === 1 ? "" : "s"}` : ""}`,
 				run: ({ pushPage }) => pushPage(sandboxPage(sandbox)),
 			}))
 		: [
