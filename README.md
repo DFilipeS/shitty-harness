@@ -209,6 +209,17 @@ The sandbox runs the same `ExecutionEnv` contract over the provider's file and s
 (`SandboxExecutionEnv`), so `read`, `write`, `edit`, and `bash` behave the same as locally. Files
 written by a session — attachments, generated images — live in the sandbox, not on this machine.
 
+### Sandbox templates
+
+Run **Sandbox templates…** in the palette to manage the recipes the harness builds into E2B
+templates. A recipe lives at `data/templates/<name>/recipe.yaml`, names its starting point — the E2B
+base image, another sandbox template, or a Docker image — and lists the commands the build runs as
+root. The page creates, edits, and builds them, following the build log live. Building moves the
+template's `default` tag, so new sandboxes use the newest build while existing sandboxes keep the
+one they started from. **Create the starter template (harness-base)…** writes the E2B base plus
+common tools and websocat in one action; point **Sandbox defaults… → Template** at it to use it for
+new sandboxes.
+
 ### SSH agent forwarding
 
 New sandboxes forward the host SSH agent by default, so private repositories clone and `git push`

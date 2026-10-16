@@ -1,6 +1,6 @@
 # Plan: sandbox templates
 
-Status: not started.
+Status: M1 implemented (recipes, storage, build queue, Templates page). M2 (selection, picker, lifecycle) not started.
 
 New sandboxes start from the provider's base image today, so every new sandbox pays the environment
 bootstrap again. This plan gives the harness a builder: recipes under `data/templates/` that it
@@ -105,7 +105,8 @@ the template list and the running build's log tail.
 - Tests: recipe validation, staleness, the build queue against a fake provider, service commands.
 
 Done when: `harness-base` builds from the page and a sandbox created with it starts with websocat
-installed.
+installed. The page and the build path are covered by tests; the first build against a real E2B
+account is still to be run.
 
 ### M2 — selection and lifecycle
 
