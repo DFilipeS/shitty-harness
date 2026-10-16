@@ -53,6 +53,7 @@ export async function openHarnessService(options: OpenHarnessServiceOptions): Pr
 			const id = sandboxes.settings.provider;
 			return { id, displayName: sandboxes.displayName(id) };
 		},
+		defaultTemplate: () => sandboxes.settings.template,
 	});
 
 	return HarnessService.create({

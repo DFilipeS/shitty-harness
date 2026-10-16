@@ -211,6 +211,8 @@ export interface SandboxProviderFactory {
 	readonly displayName: string;
 	/** Environment variable the adapter also honors, e.g. "E2B_API_KEY". */
 	readonly envVar?: string;
+	/** The template the provider uses when nothing names one, e.g. E2B's "base". */
+	readonly defaultTemplate?: string;
 	/** False when the provider works without a credential, e.g. a local Docker daemon. */
 	readonly needsApiKey: boolean;
 	create(config: SandboxProviderConfig, credentials: { apiKey?: string }): SandboxProvider;

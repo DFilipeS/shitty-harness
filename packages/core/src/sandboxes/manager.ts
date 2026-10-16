@@ -236,6 +236,19 @@ export class SandboxManager {
 		return sandboxProviderFactory(providerId).displayName;
 	}
 
+	/**
+	 * The template a new sandbox uses when a target names none: the stored default, or the provider's
+	 * own default (E2B's "base") when nothing is stored.
+	 */
+	defaultTemplate(): string | undefined {
+		return this.settings.template ?? this.providerDefaultTemplate();
+	}
+
+	/** The provider's own default template, e.g. E2B's "base". */
+	providerDefaultTemplate(): string | undefined {
+		return sandboxProviderFactory(this.settings.provider).defaultTemplate;
+	}
+
 	/** The configured provider, with its credentials; shared with the template manager. */
 	provider(): SandboxProvider {
 		return this.#provider(this.settings.provider);
@@ -264,14 +277,18 @@ export class SandboxManager {
 
 	async create(choice: {
 		name?: string;
-		template?: string;
+		template?: string | null;
 		source?: SandboxSource;
 		workspaceDir: string;
 		forwardAgent?: boolean;
 	}): Promise<SandboxSummary> {
 		const settings = this.settings;
 		const provider = this.#provider(settings.provider);
-		const template = choice.template ?? settings.template;
+		// An explicit null means the provider's own default, not the stored one.
+		const template =
+			choice.template === null
+				? sandboxProviderFactory(settings.provider).defaultTemplate
+				: (choice.template ?? settings.template);
 		const handle = await provider.create({
 			...(template === undefined ? {} : { template }),
 			workspaceDir: choice.workspaceDir,

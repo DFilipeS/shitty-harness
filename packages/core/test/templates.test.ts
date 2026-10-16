@@ -26,12 +26,17 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 10_000): P
 	}
 }
 
-function templateManager(dir: string, provider: FakeSandboxProvider): TemplateManager {
+function templateManager(
+	dir: string,
+	provider: FakeSandboxProvider,
+	options: { defaultTemplate?: () => string | undefined } = {},
+): TemplateManager {
 	return new TemplateManager({
 		store: new TemplateStore(dir),
 		provider: () => provider,
 		configured: () => true,
 		identity: () => ({ id: "fake", displayName: "Fake" }),
+		...(options.defaultTemplate === undefined ? {} : { defaultTemplate: options.defaultTemplate }),
 	});
 }
 
@@ -219,6 +224,18 @@ describe("template manager", () => {
 		});
 	});
 
+	it("exposes the stored sandbox default in the list", async () => {
+		await withDir(async (dir) => {
+			const manager = templateManager(dir, new FakeSandboxProvider(), {
+				defaultTemplate: () => "harness-base",
+			});
+			expect((await manager.list()).default).toBe("harness-base");
+
+			const without = templateManager(dir, new FakeSandboxProvider());
+			expect((await without.list()).default).toBeUndefined();
+		});
+	});
+
 	it("emits a changed event as a build moves through its states", async () => {
 		await withDir(async (dir) => {
 			const provider = new FakeSandboxProvider();
@@ -300,6 +317,98 @@ describe("template service commands", () => {
 		});
 		try {
 			await expect(service.createTemplate("Bad Name", {})).rejects.toMatchObject({ code: "invalid" });
+		} finally {
+			await service.close();
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("reads a stored template that equals the provider default as no choice", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-templates-service-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const store = new FakeSandboxSettingsStore({ template: "base" });
+		const manager = new SandboxManager({ store });
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: localEnvironment(),
+			sandboxes: manager,
+			templates: templateManager(dir, provider, {
+				defaultTemplate: () => store.getSandboxSettings().template,
+			}),
+		});
+		try {
+			expect((await service.listSandboxes()).settings.template).toBeUndefined();
+			await service.createStarterTemplate();
+			expect((await service.listTemplates()).default).toBeUndefined();
+
+			await service.setSandboxSettings({ template: "harness-base" });
+			expect((await service.listTemplates()).default).toBe("harness-base");
+		} finally {
+			await service.close();
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("resets the sandbox default when its template is removed", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-templates-service-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const store = new FakeSandboxSettingsStore({ template: "harness-base" });
+		const manager = new SandboxManager({ store });
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: localEnvironment(),
+			sandboxes: manager,
+			templates: templateManager(dir, provider, { defaultTemplate: () => store.getSandboxSettings().template }),
+		});
+		const defaults: (string | undefined)[] = [];
+		service.on((event) => {
+			if (event.type === "sandboxes") defaults.push(event.settings.template);
+		});
+		try {
+			await service.createStarterTemplate();
+			expect((await service.listTemplates()).default).toBe("harness-base");
+
+			const after = await service.removeTemplate("harness-base");
+			expect(after.default).toBeUndefined();
+			expect(manager.settings.template).toBeUndefined();
+			expect(manager.defaultTemplate()).toBe("base");
+			expect(defaults.at(-1)).toBeUndefined();
+		} finally {
+			await service.close();
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("resets the sandbox default when its template is deleted in E2B", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "harness-templates-service-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const manager = new SandboxManager({
+			store: new FakeSandboxSettingsStore({ template: "harness-base" }),
+		});
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: localEnvironment(),
+			sandboxes: manager,
+			templates: templateManager(dir, provider),
+		});
+		try {
+			await service.createStarterTemplate();
+			await service.buildTemplate("harness-base");
+			await waitFor(async () => (await service.listTemplates()).templates[0]?.state === "ready");
+
+			const after = await service.deleteTemplate("harness-base");
+			expect(after.templates).toHaveLength(0);
+			expect(provider.templates.size).toBe(0);
+			expect(manager.settings.template).toBeUndefined();
 		} finally {
 			await service.close();
 			await rm(dir, { recursive: true, force: true });

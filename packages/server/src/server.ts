@@ -173,7 +173,9 @@ function optionalSandboxChoice(value: unknown): SandboxChoice {
 	if (value.provider !== undefined) choice.provider = requireString(value.provider, "sandbox.provider");
 	if (value.sandboxId !== undefined) choice.sandboxId = requireString(value.sandboxId, "sandbox.sandboxId");
 	if (value.name !== undefined) choice.name = requireString(value.name, "sandbox.name");
-	if (value.template !== undefined) choice.template = requireString(value.template, "sandbox.template");
+	if (value.template !== undefined) {
+		choice.template = value.template === null ? null : requireString(value.template, "sandbox.template");
+	}
 	if (value.workspaceDir !== undefined) choice.workspaceDir = requireString(value.workspaceDir, "sandbox.workspaceDir");
 	if (value.forwardAgent !== undefined) choice.forwardAgent = requireBoolean(value.forwardAgent, "sandbox.forwardAgent");
 	const source = optionalSandboxSource(value.source);

@@ -52,7 +52,8 @@ export type SandboxChoice = {
 	/** An existing sandbox; absent means create a new one. */
 	sandboxId?: string;
 	name?: string;
-	template?: string;
+	/** A template name; `null` means the provider's own default, not the stored one. */
+	template?: string | null;
 	source?: SandboxSourceChoice;
 	workspaceDir?: string;
 	/** Whether the sandbox forwards the host SSH agent; defaults to the stored setting. */
@@ -176,6 +177,8 @@ export type TemplatesState = {
 	providerName: string;
 	configured: boolean;
 	templates: TemplateInfo[];
+	/** The template new sandboxes use by default, when one is stored. */
+	default?: string;
 	other: ProviderTemplateInfo[];
 };
 

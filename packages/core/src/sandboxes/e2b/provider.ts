@@ -721,6 +721,7 @@ export const E2BProviderFactory: SandboxProviderFactory = {
 	name: "e2b",
 	displayName: "E2B",
 	envVar: "E2B_API_KEY",
+	defaultTemplate: "base",
 	needsApiKey: true,
 	create: (config, credentials) => new E2BProvider(config, credentials),
 	async validate(credentials) {

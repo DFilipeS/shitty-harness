@@ -156,9 +156,10 @@ function sandboxDefaults(manager: SandboxManager | undefined): {
 	forwardAgent: boolean;
 } {
 	const settings = manager?.settings;
+	const template = manager?.defaultTemplate();
 	return {
 		provider: settings?.provider ?? DEFAULT_SANDBOX_SETTINGS.provider,
-		...(settings?.template === undefined ? {} : { template: settings.template }),
+		...(template === undefined ? {} : { template }),
 		workspaceDir: DEFAULT_SANDBOX_WORKSPACE,
 		forwardAgent: settings?.ssh.forwardAgent ?? DEFAULT_SANDBOX_SETTINGS.ssh.forwardAgent,
 	};
@@ -168,11 +169,14 @@ function sandboxSettingsInfo(
 	settings: SandboxSettings,
 	configured: boolean,
 	providerName: string,
+	providerDefault?: string,
 ): SandboxSettingsInfo {
+	// A stored template equal to the provider's own default is the same as no choice at all.
+	const template = settings.template === providerDefault ? undefined : settings.template;
 	return {
 		provider: settings.provider,
 		providerName,
-		...(settings.template === undefined ? {} : { template: settings.template }),
+		...(template === undefined ? {} : { template }),
 		idleTimeoutMs: settings.idleTimeoutMs,
 		autoPause: settings.autoPause,
 		...(settings.ssh.agentSocket === undefined ? {} : { sshAgentSocket: settings.ssh.agentSocket }),
@@ -360,7 +364,16 @@ export class HarnessService {
 	/** Announce the template list after a recipe, build, or provider change. */
 	async #emitTemplates(): Promise<void> {
 		if (this.#templates === undefined) return;
-		this.#emit({ type: "templates", ...(await this.#templates.list()) });
+		this.#emit({ type: "templates", ...(await this.#templateState()) });
+	}
+
+	/** The template list the client sees, with a provider-default stored template read as unset. */
+	async #templateState(): Promise<TemplatesState> {
+		const state = await this.#requireTemplates().list();
+		const providerDefault = this.#sandboxes?.providerDefaultTemplate();
+		if (providerDefault === undefined || state.default !== providerDefault) return state;
+		const { default: _providerDefault, ...rest } = state;
+		return rest;
 	}
 
 	/** Lists once, announces the result to every client, and returns the same state to the caller. */
@@ -656,7 +669,8 @@ export class HarnessService {
 			};
 		}
 		const name = choice.name?.trim();
-		const template = choice.template?.trim();
+		const template =
+			choice.template === null ? manager.defaultTemplate() : (choice.template?.trim() ?? manager.defaultTemplate());
 		const source = this.#sandboxSource(choice.source);
 		const forwardAgent = choice.forwardAgent ?? manager.settings.ssh.forwardAgent;
 		const target: ResolvedSandboxTarget = {
@@ -714,6 +728,7 @@ export class HarnessService {
 				settings,
 				configured,
 				this.#sandboxes?.displayName(settings.provider) ?? settings.provider,
+				this.#sandboxes?.providerDefaultTemplate(),
 			),
 			sandboxes: sandboxes.map((sandbox) => ({
 				...sandbox,
@@ -732,7 +747,11 @@ export class HarnessService {
 		await manager.create({
 			workspaceDir: choice.workspaceDir ?? DEFAULT_SANDBOX_WORKSPACE,
 			...(name === undefined || name === "" ? {} : { name }),
-			...(template === undefined || template === "" ? {} : { template }),
+			...(choice.template === null
+				? { template: null }
+				: template === undefined || template === ""
+					? {}
+					: { template }),
 			...(source === undefined ? {} : { source }),
 			...(choice.forwardAgent === undefined ? {} : { forwardAgent: choice.forwardAgent }),
 		});
@@ -777,6 +796,8 @@ export class HarnessService {
 		forwardAgent?: boolean | null;
 	}): Promise<SandboxesState> {
 		await this.#requireSandboxes().setSettings(change);
+		// The default template is part of the template list too, so keep both in step.
+		if (change.template !== undefined) await this.#emitTemplates();
 		return await this.#listAndEmitSandboxes();
 	}
 
@@ -789,7 +810,7 @@ export class HarnessService {
 
 	/** Every sandbox template the harness manages, merged with the provider's own list. */
 	async listTemplates(): Promise<TemplatesState> {
-		return await this.#requireTemplates().list();
+		return await this.#templateState();
 	}
 
 	async createTemplate(name: string, recipe: TemplateRecipeInput | undefined): Promise<TemplatesState> {
@@ -821,13 +842,23 @@ export class HarnessService {
 	/** Forget a template in the harness; the provider's template stays. */
 	async removeTemplate(name: string): Promise<TemplatesState> {
 		await this.#requireTemplates().remove(name);
+		await this.#resetDefaultTemplate(name);
 		return await this.#listAndEmitTemplates();
 	}
 
 	/** Delete a template the harness manages, in the provider first. */
 	async deleteTemplate(name: string): Promise<TemplatesState> {
 		await this.#requireTemplates().deleteTemplate(name);
+		await this.#resetDefaultTemplate(name);
 		return await this.#listAndEmitTemplates();
+	}
+
+	/** A deliberate removal should not leave new sandboxes pointing at a template that is gone. */
+	async #resetDefaultTemplate(name: string): Promise<void> {
+		if (this.#sandboxes === undefined) return;
+		if (this.#sandboxes.settings.template !== name) return;
+		await this.#sandboxes.setSettings({ template: null });
+		await this.#listAndEmitSandboxes();
 	}
 
 	async deleteProviderTemplate(templateId: string): Promise<TemplatesState> {
@@ -836,7 +867,7 @@ export class HarnessService {
 	}
 
 	async #listAndEmitTemplates(): Promise<TemplatesState> {
-		const state = await this.#requireTemplates().list();
+		const state = await this.#templateState();
 		this.#emit({ type: "templates", ...state });
 		return state;
 	}

@@ -59,6 +59,8 @@ export type TemplatesState = {
 	providerName: string;
 	configured: boolean;
 	templates: TemplateInfo[];
+	/** The template new sandboxes use by default, when one is stored. */
+	default?: string;
 	/** Templates the provider knows about that the harness does not manage. */
 	other: ProviderTemplate[];
 };
@@ -167,6 +169,8 @@ export type TemplateManagerOptions = {
 	configured: () => boolean;
 	/** Provider id and human-readable name for the state the UI shows. */
 	identity: () => { id: string; displayName: string };
+	/** The sandbox default template, when one is stored. */
+	defaultTemplate?: () => string | undefined;
 };
 
 /**
@@ -228,7 +232,15 @@ export class TemplateManager {
 			}
 		}
 
-		return { provider: id, providerName: displayName, configured, templates, other };
+		const defaultTemplate = this.#options.defaultTemplate?.();
+		return {
+			provider: id,
+			providerName: displayName,
+			configured,
+			templates,
+			...(defaultTemplate === undefined ? {} : { default: defaultTemplate }),
+			other,
+		};
 	}
 
 	async #info(name: string): Promise<TemplateInfo> {
@@ -323,6 +335,15 @@ export class TemplateManager {
 		const lines: string[] = [];
 		this.#active = { name, lines };
 		this.onChanged?.();
+		// The log is written before the build state, so a reader that sees a finished state can
+		// always read the whole log that belongs to it.
+		const writeLog = async (): Promise<void> => {
+			try {
+				await this.#options.store.writeLog(name, lines.length === 0 ? "" : `${lines.join("\n")}\n`);
+			} catch (error) {
+				console.warn(`[sandbox] writing the build log for ${name} failed:`, error);
+			}
+		};
 		try {
 			const result = await provider.buildTemplate(
 				{ name, source: recipe.source, run: recipe.run },
@@ -331,6 +352,7 @@ export class TemplateManager {
 					if (lines.length > MAX_LOG_LINES) lines.shift();
 				},
 			);
+			await writeLog();
 			await this.#options.store.writeBuild(name, {
 				templateId: result.templateId,
 				buildId: result.buildId,
@@ -340,6 +362,7 @@ export class TemplateManager {
 				finishedAt: Date.now(),
 			});
 		} catch (error) {
+			await writeLog();
 			await this.#options.store.writeBuild(name, {
 				status: "failed",
 				recipeHash: hash,
@@ -351,11 +374,6 @@ export class TemplateManager {
 		} finally {
 			this.#active = undefined;
 			this.#pending.delete(name);
-			await this.#options.store
-				.writeLog(name, lines.length === 0 ? "" : `${lines.join("\n")}\n`)
-				.catch((error: unknown) => {
-					console.warn(`[sandbox] writing the build log for ${name} failed:`, error);
-				});
 			this.onChanged?.();
 		}
 	}

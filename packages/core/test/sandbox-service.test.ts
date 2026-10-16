@@ -288,4 +288,66 @@ describe("sandbox targets", () => {
 			await rm(workspacesDir, { recursive: true, force: true });
 		}
 	});
+
+	it("uses the stored default template, or the provider's own for an explicit null", async () => {
+		const sandboxRoot = await mkdtemp(join(tmpdir(), "harness-sandbox-root-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const manager = new SandboxManager({
+			store: new FakeSandboxSettingsStore({ template: "harness-base" }),
+		});
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: localEnvironment(),
+			sandboxes: manager,
+		});
+		try {
+			expect(manager.defaultTemplate()).toBe("harness-base");
+			await service.createSandbox({ workspaceDir: sandboxRoot, source: { kind: "empty" } });
+			expect(provider.createSpecs[0]?.template).toBe("harness-base");
+
+			await service.createSandbox({ workspaceDir: sandboxRoot, source: { kind: "empty" }, template: null });
+			expect(provider.createSpecs[1]?.template).toBe("base");
+
+			await service.createSandbox({ workspaceDir: sandboxRoot, source: { kind: "empty" }, template: "node-22" });
+			expect(provider.createSpecs[2]?.template).toBe("node-22");
+		} finally {
+			await service.close();
+			await rm(sandboxRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("pins the provider default when a sandbox target names no template", async () => {
+		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-sandbox-service-"));
+		const sandboxRoot = await mkdtemp(join(tmpdir(), "harness-sandbox-root-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore() });
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: localEnvironment(),
+			workspacesDir,
+			sandboxes: manager,
+		});
+		try {
+			const session = await service.createSession();
+			await service.setTarget(session.id, {
+				kind: "sandbox",
+				source: { kind: "empty" },
+				workspaceDir: sandboxRoot,
+			});
+			await service.prompt(session.id, "Do nothing", "request-template");
+			await waitFor(async () => (await service.listSessions())[0]?.working === true);
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+			expect(provider.createSpecs[0]?.template).toBe("base");
+		} finally {
+			await service.close();
+			await rm(workspacesDir, { recursive: true, force: true });
+			await rm(sandboxRoot, { recursive: true, force: true });
+		}
+	});
 });

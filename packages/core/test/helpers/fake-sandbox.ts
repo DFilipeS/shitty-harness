@@ -204,6 +204,9 @@ export class FakeSandboxProvider implements SandboxProvider {
 	#nextId = 1;
 	#listCount = 0;
 
+	/** Every sandbox spec this provider created, for tests. */
+	readonly createSpecs: SandboxSpec[] = [];
+
 	/** Templates the provider knows about, keyed by template id. */
 	readonly templates = new Map<string, ProviderTemplate>();
 	/** Every build the provider was asked for, for tests. */
@@ -228,6 +231,7 @@ export class FakeSandboxProvider implements SandboxProvider {
 	}
 
 	async create(spec: SandboxSpec): Promise<FakeSandboxHandle> {
+		this.createSpecs.push(spec);
 		await mkdir(spec.workspaceDir, { recursive: true });
 		const handle = new FakeSandboxHandle(`fake-${this.#nextId++}`, spec.workspaceDir, spec.idleTimeoutMs);
 		this.#sandboxes.set(handle.id, handle);
@@ -295,6 +299,7 @@ export function registerFakeSandboxProvider(
 	registerSandboxProvider({
 		name: "fake",
 		displayName: "Fake",
+		defaultTemplate: "base",
 		needsApiKey: true,
 		create: () => provider,
 		validate,
