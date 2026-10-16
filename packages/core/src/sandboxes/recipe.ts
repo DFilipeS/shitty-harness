@@ -149,10 +149,13 @@ export function serializeRecipe(recipe: TemplateRecipe): string {
 export const STARTER_TEMPLATE_NAME = "harness-base";
 
 export const STARTER_RECIPE: TemplateRecipe = {
-	description: "E2B base plus common build tools and websocat",
+	description: "E2B base plus common build tools, websocat, and Docker",
 	source: { kind: "default" },
 	run: [
 		"apt-get update && apt-get install -y git curl ca-certificates build-essential jq unzip procps",
 		'ARCH=$(uname -m); case "$ARCH" in aarch64|arm64) ASSET=websocat.aarch64-unknown-linux-musl ;; *) ASSET=websocat.x86_64-unknown-linux-musl ;; esac; curl -fsSL -o /usr/local/bin/websocat "https://github.com/vi/websocat/releases/latest/download/$ASSET"; chmod +x /usr/local/bin/websocat',
+		"curl -fsSL https://get.docker.com | sh",
+		"usermod -aG docker user",
+		"docker --version && docker compose version",
 	],
 };

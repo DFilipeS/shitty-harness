@@ -217,8 +217,9 @@ base image, another sandbox template, or a Docker image — and lists the comman
 root. The page creates, edits, and builds them, following the build log live; a template whose
 recipe changed since its last build is marked stale. Building moves the template's `default` tag,
 so new sandboxes use the newest build while existing sandboxes keep the one they started from.
-**Create the starter template (harness-base)…** writes the E2B base plus common tools and websocat
-in one action.
+**Create the starter template (harness-base)…** writes the E2B base plus common tools, websocat, and
+Docker in one action; the user is in the `docker` group, so `docker run`, `docker compose`, and
+Testcontainers work as they do locally.
 
 **Sandbox defaults… → Template** and the new-sandbox dialog's **Template** row pick between ready
 sandbox templates, the provider default (`base`), other templates in the E2B project, or any name

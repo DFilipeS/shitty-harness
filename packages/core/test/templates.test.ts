@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { HarnessService } from "../src/index.ts";
 import { localEnvironment } from "../src/node.ts";
 import { SandboxError } from "../src/sandboxes/provider.ts";
-import { parseRecipe, serializeRecipe, templateName } from "../src/sandboxes/recipe.ts";
+import { parseRecipe, serializeRecipe, STARTER_RECIPE, templateName } from "../src/sandboxes/recipe.ts";
 import { SandboxManager } from "../src/sandboxes/manager.ts";
 import { TemplateManager, TemplateStore } from "../src/sandboxes/templates.ts";
 import { createFauxProviders } from "./helpers/fake-providers.ts";
@@ -87,6 +87,13 @@ describe("template recipes", () => {
 			run: ["apt-get update", "apt-get install -y jq"],
 		};
 		expect(parseRecipe(serializeRecipe(recipe))).toEqual(recipe);
+	});
+
+	it("gives the starter recipe the common tools and Docker", () => {
+		const commands = STARTER_RECIPE.run.join("\n");
+		expect(commands).toContain("websocat");
+		expect(commands).toContain("get.docker.com");
+		expect(commands).toContain("usermod -aG docker user");
 	});
 
 	it("normalizes names and rejects the rest", () => {
