@@ -214,11 +214,18 @@ written by a session — attachments, generated images — live in the sandbox, 
 Run **Sandbox templates…** in the palette to manage the recipes the harness builds into E2B
 templates. A recipe lives at `data/templates/<name>/recipe.yaml`, names its starting point — the E2B
 base image, another sandbox template, or a Docker image — and lists the commands the build runs as
-root. The page creates, edits, and builds them, following the build log live. Building moves the
-template's `default` tag, so new sandboxes use the newest build while existing sandboxes keep the
-one they started from. **Create the starter template (harness-base)…** writes the E2B base plus
-common tools and websocat in one action; point **Sandbox defaults… → Template** at it to use it for
-new sandboxes.
+root. The page creates, edits, and builds them, following the build log live; a template whose
+recipe changed since its last build is marked stale. Building moves the template's `default` tag,
+so new sandboxes use the newest build while existing sandboxes keep the one they started from.
+**Create the starter template (harness-base)…** writes the E2B base plus common tools and websocat
+in one action.
+
+**Sandbox defaults… → Template** and the new-sandbox dialog's **Template** row pick between ready
+sandbox templates, the provider default (`base`), other templates in the E2B project, or any name
+you type; **Use as default** on a template page makes it the one new sandboxes start from. Only
+ready and stale templates can be picked: a draft, building, failed, or missing one shows its state
+on the Templates page instead. Removing a template forgets its recipe but leaves the E2B template;
+**Delete in E2B** removes both. Deleting the default resets it to the provider default.
 
 ### SSH agent forwarding
 

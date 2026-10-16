@@ -1,6 +1,6 @@
 # Plan: sandbox templates
 
-Status: M1 implemented (recipes, storage, build queue, Templates page). M2 (selection, picker, lifecycle) not started.
+Status: M1 and M2 implemented (recipes, storage, build queue, Templates page, selection, lifecycle).
 
 New sandboxes start from the provider's base image today, so every new sandbox pays the environment
 bootstrap again. This plan gives the harness a builder: recipes under `data/templates/` that it
@@ -116,7 +116,9 @@ installed. Verified: the build finished in 24s and a sandbox from it reported we
 - Tests: picker and default resolution, remove and delete behavior.
 
 Done when: a session's new sandbox starts from a chosen template, and removing or deleting a
-template behaves as decided.
+template behaves as decided. Verified: the new-sandbox and sandbox-defaults pickers offer the ready
+templates, the provider default, other E2B templates, and a typed name; removing a template keeps
+the E2B one, deleting in E2B removes both, and either resets the default to the provider default.
 
 ## Deferred
 
