@@ -61,6 +61,9 @@ export type SandboxManagerOptions = {
 /** The labels that mark a sandbox as this harness's, so the list never shows foreign sandboxes. */
 export const SANDBOX_LABELS: Record<string, string> = { harness: "1" };
 
+/** The template the build command produces: the provider's base image plus sshd and websocat. */
+export const SANDBOX_TEMPLATE_NAME = "harness-base";
+
 type EnvironmentEntry = {
 	promise: Promise<SandboxExecutionEnv>;
 	sandboxId: string;
@@ -321,6 +324,17 @@ export class SandboxManager {
 	async metrics(providerName: string, sandboxId: string): Promise<SandboxMetrics | undefined> {
 		const handle = await this.#handle(providerName, sandboxId);
 		return handle.metrics?.();
+	}
+
+	/** Build the provider template and make it the default for new sandboxes. */
+	async buildTemplate(onLog?: (line: string) => void): Promise<string> {
+		const provider = this.#provider(this.settings.provider);
+		if (provider.buildTemplate === undefined) {
+			throw new SandboxError("invalid", `Provider ${provider.displayName} cannot build templates`);
+		}
+		await provider.buildTemplate(SANDBOX_TEMPLATE_NAME, onLog);
+		await this.setSettings({ template: SANDBOX_TEMPLATE_NAME });
+		return SANDBOX_TEMPLATE_NAME;
 	}
 
 	#provider(name: string): SandboxProvider {

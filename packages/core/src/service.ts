@@ -50,6 +50,7 @@ import { sortModelsForDisplay } from "./model-order.ts";
 import type { Providers } from "./providers.ts";
 import { SandboxManager, type ResolvedSandboxTarget, type SandboxStatus } from "./sandboxes/manager.ts";
 import type { SandboxSource } from "./sandboxes/provider.ts";
+import { sandboxProviderFactory } from "./sandboxes/registry.ts";
 import {
 	DEFAULT_SANDBOX_SETTINGS,
 	DEFAULT_SANDBOX_WORKSPACE,
@@ -214,6 +215,7 @@ export class HarnessService {
 	#indexWatch: DocumentWatch<SessionIndexState> | undefined;
 	#taskGraphWatch: TaskGraphWatch | undefined;
 	#working = new Set<string>();
+	#templateBuild: Promise<string> | undefined;
 	#closed = false;
 
 	private constructor(
@@ -672,22 +674,27 @@ export class HarnessService {
 			console.warn("[core] listing sandboxes failed:", error);
 			return [];
 		}) : [];
-		const attached = new Map<string, string[]>();
+		const attached = new Map<string, { sessions: string[]; working: boolean }>();
 		for (const session of await this.listSessions()) {
 			const target = session.target;
 			if (target.kind !== "sandbox" || target.sandboxId === undefined) continue;
-			const list = attached.get(target.sandboxId) ?? [];
-			list.push(session.id);
-			attached.set(target.sandboxId, list);
+			const entry = attached.get(target.sandboxId) ?? { sessions: [], working: false };
+			entry.sessions.push(session.id);
+			entry.working ||= session.working;
+			attached.set(target.sandboxId, entry);
 		}
 		return {
 			provider: settings.provider,
-				settings: sandboxSettingsInfo(
-					settings,
-					configured,
-					this.#sandboxes?.displayName(settings.provider) ?? settings.provider,
-				),
-			sandboxes: sandboxes.map((sandbox) => ({ ...sandbox, sessions: attached.get(sandbox.id) ?? [] })),
+			settings: sandboxSettingsInfo(
+				settings,
+				configured,
+				this.#sandboxes?.displayName(settings.provider) ?? settings.provider,
+			),
+			sandboxes: sandboxes.map((sandbox) => ({
+				...sandbox,
+				sessions: attached.get(sandbox.id)?.sessions ?? [],
+				working: attached.get(sandbox.id)?.working ?? false,
+			})),
 		};
 	}
 
@@ -730,8 +737,31 @@ export class HarnessService {
 		return this.#requireSandboxes().metrics(provider, sandboxId);
 	}
 
+	/** Build the provider template once; concurrent callers share the build. */
+	async buildSandboxTemplate(): Promise<{ template: string }> {
+		const manager = this.#requireSandboxes();
+		let build = this.#templateBuild;
+		if (build === undefined) {
+			build = manager.buildTemplate((line) => console.log(`[sandbox] ${line}`));
+			this.#templateBuild = build;
+			void build
+				.finally(() => {
+					if (this.#templateBuild === build) this.#templateBuild = undefined;
+				})
+				.catch(() => undefined);
+		}
+		const template = await build;
+		await this.#emitSandboxes();
+		return { template };
+	}
+
 	async configureSandboxProvider(provider: string, apiKey: string | null): Promise<SandboxesState> {
-		await this.#requireSandboxes().setSettings({ apiKey: { provider, key: apiKey } });
+		const manager = this.#requireSandboxes();
+		if (apiKey !== null && apiKey !== "") {
+			// Validate before storing, so a bad key fails here instead of on the next use.
+			await sandboxProviderFactory(provider).validate({ apiKey });
+		}
+		await manager.setSettings({ apiKey: { provider, key: apiKey } });
 		await this.#emitSandboxes();
 		return this.listSandboxes();
 	}

@@ -78,6 +78,8 @@ export type SandboxInfo = {
 	lastUsedAt?: number;
 	/** Ids of sessions whose current target is this sandbox. */
 	sessions: string[];
+	/** True while one of those sessions has live work. */
+	working: boolean;
 	/** True while the harness holds a live SSH agent forward into this sandbox. */
 	forwarding: boolean;
 };
@@ -245,6 +247,10 @@ export type SandboxesMetricsResult = {
 	metrics?: SandboxMetricsInfo;
 };
 
+export type SandboxesBuildResult = {
+	template: string;
+};
+
 /** Commands the client sends to the server. Every command carries a correlation `id`. */
 export type ClientCommand =
 	| { id: string; type: "sessions.list" }
@@ -278,6 +284,7 @@ export type ClientCommand =
 	| { id: string; type: "sandboxes.resume"; provider: string; sandboxId: string }
 	| { id: string; type: "sandboxes.kill"; provider: string; sandboxId: string }
 	| { id: string; type: "sandboxes.metrics"; provider: string; sandboxId: string }
+	| { id: string; type: "sandboxes.build" }
 	| { id: string; type: "sandboxes.configure"; provider: string; apiKey: string | null }
 	| {
 			id: string;
@@ -323,6 +330,7 @@ export type CommandResult = {
 	"sandboxes.resume": SandboxesListResult;
 	"sandboxes.kill": SandboxesListResult;
 	"sandboxes.metrics": SandboxesMetricsResult;
+	"sandboxes.build": SandboxesBuildResult;
 	"sandboxes.configure": SandboxesListResult;
 	"sandboxes.settings": SandboxesListResult;
 	"providers.list": ProvidersListResult;

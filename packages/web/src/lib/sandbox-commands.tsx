@@ -1,5 +1,5 @@
 import type { SandboxInfo } from "@harness/protocol";
-import { CheckIcon, KeyIcon, RefreshIcon, SlidersIcon, TerminalIcon, TrashIcon } from "../components/icons.tsx";
+import { CheckIcon, KeyIcon, RefreshIcon, SlidersIcon, TerminalIcon, TrashIcon, WandIcon } from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
 import { formatBytes } from "./format.ts";
 import { useHarness } from "./store.tsx";
@@ -20,6 +20,7 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 		sandboxMetrics,
 		configureSandbox,
 		setSandboxSettings,
+		buildSandboxTemplate,
 	} = useHarness();
 	const { openPage } = useCommandPalette();
 	const configured = sandboxSettings?.configured === true;
@@ -129,6 +130,14 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 						},
 					}),
 			},
+			{
+				id: "sandbox.settings.build",
+				title: "Build sandbox template…",
+				group: "Template",
+				detail: sandboxSettings?.template === "harness-base" ? "harness-base (built)" : "Preinstall websocat for faster sandboxes",
+				icon: <WandIcon />,
+				run: () => void buildSandboxTemplate(),
+			},
 		],
 	});
 
@@ -236,7 +245,7 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 				id: `sandbox.manage.${sandbox.id}`,
 				title: sandbox.name ?? sandbox.id.slice(0, 12),
 				group: "Sandboxes",
-				detail: `${sandbox.state}${sandbox.forwarding ? " · SSH agent" : ""}${sandbox.sessions.length > 0 ? ` · ${sandbox.sessions.length} session${sandbox.sessions.length === 1 ? "" : "s"}` : ""}`,
+				detail: `${sandbox.state}${sandbox.working ? " · working" : ""}${sandbox.forwarding ? " · SSH agent" : ""}${sandbox.sessions.length > 0 ? ` · ${sandbox.sessions.length} session${sandbox.sessions.length === 1 ? "" : "s"}` : ""}`,
 				run: ({ pushPage }) => pushPage(sandboxPage(sandbox)),
 			}))
 		: [

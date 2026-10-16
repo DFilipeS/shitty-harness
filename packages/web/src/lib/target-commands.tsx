@@ -177,7 +177,7 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 						id: `sandbox.existing.${sandbox.id}`,
 						title: sandbox.name ?? sandbox.id.slice(0, 12),
 						group: "Sandboxes",
-						detail: `${sandbox.state} · ${sandbox.workspaceDir}`,
+						detail: `${sandbox.state}${sandbox.working ? " · working" : ""} · ${sandbox.workspaceDir}`,
 						current: current?.kind === "sandbox" && current.sandboxId === sandbox.id,
 						run: () =>
 							void setTarget({

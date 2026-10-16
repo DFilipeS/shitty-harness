@@ -307,13 +307,19 @@ function ThinkingChip() {
 
 /** Where this session's tools run. Locked while a run is in flight, like the model and level. */
 function TargetChip() {
-	const { sessions, activeSessionId, activeSession, targetStatus } = useHarness();
+	const { sessions, sandboxes, activeSessionId, activeSession, targetStatus } = useHarness();
 	const targetPalette = useTargetPalette();
 	const session = sessions.find((candidate) => candidate.id === activeSessionId);
 	const target = session?.target;
 	const status = activeSessionId === undefined ? undefined : targetStatus[activeSessionId];
 	const phase = status?.phase;
 	const runActive = activeSession?.runActive ?? false;
+	const sandbox =
+		target?.kind === "sandbox" && target.sandboxId !== undefined
+			? sandboxes.find((candidate) => candidate.id === target.sandboxId)
+			: undefined;
+	const otherWorking =
+		sandbox?.working === true && sandbox.sessions.some((id) => id !== activeSessionId);
 	const label =
 		phase === "starting"
 			? "starting…"
@@ -331,9 +337,11 @@ function TargetChip() {
 					? (status?.message ?? "Could not start the sandbox")
 					: runActive
 						? "The target is locked while the agent is working"
-						: target === undefined
-							? "Choose where tools run"
-							: `Target: ${targetLabel(target)}`;
+						: otherWorking
+							? "Another session is working in this sandbox"
+							: target === undefined
+								? "Choose where tools run"
+								: `Target: ${targetLabel(target)}`;
 	return (
 		<button
 			type="button"
@@ -342,7 +350,7 @@ function TargetChip() {
 			disabled={runActive}
 			title={title}
 			className={`flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] hover:bg-raised disabled:opacity-50 disabled:hover:bg-transparent ${
-				phase === "gone" || phase === "error" ? "text-warn" : "text-fg-subtle hover:text-fg"
+				phase === "gone" || phase === "error" || otherWorking ? "text-warn" : "text-fg-subtle hover:text-fg"
 			}`}
 		>
 			{target !== undefined && target.kind === "sandbox" ? (

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { MemoryStorage, type JsonObject } from "@earendil-works/pi-durable";
 import { describe, expect, it } from "vitest";
-import { HarnessService, type ServiceEvent } from "../src/index.ts";
+import { HarnessService, SandboxError, type ServiceEvent } from "../src/index.ts";
 import { localEnvironment } from "../src/node.ts";
 import { SandboxManager } from "../src/sandboxes/manager.ts";
 import { createFauxProviders } from "./helpers/fake-providers.ts";
@@ -200,6 +200,52 @@ describe("sandbox targets", () => {
 			await service.close();
 			await rm(workspacesDir, { recursive: true, force: true });
 			await rm(sandboxRoot, { recursive: true, force: true });
+		}
+	});
+
+	it("builds the sandbox template once and makes it the default", async () => {
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore() });
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: localEnvironment(),
+			sandboxes: manager,
+		});
+		try {
+			const [first, second] = await Promise.all([
+				service.buildSandboxTemplate(),
+				service.buildSandboxTemplate(),
+			]);
+			expect(first.template).toBe("harness-base");
+			expect(second.template).toBe("harness-base");
+			expect(provider.buildCount).toBe(1);
+			expect((await service.listSandboxes()).settings.template).toBe("harness-base");
+		} finally {
+			await service.close();
+		}
+	});
+
+	it("rejects a sandbox key the provider refuses", async () => {
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider, async () => {
+			throw new SandboxError("auth", "bad key");
+		});
+		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore({ providers: {} }) });
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			environment: localEnvironment(),
+			sandboxes: manager,
+		});
+		try {
+			await expect(service.configureSandboxProvider("fake", "bad")).rejects.toMatchObject({ code: "auth" });
+			expect(manager.settings.providers.fake).toBeUndefined();
+		} finally {
+			await service.close();
 		}
 	});
 
