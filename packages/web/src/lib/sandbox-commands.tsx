@@ -13,9 +13,25 @@ type SandboxSettingsChange = {
 	forwardAgent?: boolean | null;
 };
 
+type SettingsPatch = {
+	template?: string | undefined;
+	sshAgentSocket?: string | undefined;
+	idleTimeoutMs?: number;
+	autoPause?: boolean;
+	forwardAgent?: boolean;
+};
+
+/** Applies a change to the settings the page shows, so a row updates before the server answers. */
+function withChange(
+	settings: SandboxSettingsInfo | undefined,
+	change: SettingsPatch,
+): SandboxSettingsInfo | undefined {
+	return settings === undefined ? undefined : { ...settings, ...change };
+}
+
 /**
- * The sandbox defaults page. Rows that change a setting replace the page with a fresh copy built
- * from the returned settings, so the palette stays open and every row shows the new value.
+ * The sandbox defaults page. A row shows its new value right away, then the page is rebuilt from
+ * the settings the server returns, so the palette stays open and ends up quoting the server.
  */
 export function buildSandboxSettingsPage(
 	settings: SandboxSettingsInfo | undefined,
@@ -40,6 +56,7 @@ export function buildSandboxSettingsPage(
 						returnToPage: true,
 						onSubmit: async (value) => {
 							const template = value.trim();
+							replacePage(page(withChange(current, { template: template === "" ? undefined : template })));
 							const state = await setSettings({ template: template === "" ? null : template });
 							if (state !== undefined) replacePage(page(state.settings));
 						},
@@ -59,7 +76,9 @@ export function buildSandboxSettingsPage(
 						onSubmit: async (value) => {
 							const minutes = Number(value.trim());
 							if (!Number.isFinite(minutes) || minutes < 0) return false;
-							const state = await setSettings({ idleTimeoutMs: Math.round(minutes * 60_000) });
+							const idleTimeoutMs = Math.round(minutes * 60_000);
+							replacePage(page(withChange(current, { idleTimeoutMs })));
+							const state = await setSettings({ idleTimeoutMs });
 							if (state !== undefined) replacePage(page(state.settings));
 						},
 					}),
@@ -72,7 +91,9 @@ export function buildSandboxSettingsPage(
 				icon: <SlidersIcon />,
 				keepOpen: true,
 				run: async ({ replacePage }) => {
-					const state = await setSettings({ autoPause: current?.autoPause !== true });
+					const autoPause = current?.autoPause !== true;
+					replacePage(page(withChange(current, { autoPause })));
+					const state = await setSettings({ autoPause });
 					if (state !== undefined) replacePage(page(state.settings));
 				},
 			},
@@ -84,7 +105,9 @@ export function buildSandboxSettingsPage(
 				icon: <KeyIcon />,
 				keepOpen: true,
 				run: async ({ replacePage }) => {
-					const state = await setSettings({ forwardAgent: current?.forwardAgent !== true });
+					const forwardAgent = current?.forwardAgent !== true;
+					replacePage(page(withChange(current, { forwardAgent })));
+					const state = await setSettings({ forwardAgent });
 					if (state !== undefined) replacePage(page(state.settings));
 				},
 			},
@@ -102,6 +125,7 @@ export function buildSandboxSettingsPage(
 						returnToPage: true,
 						onSubmit: async (value) => {
 							const socket = value.trim();
+							replacePage(page(withChange(current, { sshAgentSocket: socket === "" ? undefined : socket })));
 							const state = await setSettings({ sshAgentSocket: socket === "" ? null : socket });
 							if (state !== undefined) replacePage(page(state.settings));
 						},

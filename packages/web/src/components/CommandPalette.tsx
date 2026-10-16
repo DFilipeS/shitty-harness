@@ -28,9 +28,14 @@ type State = {
 	selected: number;
 	prompt?: PromptOptions;
 	promptValue: string;
+	/**
+	 * Bumped whenever the user moves to another page. A command that replaces its page after an
+	 * await checks it, so a late answer cannot overwrite a page the user opened meanwhile.
+	 */
+	generation: number;
 };
 
-const EMPTY: State = { pages: [], query: "", selected: 0, promptValue: "" };
+const EMPTY: State = { pages: [], query: "", selected: 0, promptValue: "", generation: 0 };
 
 /** Ranks a command against the query. Lower is better; undefined means no match. */
 function score(command: Command, query: string): number | undefined {
@@ -106,7 +111,7 @@ export function CommandPalette({
 	// Snapshot the registered commands and reset the search each time the palette opens.
 	useLayoutEffect(() => {
 		if (!open) return;
-		setState({
+		setState((current) => ({
 			pages: [
 				initial.kind === "shortcuts"
 					? { kind: "shortcuts", title: "Keyboard shortcuts" }
@@ -116,10 +121,12 @@ export function CommandPalette({
 			],
 			query: "",
 			selected: 0,
+			// Reopening the palette is a fresh start: a command from the last visit can no longer navigate.
+			generation: current.generation + 1,
 			...(initial.kind === "prompt"
 				? { prompt: initial.options, promptValue: initial.options.initialValue ?? "" }
 				: { promptValue: "" }),
-		});
+		}));
 		inputRef.current?.focus();
 	}, [open, initial, registry]);
 
@@ -196,8 +203,7 @@ export function CommandPalette({
 
 	const runCommand = (command: Command) => {
 		let navigated = false;
-		// The page the command runs on; a later replacePage must not clobber a page the user moved to.
-		const pageAtRun = state.pages[state.pages.length - 1];
+		const generationAtRun = state.generation;
 		const context: CommandContext = {
 			pushPage: (next) => {
 				navigated = true;
@@ -208,12 +214,13 @@ export function CommandPalette({
 					selected: 0,
 					prompt: undefined,
 					promptValue: "",
+					generation: current.generation + 1,
 				}));
 			},
 			replacePage: (next) => {
 				navigated = true;
 				setState((current) => {
-					if (current.pages[current.pages.length - 1] !== pageAtRun) return current;
+					if (current.generation !== generationAtRun) return current;
 					const pages = [...current.pages];
 					pages[pages.length - 1] = next;
 					return { ...current, pages };
@@ -240,7 +247,13 @@ export function CommandPalette({
 			return;
 		}
 		if (state.pages.length > 1) {
-			setState((current) => ({ ...current, pages: current.pages.slice(0, -1), query: "", selected: 0 }));
+			setState((current) => ({
+				...current,
+				pages: current.pages.slice(0, -1),
+				query: "",
+				selected: 0,
+				generation: current.generation + 1,
+			}));
 			return;
 		}
 		onClose();

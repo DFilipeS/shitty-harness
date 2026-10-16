@@ -37,6 +37,29 @@ function command(page: CommandPage | undefined, id: string) {
 }
 
 describe("buildSandboxSettingsPage", () => {
+	it("flips the auto-pause row before the server answers", async () => {
+		let answer: (state: SandboxesState | undefined) => void = () => {};
+		const replaced: CommandPage[] = [];
+		let requested: unknown;
+		const page = buildSandboxSettingsPage(settings({ autoPause: false }), (change) => {
+			requested = change;
+			return new Promise((resolve) => (answer = resolve));
+		});
+
+		const running = command(page, "sandbox.settings.autopause")?.run(
+			context({ replacePage: (next) => replaced.push(next) }),
+		);
+		expect(requested).toEqual({ autoPause: true });
+		expect(replaced).toHaveLength(1);
+		expect(command(replaced[0], "sandbox.settings.autopause")?.title).toBe("Auto-pause: on");
+
+		// The server's answer replaces the guess; here it agrees with it.
+		answer(state(settings({ autoPause: true })));
+		await running;
+		expect(replaced).toHaveLength(2);
+		expect(command(replaced[1], "sandbox.settings.autopause")?.title).toBe("Auto-pause: on");
+	});
+
 	it("keeps the palette open and flips the auto-pause row", async () => {
 		const changes: unknown[] = [];
 		let replaced: CommandPage | undefined;
@@ -85,6 +108,32 @@ describe("buildSandboxSettingsPage", () => {
 
 		await submitted?.onSubmit("15");
 		expect(command(replaced, "sandbox.settings.idle")?.detail).toBe("15 min");
+	});
+
+	it("shows the new idle timeout before the server answers", async () => {
+		let submitted: PromptOptions | undefined;
+		const replaced: CommandPage[] = [];
+		const pending = new Promise<undefined>(() => {});
+		const page = buildSandboxSettingsPage(settings(), () => pending);
+
+		command(page, "sandbox.settings.idle")?.run(
+			context({ prompt: (options) => (submitted = options), replacePage: (next) => replaced.push(next) }),
+		);
+		void submitted?.onSubmit("15");
+		expect(command(replaced[0], "sandbox.settings.idle")?.detail).toBe("15 min");
+	});
+
+	it("shows a cleared template before the server answers", async () => {
+		let submitted: PromptOptions | undefined;
+		const replaced: CommandPage[] = [];
+		const pending = new Promise<undefined>(() => {});
+		const page = buildSandboxSettingsPage(settings({ template: "harness-base" }), () => pending);
+
+		command(page, "sandbox.settings.template")?.run(
+			context({ prompt: (options) => (submitted = options), replacePage: (next) => replaced.push(next) }),
+		);
+		void submitted?.onSubmit("");
+		expect(command(replaced[0], "sandbox.settings.template")?.detail).toBe("provider default");
 	});
 
 	it("keeps the idle prompt open when the value is not a number", async () => {
