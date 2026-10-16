@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { TargetInfo } from "@harness/protocol";
+import type { ProviderTemplateInfo, SandboxSourceChoice, TargetInfo, TemplateInfo } from "@harness/protocol";
 import { CheckIcon, FilePlusIcon, FolderIcon, KeyIcon, LayersIcon, TerminalIcon } from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
 import { useHarness } from "./store.tsx";
+import { buildTemplatePickerPage } from "./template-commands.tsx";
 
 type FolderListing = {
 	path: string;
@@ -81,49 +82,64 @@ export function buildFolderPage(
 	return { kind: "commands", title: "Choose a folder", placeholder: "Search folders…", commands };
 }
 
-/** The target picker: the session's scratch directory, a folder, or a sandbox. */
-export function useTargetPalette(): { page(): CommandPage; open(): void } {
-	const {
-		activeSessionId,
-		sessions,
-		setTarget,
-		browseWorkspaces,
-		createWorkspaceFolder,
-		sandboxes,
-		sandboxProvider,
-		sandboxSettings,
-		configureSandbox,
-	} = useHarness();
-	const { openPage } = useCommandPalette();
-	const session = sessions.find((candidate) => candidate.id === activeSessionId);
-	const current = session?.target;
-	const configured = sandboxSettings?.configured === true;
-	// The new-sandbox toggle; undefined follows the stored default.
-	const [forwardOverride, setForwardOverride] = useState<boolean | undefined>(undefined);
-	const forwardAgent = forwardOverride ?? sandboxSettings?.forwardAgent ?? true;
+/** What the new-sandbox dialog hands to `create`. */
+export type NewSandboxChoice = {
+	source: SandboxSourceChoice;
+	forwardAgent: boolean;
+	/** The template a new sandbox starts from; `null` is the provider's own default. */
+	template: string | null;
+};
 
-	const browse = (path?: string): CommandPage =>
-		folderPage(async () =>
-			buildFolderPage(
-				await browseWorkspaces(path),
-				browse,
-				(folder) => void setTarget({ kind: "local", path: folder }),
-				createWorkspaceFolder,
-			),
-		);
-
-	const newSandbox = (forward: boolean): CommandPage => ({
+/**
+ * The new-sandbox dialog: the template a sandbox starts from, its workspace source, and whether the
+ * host SSH agent is forwarded. It creates nothing itself; `create` does.
+ */
+export function buildNewSandboxPage(options: {
+	forwardAgent: boolean;
+	/** The template that applies now; undefined is the provider default. */
+	template?: string;
+	templates: TemplateInfo[];
+	other: ProviderTemplateInfo[];
+	chooseTemplate(template: string | null): void;
+	toggleForwardAgent(): void;
+	create(choice: NewSandboxChoice): void;
+}): CommandPage {
+	const template = options.template;
+	const choice = (source: SandboxSourceChoice): NewSandboxChoice => ({
+		source,
+		forwardAgent: options.forwardAgent,
+		template: template ?? null,
+	});
+	return {
 		kind: "commands",
 		title: "New sandbox",
 		placeholder: "Choose the starting point…",
 		commands: [
+			{
+				id: "sandbox.new.template",
+				title: "Template",
+				group: "New sandbox",
+				detail: template ?? "provider default",
+				icon: <LayersIcon />,
+				run: ({ pushPage }) =>
+					pushPage(
+						buildTemplatePickerPage({
+							idPrefix: "sandbox.new.template",
+							title: "Sandbox template",
+							templates: options.templates,
+							other: options.other,
+							...(template === undefined ? {} : { current: template }),
+							select: options.chooseTemplate,
+						}),
+					),
+			},
 			{
 				id: "sandbox.new.empty",
 				title: "Empty workspace",
 				group: "New sandbox",
 				detail: "Start with an empty directory",
 				icon: <TerminalIcon />,
-				run: () => void setTarget({ kind: "sandbox", source: { kind: "empty" }, forwardAgent: forward }),
+				run: () => options.create(choice({ kind: "empty" })),
 			},
 			{
 				id: "sandbox.new.git",
@@ -138,25 +154,81 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 						onSubmit: (value) => {
 							const url = value.trim();
 							if (url === "") return false;
-							void setTarget({ kind: "sandbox", source: { kind: "git", url }, forwardAgent: forward });
+							options.create(choice({ kind: "git", url }));
 						},
 					}),
 			},
 			{
 				id: "sandbox.new.forward",
-				title: forward ? "Forward SSH agent: on" : "Forward SSH agent: off",
+				title: options.forwardAgent ? "Forward SSH agent: on" : "Forward SSH agent: off",
 				group: "New sandbox",
-				detail: forward ? "Private repositories and git push work" : "The host keys stay out of the sandbox",
+				detail: options.forwardAgent
+					? "Private repositories and git push work"
+					: "The host keys stay out of the sandbox",
 				icon: <KeyIcon />,
-				current: forward,
+				current: options.forwardAgent,
+				keepOpen: true,
 				run: ({ replacePage }) => {
-					const next = !forward;
-					setForwardOverride(next);
-					replacePage(newSandbox(next));
+					options.toggleForwardAgent();
+					replacePage(buildNewSandboxPage({ ...options, forwardAgent: !options.forwardAgent }));
 				},
 			},
 		],
-	});
+	};
+}
+
+/** The target picker: the session's scratch directory, a folder, or a sandbox. */
+export function useTargetPalette(): { page(): CommandPage; open(): void } {
+	const {
+		activeSessionId,
+		sessions,
+		setTarget,
+		browseWorkspaces,
+		createWorkspaceFolder,
+		sandboxes,
+		sandboxProvider,
+		sandboxSettings,
+		configureSandbox,
+		templates,
+		templatesOther,
+	} = useHarness();
+	const { openPage } = useCommandPalette();
+	const session = sessions.find((candidate) => candidate.id === activeSessionId);
+	const current = session?.target;
+	const configured = sandboxSettings?.configured === true;
+	// The new-sandbox toggle; undefined follows the stored default.
+	const [forwardOverride, setForwardOverride] = useState<boolean | undefined>(undefined);
+	const forwardAgent = forwardOverride ?? sandboxSettings?.forwardAgent ?? true;
+	// The new-sandbox template; undefined follows the stored default, null means provider default.
+	const [templateOverride, setTemplateOverride] = useState<string | null | undefined>(undefined);
+	const selectedTemplate = templateOverride === undefined ? sandboxSettings?.template : (templateOverride ?? undefined);
+
+	const browse = (path?: string): CommandPage =>
+		folderPage(async () =>
+			buildFolderPage(
+				await browseWorkspaces(path),
+				browse,
+				(folder) => void setTarget({ kind: "local", path: folder }),
+				createWorkspaceFolder,
+			),
+		);
+
+	const newSandbox = (): CommandPage =>
+		buildNewSandboxPage({
+			forwardAgent,
+			...(selectedTemplate === undefined ? {} : { template: selectedTemplate }),
+			templates,
+			other: templatesOther,
+			chooseTemplate: (template) => setTemplateOverride(template),
+			toggleForwardAgent: () => setForwardOverride(!forwardAgent),
+			create: (choice) =>
+				void setTarget({
+					kind: "sandbox",
+					source: choice.source,
+					forwardAgent: choice.forwardAgent,
+					template: choice.template,
+				}),
+		});
 
 	const existingSandbox = (): CommandPage => ({
 		kind: "commands",
@@ -199,7 +271,7 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 					detail: "Create a fresh sandbox for this session",
 					icon: <TerminalIcon />,
 					current: current?.kind === "sandbox" && current.sandboxId === undefined,
-					run: ({ pushPage }) => pushPage(newSandbox(forwardAgent)),
+					run: ({ pushPage }) => pushPage(newSandbox()),
 				},
 				{
 					id: "target.sandbox.existing",

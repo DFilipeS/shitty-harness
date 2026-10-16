@@ -123,17 +123,38 @@ describe("buildSandboxSettingsPage", () => {
 		expect(command(replaced[0], "sandbox.settings.idle")?.detail).toBe("15 min");
 	});
 
-	it("shows a cleared template before the server answers", async () => {
-		let submitted: PromptOptions | undefined;
-		const replaced: CommandPage[] = [];
-		const pending = new Promise<undefined>(() => {});
-		const page = buildSandboxSettingsPage(settings({ template: "harness-base" }), () => pending);
+	it("opens the template picker and clears to the provider default", async () => {
+		let pushed: CommandPage | undefined;
+		let requested: unknown;
+		const page = buildSandboxSettingsPage(
+			settings({ template: "harness-base" }),
+			async (change) => {
+				requested = change;
+				return state(settings({ template: undefined }));
+			},
+			{
+				list: [
+					{
+						name: "harness-base",
+						source: { kind: "default" },
+						run: [],
+						state: "ready",
+					},
+				],
+				other: [],
+			},
+		);
 
 		command(page, "sandbox.settings.template")?.run(
-			context({ prompt: (options) => (submitted = options), replacePage: (next) => replaced.push(next) }),
+			context({ pushPage: (next) => (pushed = next) }),
 		);
-		void submitted?.onSubmit("");
-		expect(command(replaced[0], "sandbox.settings.template")?.detail).toBe("provider default");
+		if (pushed?.kind !== "commands") throw new Error("expected the picker page");
+		const providerDefault = command(pushed, "sandbox.settings.template.default");
+		expect(providerDefault?.current).toBe(false);
+		expect(command(pushed, "sandbox.settings.template.template.harness-base")?.current).toBe(true);
+
+		await providerDefault?.run(context());
+		expect(requested).toEqual({ template: null });
 	});
 
 	it("keeps the idle prompt open when the value is not a number", async () => {

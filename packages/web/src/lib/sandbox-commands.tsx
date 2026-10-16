@@ -1,8 +1,9 @@
-import type { SandboxInfo, SandboxesState, SandboxSettingsInfo } from "@harness/protocol";
+import type { ProviderTemplateInfo, SandboxInfo, SandboxesState, SandboxSettingsInfo, TemplateInfo } from "@harness/protocol";
 import { CheckIcon, KeyIcon, RefreshIcon, SlidersIcon, TerminalIcon, TrashIcon } from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
 import { formatBytes } from "./format.ts";
 import { useHarness } from "./store.tsx";
+import { buildTemplatePickerPage } from "./template-commands.tsx";
 
 type SandboxSettingsChange = {
 	provider?: string;
@@ -36,6 +37,7 @@ function withChange(
 export function buildSandboxSettingsPage(
 	settings: SandboxSettingsInfo | undefined,
 	setSettings: (change: SandboxSettingsChange) => Promise<SandboxesState | undefined>,
+	templates: { list: TemplateInfo[]; other: ProviderTemplateInfo[] } = { list: [], other: [] },
 ): CommandPage {
 	const page = (current: SandboxSettingsInfo | undefined): CommandPage => ({
 		kind: "commands",
@@ -48,19 +50,17 @@ export function buildSandboxSettingsPage(
 				group: "Defaults",
 				detail: current?.template ?? "provider default",
 				icon: <SlidersIcon />,
-				run: ({ prompt, replacePage }) =>
-					prompt({
-						title: "Sandbox template",
-						initialValue: current?.template ?? "",
-						placeholder: "base",
-						returnToPage: true,
-						onSubmit: async (value) => {
-							const template = value.trim();
-							replacePage(page(withChange(current, { template: template === "" ? undefined : template })));
-							const state = await setSettings({ template: template === "" ? null : template });
-							if (state !== undefined) replacePage(page(state.settings));
-						},
-					}),
+				run: ({ pushPage }) =>
+					pushPage(
+						buildTemplatePickerPage({
+							idPrefix: "sandbox.settings.template",
+							title: "Sandbox template",
+							templates: templates.list,
+							other: templates.other,
+							...(current?.template === undefined ? {} : { current: current.template }),
+							select: (template) => void setSettings({ template: template ?? null }),
+						}),
+					),
 			},
 			{
 				id: "sandbox.settings.idle",
@@ -152,6 +152,8 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 		sandboxMetrics,
 		configureSandbox,
 		setSandboxSettings,
+		templates,
+		templatesOther,
 	} = useHarness();
 	const { openPage } = useCommandPalette();
 	const configured = sandboxSettings?.configured === true;
@@ -189,7 +191,8 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 		],
 	});
 
-	const settingsPage = (): CommandPage => buildSandboxSettingsPage(sandboxSettings, setSandboxSettings);
+	const settingsPage = (): CommandPage =>
+		buildSandboxSettingsPage(sandboxSettings, setSandboxSettings, { list: templates, other: templatesOther });
 
 	const metricsPage = (sandbox: SandboxInfo): CommandPage => ({
 		kind: "loading",

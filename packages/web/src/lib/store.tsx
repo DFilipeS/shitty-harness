@@ -70,6 +70,7 @@ type State = {
 	templatesProviderName: string;
 	templatesConfigured: boolean;
 	templates: TemplateInfo[];
+	templatesDefault?: string;
 	templatesOther: ProviderTemplateInfo[];
 	targetStatus: Record<string, TargetStatus>;
 	activeSessionId?: string;
@@ -108,6 +109,7 @@ type Action =
 			providerName: string;
 			configured: boolean;
 			templates: TemplateInfo[];
+			default?: string;
 			other: ProviderTemplateInfo[];
 	  }
 	| { type: "target/status"; status: TargetStatus }
@@ -258,6 +260,7 @@ function reducer(state: State, action: Action): State {
 				templatesProviderName: action.providerName,
 				templatesConfigured: action.configured,
 				templates: action.templates,
+				templatesDefault: action.default,
 				templatesOther: action.other,
 			};
 		case "target/status":
@@ -327,6 +330,7 @@ type HarnessContextValue = {
 	templatesProviderName: string;
 	templatesConfigured: boolean;
 	templates: TemplateInfo[];
+	templatesDefault?: string;
 	templatesOther: ProviderTemplateInfo[];
 	targetStatus: Record<string, TargetStatus>;
 	activeSessionId?: string;
@@ -389,6 +393,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		return new HarnessClient(`${protocol}//${window.location.host}/ws`);
 	}, []);
 	const [state, dispatch] = useReducer(reducer, initialState);
+	const templatesDefault = state.templatesDefault;
 
 	useEffect(() => {
 		const unsubscribeEvents = client.onEvent((event) => {
@@ -412,6 +417,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					providerName: event.providerName,
 					configured: event.configured,
 					templates: event.templates,
+					...(event.default === undefined ? {} : { default: event.default }),
 					other: event.other,
 				});
 			} else {
@@ -463,6 +469,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					providerName: templates.providerName,
 					configured: templates.configured,
 					templates: templates.templates,
+					...(templates.default === undefined ? {} : { default: templates.default }),
 					other: templates.other,
 				});
 			} catch (error) {
@@ -793,6 +800,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			providerName: string;
 			configured: boolean;
 			templates: TemplateInfo[];
+			default?: string;
 			other: ProviderTemplateInfo[];
 		}) => {
 			dispatch({
@@ -801,7 +809,23 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				providerName: state.providerName,
 				configured: state.configured,
 				templates: state.templates,
+				...(state.default === undefined ? {} : { default: state.default }),
 				other: state.other,
+			});
+		},
+		[],
+	);
+
+	/** Tell the user when a removal left new sandboxes on the provider default. */
+	const noteDefaultReset = useCallback(
+		(previous: string | undefined, name: string, next: TemplatesState | undefined) => {
+			if (previous !== name || next?.default !== undefined) return;
+			dispatch({
+				type: "notice/set",
+				notice: {
+					text: `Template ${name} was the default; new sandboxes will use the provider default.`,
+					tone: "info",
+				},
 			});
 		},
 		[],
@@ -864,13 +888,21 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	);
 
 	const removeTemplate = useCallback(
-		async (name: string) => await templateCommand(() => client.send({ type: "templates.remove", name })),
-		[templateCommand, client],
+		async (name: string) => {
+			const state = await templateCommand(() => client.send({ type: "templates.remove", name }));
+			noteDefaultReset(templatesDefault, name, state);
+			return state;
+		},
+		[templateCommand, client, noteDefaultReset, templatesDefault],
 	);
 
 	const deleteTemplate = useCallback(
-		async (name: string) => await templateCommand(() => client.send({ type: "templates.delete", name })),
-		[templateCommand, client],
+		async (name: string) => {
+			const state = await templateCommand(() => client.send({ type: "templates.delete", name }));
+			noteDefaultReset(templatesDefault, name, state);
+			return state;
+		},
+		[templateCommand, client, noteDefaultReset, templatesDefault],
 	);
 
 	const deleteProviderTemplate = useCallback(
@@ -949,6 +981,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			templatesProviderName: state.templatesProviderName,
 			templatesConfigured: state.templatesConfigured,
 			templates: state.templates,
+			...(state.templatesDefault === undefined ? {} : { templatesDefault: state.templatesDefault }),
 			templatesOther: state.templatesOther,
 			targetStatus: state.targetStatus,
 			...(state.activeSessionId === undefined ? {} : { activeSessionId: state.activeSessionId }),

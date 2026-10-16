@@ -1,4 +1,4 @@
-import type { TemplateInfo, TemplateRecipeInput, TemplatesState } from "@harness/protocol";
+import type { ProviderTemplateInfo, TemplateInfo, TemplateRecipeInput, TemplatesState } from "@harness/protocol";
 import {
 	CheckIcon,
 	FilePlusIcon,
@@ -44,10 +44,97 @@ function errorMessageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+/** The short name of a provider template name: the last path segment, without its tag. */
+export function templateShortName(name: string): string {
+	const colon = name.indexOf(":");
+	const withoutTag = colon === -1 ? name : name.slice(0, colon);
+	const slash = withoutTag.lastIndexOf("/");
+	return slash === -1 ? withoutTag : withoutTag.slice(slash + 1);
+}
+
+/**
+ * The template picker shared by the sandbox defaults and the new-sandbox flow. It only offers
+ * templates that can actually start a sandbox: ready or stale harness templates, the provider's
+ * own default, and any other template the provider knows about. Draft, building, failed, and
+ * missing templates stay on the Templates page, where their state is visible.
+ */
+export function buildTemplatePickerPage(options: {
+	idPrefix: string;
+	title?: string;
+	templates: TemplateInfo[];
+	other: ProviderTemplateInfo[];
+	/** The template that applies now; undefined is the provider default. */
+	current?: string;
+	/** `null` selects the provider default. */
+	select(template: string | null): void;
+}): CommandPage {
+	const pickable = options.templates.filter((template) => template.state === "ready" || template.state === "stale");
+	const known = new Set(options.templates.map((template) => template.name));
+	const others = options.other
+		.map((template) => ({ template, name: templateShortName(template.names[0] ?? template.templateId) }))
+		.filter((entry) => !known.has(entry.name));
+	return {
+		kind: "commands",
+		title: options.title ?? "Sandbox template",
+		placeholder: "Search templates…",
+		commands: [
+			{
+				id: `${options.idPrefix}.default`,
+				title: "Provider default",
+				group: "Base",
+				detail: `The ${options.current === undefined ? "current choice" : "provider's own image"}`,
+				icon: <TerminalIcon />,
+				current: options.current === undefined,
+				run: () => options.select(null),
+			},
+			...pickable.map(
+				(template): Command => ({
+					id: `${options.idPrefix}.template.${template.name}`,
+					title: template.name,
+					group: "Sandbox templates",
+					detail: `${stateLabel(template)}${template.description === undefined ? "" : ` · ${template.description}`}`,
+					icon: <LayersIcon />,
+					current: options.current === template.name,
+					run: () => options.select(template.name),
+				}),
+			),
+			...others.map(
+				(entry): Command => ({
+					id: `${options.idPrefix}.other.${entry.template.templateId}`,
+					title: entry.name,
+					group: "Other E2B templates",
+					detail: entry.template.buildStatus === undefined ? "in this E2B project" : `${entry.template.buildStatus} · in this E2B project`,
+					current: options.current === entry.name,
+					run: () => options.select(entry.name),
+				}),
+			),
+			{
+				id: `${options.idPrefix}.name`,
+				title: "Use a name…",
+				group: "Custom",
+				detail: "Any template in this E2B project",
+				icon: <SlidersIcon />,
+				run: ({ prompt }) =>
+					prompt({
+						title: "Template name",
+						placeholder: "my-template",
+						onSubmit: (value) => {
+							const name = value.trim();
+							if (name === "") return false;
+							options.select(name);
+						},
+					}),
+			},
+		],
+	};
+}
+
 /** The palette rows and flows for sandbox templates: create, edit, and build recipes. */
 export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 	const {
 		templates,
+		templatesDefault,
+		templatesOther,
 		templatesProviderName,
 		templatesConfigured,
 		refreshTemplates,
@@ -56,6 +143,10 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 		updateTemplate,
 		buildTemplate,
 		templateLogs,
+		removeTemplate,
+		deleteTemplate,
+		deleteProviderTemplate,
+		setSandboxSettings,
 	} = useHarness();
 	const { openPage } = useCommandPalette();
 
@@ -289,7 +380,50 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 		],
 	});
 
-	const templatePage = (template: TemplateInfo): CommandPage => ({
+	/** A confirmation page: one action and a way back. */
+	const confirmPage = (title: string, action: string, detail: string, run: () => void): CommandPage => ({
+		kind: "commands",
+		title,
+		placeholder: "Confirm…",
+		commands: [
+			{ id: "confirm.run", title: action, group: "Confirm", detail, icon: <TrashIcon />, run },
+			{ id: "confirm.cancel", title: "Cancel", group: "Confirm", run: () => {} },
+		],
+	});
+
+	/** A template the harness does not manage; only the provider knows about it. */
+	const otherTemplatePage = (template: ProviderTemplateInfo): CommandPage => {
+		const name = templateShortName(template.names[0] ?? template.templateId);
+		return {
+			kind: "commands",
+			title: name,
+			placeholder: "Actions…",
+			commands: [
+				{
+					id: "other.delete",
+					title: "Delete in E2B…",
+					group: "Danger",
+					detail: "Cannot be undone",
+					icon: <TrashIcon />,
+					run: ({ pushPage }) =>
+						pushPage(
+							confirmPage("Delete template", `Delete ${name} in E2B`, "Cannot be undone", () =>
+								void deleteProviderTemplate(template.templateId),
+							),
+						),
+				},
+				{
+					id: "other.back",
+					title: "Back to templates",
+					group: "Templates",
+					icon: <CheckIcon />,
+					run: ({ replacePage }) => replacePage(page()),
+				},
+			],
+		};
+	};
+
+	const templatePage = (template: TemplateInfo, isDefault = templatesDefault === template.name): CommandPage => ({
 		kind: "commands",
 		title: template.name,
 		placeholder: "Actions…",
@@ -360,6 +494,47 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 							run: () => {},
 						} satisfies Command,
 					]),
+			{
+				id: "template.default",
+				title: isDefault ? "Default template: on" : "Use as default",
+				group: "Templates",
+				detail: "New sandboxes start from it",
+				icon: <CheckIcon />,
+				current: isDefault,
+				when: () => template.state === "ready" || template.state === "stale",
+				keepOpen: true,
+				run: async ({ replacePage }) => {
+					replacePage(templatePage(template, true));
+					await setSandboxSettings({ template: template.name });
+				},
+			},
+			{
+				id: "template.remove",
+				title: "Remove from harness…",
+				group: "Danger",
+				detail: "Deletes the recipe and its build state; the E2B template stays",
+				icon: <TrashIcon />,
+				run: ({ pushPage }) =>
+					pushPage(
+						confirmPage("Remove template", `Remove ${template.name}`, "The E2B template stays", () =>
+							void removeTemplate(template.name),
+						),
+					),
+			},
+			{
+				id: "template.delete",
+				title: "Delete in E2B…",
+				group: "Danger",
+				detail: "Deletes the E2B template and the recipe; running sandboxes keep running",
+				icon: <TrashIcon />,
+				when: () => template.lastBuild?.templateId !== undefined,
+				run: ({ pushPage }) =>
+					pushPage(
+						confirmPage("Delete template", `Delete ${template.name} in E2B`, "Cannot be undone", () =>
+							void deleteTemplate(template.name),
+						),
+					),
+			},
 			{
 				id: "template.done",
 				title: "Back to templates",
@@ -454,11 +629,22 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 						id: `template.manage.${template.name}`,
 						title: template.name,
 						group: "Templates",
-						detail: `${stateLabel(template)}${template.description === undefined ? "" : ` · ${template.description}`}`,
+						detail: `${templatesDefault === template.name ? "default · " : ""}${stateLabel(template)}${template.description === undefined ? "" : ` · ${template.description}`}`,
 						icon: <TerminalIcon />,
+						current: templatesDefault === template.name,
 						run: ({ pushPage }) => pushPage(templatePage(template)),
 					}),
 				),
+				...templatesOther.map((template): Command => {
+					const name = templateShortName(template.names[0] ?? template.templateId);
+					return {
+						id: `template.other.${template.templateId}`,
+						title: name,
+						group: "Other E2B templates",
+						detail: template.buildStatus === undefined ? "in this E2B project" : template.buildStatus,
+						run: ({ pushPage }) => pushPage(otherTemplatePage(template)),
+					};
+				}),
 				{
 					id: "template.new",
 					title: "New template…",
