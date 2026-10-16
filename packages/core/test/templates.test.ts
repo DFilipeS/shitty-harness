@@ -89,11 +89,12 @@ describe("template recipes", () => {
 		expect(parseRecipe(serializeRecipe(recipe))).toEqual(recipe);
 	});
 
-	it("gives the starter recipe the common tools and Docker", () => {
+	it("gives the starter recipe the common tools, Docker, and mise", () => {
 		const commands = STARTER_RECIPE.run.join("\n");
 		expect(commands).toContain("websocat");
 		expect(commands).toContain("get.docker.com");
 		expect(commands).toContain("usermod -aG docker user");
+		expect(commands).toContain("mise.run");
 	});
 
 	it("normalizes names and rejects the rest", () => {

@@ -149,7 +149,7 @@ export function serializeRecipe(recipe: TemplateRecipe): string {
 export const STARTER_TEMPLATE_NAME = "harness-base";
 
 export const STARTER_RECIPE: TemplateRecipe = {
-	description: "E2B base plus common build tools, websocat, and Docker",
+	description: "E2B base plus common build tools, websocat, Docker, and mise",
 	source: { kind: "default" },
 	run: [
 		"apt-get update && apt-get install -y git curl ca-certificates build-essential jq unzip procps",
@@ -157,5 +157,7 @@ export const STARTER_RECIPE: TemplateRecipe = {
 		"curl -fsSL https://get.docker.com | sh",
 		"usermod -aG docker user",
 		"docker --version && docker compose version",
+		"curl -fsSL https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh",
+		"mise --version",
 	],
 };
