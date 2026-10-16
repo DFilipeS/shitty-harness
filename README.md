@@ -196,7 +196,8 @@ key, or set `E2B_API_KEY`. Then a session's target can be a **new sandbox** — 
 Git repository — or an **existing sandbox** created earlier, by this or another session.
 
 Sandboxes are created lazily on first use, auto-pause after the configured idle timeout, and are
-killed only when you kill them. They outlive their sessions: deleting a session never kills a
+killed only when you kill them. A running command renews the timeout, so a long build or test run
+is not cut off midway. They outlive their sessions: deleting a session never kills a
 sandbox, and any session can connect to one. **Manage sandboxes…** lists them with their state and
 lets you pause, resume, kill, and read metrics. When a sandbox is gone, tool calls fail with a
 clear error; the harness never falls back to running them on this machine.
