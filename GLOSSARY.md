@@ -86,6 +86,14 @@ _Avoid_: container, VM, remote machine
 A vendor that creates and manages sandboxes, such as E2B.
 _Avoid_: provider (unqualified), backend
 
+**Sandbox template**:
+A named environment the harness builds into an E2B template. New sandboxes can start from one.
+_Avoid_: image, base
+
+**Template recipe**:
+The file that describes how the harness builds a sandbox template: where it starts and the commands it runs.
+_Avoid_: definition, spec
+
 **Target**:
 Where a session's tools run: the local machine or a sandbox. A session can change its target between runs.
 _Avoid_: environment, host, runner
