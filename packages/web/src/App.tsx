@@ -13,12 +13,14 @@ import {
 	SlidersIcon,
 	SunIcon,
 	TerminalIcon,
+	WandIcon,
 } from "./components/icons.tsx";
 import { CommandPaletteProvider, useRegisterCommands, type Command } from "./lib/commands.tsx";
 import { relativeTime } from "./lib/format.ts";
 import { useProviderPalette } from "./lib/provider-commands.tsx";
 import { useSandboxesPalette } from "./lib/sandbox-commands.tsx";
 import { useDefaultsPalette } from "./lib/session-commands.tsx";
+import { useTemplatesPalette } from "./lib/template-commands.tsx";
 import { SHORTCUTS } from "./lib/shortcuts.ts";
 import { HarnessProvider, useHarness } from "./lib/store.tsx";
 import { ThemeProvider, useTheme } from "./lib/theme.tsx";
@@ -110,6 +112,7 @@ function useGlobalCommands(toggleSidebar: () => void) {
 	const providersPalette = useProviderPalette();
 	const defaultsPalette = useDefaultsPalette();
 	const sandboxesPalette = useSandboxesPalette();
+	const templatesPalette = useTemplatesPalette();
 
 	const commands: Command[] = [
 		{
@@ -165,6 +168,14 @@ function useGlobalCommands(toggleSidebar: () => void) {
 			keywords: ["sandbox", "e2b", "remote", "kill", "pause"],
 			icon: <TerminalIcon />,
 			run: ({ pushPage }) => pushPage(sandboxesPalette.page()),
+		},
+		{
+			id: "templates.open",
+			title: "Sandbox templates…",
+			group: "App",
+			keywords: ["template", "recipe", "build", "e2b", "environment", "image"],
+			icon: <WandIcon />,
+			run: ({ pushPage }) => pushPage(templatesPalette.page()),
 		},
 		{
 			id: "providers.refresh",

@@ -11,6 +11,7 @@ import type {
 	PromptAttachment,
 	ProviderInfo,
 	ProviderRefreshReport,
+	ProviderTemplateInfo,
 	SandboxChoice,
 	SandboxInfo,
 	SandboxMetricsInfo,
@@ -20,6 +21,10 @@ import type {
 	SnapshotEvent,
 	TargetChoice,
 	TargetStatus,
+	TemplateInfo,
+	TemplateRecipeInput,
+	TemplatesLogsResult,
+	TemplatesState,
 	UsageState,
 	WorkspacesBrowseResult,
 } from "@harness/protocol";
@@ -61,6 +66,11 @@ type State = {
 	sandboxProvider: string;
 	sandboxSettings?: SandboxSettingsInfo;
 	sandboxes: SandboxInfo[];
+	templatesProvider: string;
+	templatesProviderName: string;
+	templatesConfigured: boolean;
+	templates: TemplateInfo[];
+	templatesOther: ProviderTemplateInfo[];
 	targetStatus: Record<string, TargetStatus>;
 	activeSessionId?: string;
 	sessionsById: Record<string, SessionState>;
@@ -92,6 +102,14 @@ type Action =
 			settings: SandboxSettingsInfo;
 			sandboxes: SandboxInfo[];
 	  }
+	| {
+			type: "templates/set";
+			provider: string;
+			providerName: string;
+			configured: boolean;
+			templates: TemplateInfo[];
+			other: ProviderTemplateInfo[];
+	  }
 	| { type: "target/status"; status: TargetStatus }
 	| { type: "target/clear"; sessionId: string }
 	| { type: "session/activate"; id: string }
@@ -115,6 +133,11 @@ const initialState: State = {
 	defaults: {},
 	sandboxProvider: "e2b",
 	sandboxes: [],
+	templatesProvider: "e2b",
+	templatesProviderName: "E2B",
+	templatesConfigured: false,
+	templates: [],
+	templatesOther: [],
 	targetStatus: {},
 	sessionsById: {},
 };
@@ -228,6 +251,15 @@ function reducer(state: State, action: Action): State {
 				sandboxSettings: action.settings,
 				sandboxes: action.sandboxes,
 			};
+		case "templates/set":
+			return {
+				...state,
+				templatesProvider: action.provider,
+				templatesProviderName: action.providerName,
+				templatesConfigured: action.configured,
+				templates: action.templates,
+				templatesOther: action.other,
+			};
 		case "target/status":
 			return {
 				...state,
@@ -291,6 +323,11 @@ type HarnessContextValue = {
 	sandboxProvider: string;
 	sandboxSettings?: SandboxSettingsInfo;
 	sandboxes: SandboxInfo[];
+	templatesProvider: string;
+	templatesProviderName: string;
+	templatesConfigured: boolean;
+	templates: TemplateInfo[];
+	templatesOther: ProviderTemplateInfo[];
 	targetStatus: Record<string, TargetStatus>;
 	activeSessionId?: string;
 	activeSession?: SessionState;
@@ -324,6 +361,15 @@ type HarnessContextValue = {
 		forwardAgent?: boolean | null;
 	}): Promise<SandboxesState | undefined>;
 	sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined>;
+	refreshTemplates(): Promise<TemplatesState | undefined>;
+	createTemplate(name: string, recipe?: TemplateRecipeInput): Promise<TemplatesState | undefined>;
+	createStarterTemplate(): Promise<TemplatesState | undefined>;
+	updateTemplate(name: string, recipe: TemplateRecipeInput): Promise<TemplatesState | undefined>;
+	buildTemplate(name: string): Promise<TemplatesState | undefined>;
+	templateLogs(name: string): Promise<TemplatesLogsResult | undefined>;
+	removeTemplate(name: string): Promise<TemplatesState | undefined>;
+	deleteTemplate(name: string): Promise<TemplatesState | undefined>;
+	deleteProviderTemplate(templateId: string): Promise<TemplatesState | undefined>;
 	setDefaults(change: {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
@@ -359,6 +405,15 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				});
 			} else if (event.type === "session.target") {
 				dispatch({ type: "target/status", status: event.status });
+			} else if (event.type === "templates.changed") {
+				dispatch({
+					type: "templates/set",
+					provider: event.provider,
+					providerName: event.providerName,
+					configured: event.configured,
+					templates: event.templates,
+					other: event.other,
+				});
 			} else {
 				dispatch({
 					type: "providers/set",
@@ -382,10 +437,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		if (state.status !== "connected") return;
 		void (async () => {
 			try {
-				const [sessions, providers, sandboxes] = await Promise.all([
+				const [sessions, providers, sandboxes, templates] = await Promise.all([
 					client.send({ type: "sessions.list" }),
 					client.send({ type: "providers.list" }),
 					client.send({ type: "sandboxes.list" }),
+					client.send({ type: "templates.list" }),
 				]);
 				dispatch({ type: "sessions/set", sessions: sessions.sessions });
 				dispatch({
@@ -400,6 +456,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					provider: sandboxes.provider,
 					settings: sandboxes.settings,
 					sandboxes: sandboxes.sandboxes,
+				});
+				dispatch({
+					type: "templates/set",
+					provider: templates.provider,
+					providerName: templates.providerName,
+					configured: templates.configured,
+					templates: templates.templates,
+					other: templates.other,
 				});
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
@@ -723,6 +787,98 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		[client],
 	);
 
+	const applyTemplates = useCallback(
+		(state: {
+			provider: string;
+			providerName: string;
+			configured: boolean;
+			templates: TemplateInfo[];
+			other: ProviderTemplateInfo[];
+		}) => {
+			dispatch({
+				type: "templates/set",
+				provider: state.provider,
+				providerName: state.providerName,
+				configured: state.configured,
+				templates: state.templates,
+				other: state.other,
+			});
+		},
+		[],
+	);
+
+	/** Run a template command that returns the whole list, reporting failures as a toast. */
+	const templateCommand = useCallback(
+		async (send: () => Promise<TemplatesState>): Promise<TemplatesState | undefined> => {
+			try {
+				const state = await send();
+				applyTemplates(state);
+				return state;
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
+			}
+		},
+		[applyTemplates],
+	);
+
+	const refreshTemplates = useCallback(
+		async () => await templateCommand(() => client.send({ type: "templates.list" })),
+		[templateCommand, client],
+	);
+
+	const createTemplate = useCallback(
+		async (name: string, recipe?: TemplateRecipeInput) =>
+			await templateCommand(() =>
+				client.send({ type: "templates.create", name, ...(recipe === undefined ? {} : { recipe }) }),
+			),
+		[templateCommand, client],
+	);
+
+	const createStarterTemplate = useCallback(
+		async () => await templateCommand(() => client.send({ type: "templates.createStarter" })),
+		[templateCommand, client],
+	);
+
+	const updateTemplate = useCallback(
+		async (name: string, recipe: TemplateRecipeInput) =>
+			await templateCommand(() => client.send({ type: "templates.update", name, recipe })),
+		[templateCommand, client],
+	);
+
+	const buildTemplate = useCallback(
+		async (name: string) => await templateCommand(() => client.send({ type: "templates.build", name })),
+		[templateCommand, client],
+	);
+
+	const templateLogs = useCallback(
+		async (name: string) => {
+			try {
+				return await client.send({ type: "templates.logs", name });
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
+			}
+		},
+		[client],
+	);
+
+	const removeTemplate = useCallback(
+		async (name: string) => await templateCommand(() => client.send({ type: "templates.remove", name })),
+		[templateCommand, client],
+	);
+
+	const deleteTemplate = useCallback(
+		async (name: string) => await templateCommand(() => client.send({ type: "templates.delete", name })),
+		[templateCommand, client],
+	);
+
+	const deleteProviderTemplate = useCallback(
+		async (templateId: string) =>
+			await templateCommand(() => client.send({ type: "templates.deleteProvider", templateId })),
+		[templateCommand, client],
+	);
+
 	const browseWorkspaces = useCallback(
 		async (path?: string) =>
 			client.send({ type: "workspaces.browse", ...(path === undefined ? {} : { path }) }),
@@ -789,6 +945,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			sandboxProvider: state.sandboxProvider,
 			...(state.sandboxSettings === undefined ? {} : { sandboxSettings: state.sandboxSettings }),
 			sandboxes: state.sandboxes,
+			templatesProvider: state.templatesProvider,
+			templatesProviderName: state.templatesProviderName,
+			templatesConfigured: state.templatesConfigured,
+			templates: state.templates,
+			templatesOther: state.templatesOther,
 			targetStatus: state.targetStatus,
 			...(state.activeSessionId === undefined ? {} : { activeSessionId: state.activeSessionId }),
 			...(state.activeSessionId === undefined || state.sessionsById[state.activeSessionId] === undefined
@@ -817,6 +978,15 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureSandbox,
 			setSandboxSettings,
 			sandboxMetrics,
+			refreshTemplates,
+			createTemplate,
+			createStarterTemplate,
+			updateTemplate,
+			buildTemplate,
+			templateLogs,
+			removeTemplate,
+			deleteTemplate,
+			deleteProviderTemplate,
 			setDefaults,
 			refreshProviders,
 			clearError: () => dispatch({ type: "error/clear" }),
@@ -845,6 +1015,15 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureSandbox,
 			setSandboxSettings,
 			sandboxMetrics,
+			refreshTemplates,
+			createTemplate,
+			createStarterTemplate,
+			updateTemplate,
+			buildTemplate,
+			templateLogs,
+			removeTemplate,
+			deleteTemplate,
+			deleteProviderTemplate,
 			setDefaults,
 			refreshProviders,
 			clearNotice,

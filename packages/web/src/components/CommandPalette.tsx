@@ -28,6 +28,9 @@ type State = {
 	selected: number;
 	prompt?: PromptOptions;
 	promptValue: string;
+	/** Lines shown by a log page, and whether the stream has ended. */
+	logLines: string[];
+	logDone: boolean;
 	/**
 	 * Bumped whenever the user moves to another page. A command that replaces its page after an
 	 * await checks it, so a late answer cannot overwrite a page the user opened meanwhile.
@@ -35,7 +38,7 @@ type State = {
 	generation: number;
 };
 
-const EMPTY: State = { pages: [], query: "", selected: 0, promptValue: "", generation: 0 };
+const EMPTY: State = { pages: [], query: "", selected: 0, promptValue: "", logLines: [], logDone: false, generation: 0 };
 
 /** Ranks a command against the query. Lower is better; undefined means no match. */
 function score(command: Command, query: string): number | undefined {
@@ -111,7 +114,7 @@ export function CommandPalette({
 	// Snapshot the registered commands and reset the search each time the palette opens.
 	useLayoutEffect(() => {
 		if (!open) return;
-		setState((current) => ({
+			setState((current) => ({
 			pages: [
 				initial.kind === "shortcuts"
 					? { kind: "shortcuts", title: "Keyboard shortcuts" }
@@ -121,6 +124,8 @@ export function CommandPalette({
 			],
 			query: "",
 			selected: 0,
+			logLines: [],
+			logDone: false,
 			// Reopening the palette is a fresh start: a command from the last visit can no longer navigate.
 			generation: current.generation + 1,
 			...(initial.kind === "prompt"
@@ -138,6 +143,36 @@ export function CommandPalette({
 	}, [open, state.prompt]);
 
 	const page = state.pages[state.pages.length - 1];
+
+	// A log page follows its stream: it polls until the stream is done, then stops.
+	useEffect(() => {
+		if (!open || page?.kind !== "log") return;
+		let cancelled = false;
+		let timer: ReturnType<typeof setInterval> | undefined;
+		const load = async () => {
+			try {
+				const chunk = await page.load();
+				if (cancelled) return;
+				setState((current) => ({ ...current, logLines: chunk.lines, logDone: chunk.done }));
+				if (chunk.done && timer !== undefined) clearInterval(timer);
+			} catch (error) {
+				if (cancelled) return;
+				if (timer !== undefined) clearInterval(timer);
+				setState((current) => ({
+					...current,
+					logLines: [...current.logLines, error instanceof Error ? error.message : String(error)],
+					logDone: true,
+				}));
+			}
+		};
+		setState((current) => ({ ...current, logLines: [], logDone: false }));
+		void load();
+		timer = setInterval(() => void load(), 1_000);
+		return () => {
+			cancelled = true;
+			if (timer !== undefined) clearInterval(timer);
+		};
+	}, [open, page]);
 
 	// A loading page fetches its commands and replaces itself in place.
 	useEffect(() => {
@@ -374,6 +409,21 @@ export function CommandPalette({
 
 					{page?.kind === "loading" && (
 						<p className="px-3 py-8 text-center text-xs text-fg-subtle">Loading…</p>
+					)}
+
+					{page?.kind === "log" && (
+						<div className="px-3 py-2">
+							<p className="pb-2 text-[11px] text-fg-faint">
+								{state.logDone ? "Build finished." : "Building…"}
+							</p>
+							{state.logLines.length === 0 ? (
+								<p className="py-6 text-center text-xs text-fg-subtle">No build output yet.</p>
+							) : (
+								<pre className="max-h-[50vh] overflow-y-auto overscroll-contain rounded-lg bg-surface p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-fg-soft">
+									{state.logLines.join("\n")}
+								</pre>
+							)}
+						</div>
 					)}
 
 					{state.prompt === undefined &&

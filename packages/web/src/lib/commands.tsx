@@ -50,7 +50,15 @@ export type CommandPage =
 	| { kind: "commands"; title: string; placeholder?: string; commands: Command[] }
 	| { kind: "shortcuts"; title: string }
 	/** A page that fetches its commands, e.g. a folder listing; the palette replaces it once it loads. */
-	| { kind: "loading"; title: string; load(): Promise<CommandPage> };
+	| { kind: "loading"; title: string; load(): Promise<CommandPage> }
+	/** A page that follows a live stream of lines, e.g. a template build. Polls until `done`. */
+	| { kind: "log"; title: string; load(): Promise<LogChunk> };
+
+export type LogChunk = {
+	lines: string[];
+	/** True when no more lines will arrive. */
+	done: boolean;
+};
 
 export type PromptOptions = {
 	title: string;
