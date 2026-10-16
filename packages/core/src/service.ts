@@ -43,6 +43,9 @@ import type {
 	TargetChoice,
 	TargetInfo,
 	TargetStatus,
+	TemplateRecipeInput,
+	TemplatesLogsResult,
+	TemplatesState,
 	WorkspacesBrowseResult,
 } from "@harness/protocol";
 import type { EnvironmentFactory } from "./environment.ts";
@@ -56,6 +59,8 @@ import {
 	DEFAULT_SANDBOX_WORKSPACE,
 	type SandboxSettings,
 } from "./sandboxes/settings.ts";
+import { normalizeRecipe } from "./sandboxes/recipe.ts";
+import type { TemplateManager } from "./sandboxes/templates.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 import {
 	createTargetSection,
@@ -101,11 +106,12 @@ type SessionAgentChange = {
 
 export { ServiceError };
 
-/** Provider, session-list, sandbox, and target changes the server forwards to every client. */
+/** Provider, session-list, sandbox, template, and target changes the server forwards to every client. */
 export type ServiceEvent =
 	| { type: "sessions"; sessions: SessionSummary[] }
 	| { type: "target"; status: TargetStatus }
 	| ({ type: "sandboxes" } & SandboxesState)
+	| ({ type: "templates" } & TemplatesState)
 	| ({ type: "providers" } & ProvidersState);
 
 export type ProvidersState = {
@@ -124,6 +130,8 @@ export type HarnessServiceDependencies = {
 	workspacesDir?: string;
 	/** Sandbox providers and their per-session environments. */
 	sandboxes?: SandboxManager;
+	/** Sandbox template recipes, their builds, and their state. */
+	templates?: TemplateManager;
 };
 
 /** The protocol view of a resolved target. */
@@ -209,6 +217,7 @@ export class HarnessService {
 	readonly #environment: EnvironmentFactory | undefined;
 	readonly #workspacesDir: string | undefined;
 	readonly #sandboxes: SandboxManager | undefined;
+	readonly #templates: TemplateManager | undefined;
 	/** Live session event streams, one per `subscribeSession` caller. */
 	readonly #streams = new Set<AgentEventStream>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
@@ -223,12 +232,14 @@ export class HarnessService {
 		environment: EnvironmentFactory | undefined,
 		workspacesDir: string | undefined,
 		sandboxes: SandboxManager | undefined,
+		templates: TemplateManager | undefined,
 	) {
 		this.#harness = harness;
 		this.#providers = providers;
 		this.#environment = environment;
 		this.#workspacesDir = workspacesDir;
 		this.#sandboxes = sandboxes;
+		this.#templates = templates;
 	}
 
 	/**
@@ -304,7 +315,13 @@ export class HarnessService {
 			environment,
 			dependencies.workspacesDir,
 			dependencies.sandboxes,
+			dependencies.templates,
 		);
+		if (dependencies.templates !== undefined) {
+			dependencies.templates.onChanged = () => {
+				void service.#emitTemplates();
+			};
+		}
 		if (dependencies.sandboxes !== undefined) {
 			dependencies.sandboxes.rememberSandboxId = async (conversationId, sandboxId) => {
 				await harness.commit(async (tx) => {
@@ -338,6 +355,12 @@ export class HarnessService {
 
 	async #emitSessions(): Promise<void> {
 		this.#emit({ type: "sessions", sessions: await this.listSessions() });
+	}
+
+	/** Announce the template list after a recipe, build, or provider change. */
+	async #emitTemplates(): Promise<void> {
+		if (this.#templates === undefined) return;
+		this.#emit({ type: "templates", ...(await this.#templates.list()) });
 	}
 
 	/** Lists once, announces the result to every client, and returns the same state to the caller. */
@@ -762,6 +785,67 @@ export class HarnessService {
 			throw new ServiceError("sandbox_unavailable", "Sandboxes are not configured");
 		}
 		return this.#sandboxes;
+	}
+
+	/** Every sandbox template the harness manages, merged with the provider's own list. */
+	async listTemplates(): Promise<TemplatesState> {
+		return await this.#requireTemplates().list();
+	}
+
+	async createTemplate(name: string, recipe: TemplateRecipeInput | undefined): Promise<TemplatesState> {
+		await this.#requireTemplates().create(name, normalizeRecipe(recipe ?? {}));
+		return await this.#listAndEmitTemplates();
+	}
+
+	/** Create the starter template the Templates page offers. */
+	async createStarterTemplate(): Promise<TemplatesState> {
+		await this.#requireTemplates().createStarter();
+		return await this.#listAndEmitTemplates();
+	}
+
+	async updateTemplate(name: string, recipe: TemplateRecipeInput): Promise<TemplatesState> {
+		await this.#requireTemplates().update(name, normalizeRecipe(recipe));
+		return await this.#listAndEmitTemplates();
+	}
+
+	/** Queue a background build; the state the caller gets back already shows it. */
+	async buildTemplate(name: string): Promise<TemplatesState> {
+		await this.#requireTemplates().startBuild(name);
+		return await this.#listAndEmitTemplates();
+	}
+
+	async templateLogs(name: string): Promise<TemplatesLogsResult> {
+		return await this.#requireTemplates().logs(name);
+	}
+
+	/** Forget a template in the harness; the provider's template stays. */
+	async removeTemplate(name: string): Promise<TemplatesState> {
+		await this.#requireTemplates().remove(name);
+		return await this.#listAndEmitTemplates();
+	}
+
+	/** Delete a template the harness manages, in the provider first. */
+	async deleteTemplate(name: string): Promise<TemplatesState> {
+		await this.#requireTemplates().deleteTemplate(name);
+		return await this.#listAndEmitTemplates();
+	}
+
+	async deleteProviderTemplate(templateId: string): Promise<TemplatesState> {
+		await this.#requireTemplates().deleteProviderTemplate(templateId);
+		return await this.#listAndEmitTemplates();
+	}
+
+	async #listAndEmitTemplates(): Promise<TemplatesState> {
+		const state = await this.#requireTemplates().list();
+		this.#emit({ type: "templates", ...state });
+		return state;
+	}
+
+	#requireTemplates(): TemplateManager {
+		if (this.#templates === undefined) {
+			throw new ServiceError("sandbox_unavailable", "Sandbox templates are not configured");
+		}
+		return this.#templates;
 	}
 
 	/** List the directories under `path` for the local folder picker; defaults to the home directory. */

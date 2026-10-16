@@ -21,6 +21,7 @@ export {
 } from "./sandboxes/manager.ts";
 export {
 	SandboxError,
+	type ProviderTemplate,
 	type SandboxErrorCode,
 	type SandboxExecOptions,
 	type SandboxFileInfo,
@@ -33,6 +34,9 @@ export {
 	type SandboxSource,
 	type SandboxSpec,
 	type SandboxState,
+	type TemplateBuildResult,
+	type TemplateBuildSource,
+	type TemplateBuildSpec,
 } from "./sandboxes/provider.ts";
 export {
 	createSandboxProvider,
@@ -47,6 +51,28 @@ export {
 	type SandboxSettingsChange,
 	type SandboxSettingsStore,
 } from "./sandboxes/settings.ts";
+export {
+	normalizeRecipe,
+	parseRecipe,
+	serializeRecipe,
+	STARTER_RECIPE,
+	STARTER_TEMPLATE_NAME,
+	templateName,
+	type TemplateRecipe,
+	type TemplateRecipeInput,
+	type TemplateSource,
+} from "./sandboxes/recipe.ts";
+export {
+	TemplateManager,
+	TemplateStore,
+	type TemplateBuildState,
+	type TemplateBuildStatus,
+	type TemplateInfo,
+	type TemplateLogs,
+	type TemplateManagerOptions,
+	type TemplateState,
+	type TemplatesState,
+} from "./sandboxes/templates.ts";
 export {
 	createTargetSection,
 	resolveTarget,

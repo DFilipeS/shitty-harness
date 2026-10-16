@@ -7,6 +7,7 @@ import { lazyEnvironment, type EnvironmentFactory } from "./environment.ts";
 import { ProviderManager } from "./providers.ts";
 import "./sandboxes/e2b/index.ts";
 import { SandboxManager } from "./sandboxes/manager.ts";
+import { TemplateManager, TemplateStore } from "./sandboxes/templates.ts";
 import { HarnessService } from "./service.ts";
 
 export type OpenHarnessServiceOptions = {
@@ -44,6 +45,15 @@ export async function openHarnessService(options: OpenHarnessServiceOptions): Pr
 	const storage = await openNodeSqliteStorage(join(dataDir, "sessions.sqlite"));
 	const environment = options.environment ?? localEnvironment();
 	const sandboxes = new SandboxManager({ store: providers, stateDir: join(dataDir, "sandboxes") });
+	const templates = new TemplateManager({
+		store: new TemplateStore(join(dataDir, "templates")),
+		provider: () => sandboxes.provider(),
+		configured: () => sandboxes.configured(),
+		identity: () => {
+			const id = sandboxes.settings.provider;
+			return { id, displayName: sandboxes.displayName(id) };
+		},
+	});
 
 	return HarnessService.create({
 		storage,
@@ -51,5 +61,6 @@ export async function openHarnessService(options: OpenHarnessServiceOptions): Pr
 		environment,
 		workspacesDir: join(dataDir, "workspaces"),
 		sandboxes,
+		templates,
 	});
 }

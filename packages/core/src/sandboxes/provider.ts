@@ -82,6 +82,40 @@ export interface AgentForwarding {
 	close(): Promise<void>;
 }
 
+/** Where a template build starts. */
+export type TemplateBuildSource =
+	| { kind: "default" }
+	| { kind: "template"; name: string }
+	| { kind: "image"; image: string };
+
+export type TemplateBuildSpec = {
+	/** Provider template name; the recipe's directory name. */
+	name: string;
+	source: TemplateBuildSource;
+	/** Commands to run during the build, in order, as root. */
+	run: string[];
+};
+
+export type TemplateBuildResult = {
+	templateId: string;
+	buildId: string;
+};
+
+/** A template the provider knows about, whether or not the harness manages it. */
+export type ProviderTemplate = {
+	/** Provider names, e.g. `project-slug/name` when namespaced. */
+	names: string[];
+	templateId: string;
+	buildId?: string;
+	buildStatus?: string;
+	/** Milliseconds since the epoch. */
+	createdAt?: number;
+	updatedAt?: number;
+	lastSpawnedAt?: number;
+	spawnCount?: number;
+	public?: boolean;
+};
+
 export interface SandboxHandle {
 	readonly id: string;
 	readonly provider: string;
@@ -135,6 +169,13 @@ export interface SandboxProvider {
 	connect(id: string, options?: SandboxConnectOptions): Promise<SandboxHandle>;
 	list(filter?: { labels?: Record<string, string> }): Promise<SandboxInfo[]>;
 	kill(id: string): Promise<void>;
+
+	/** Optional. Build a template; resolves when the build finishes, streaming log lines as it runs. */
+	buildTemplate?(spec: TemplateBuildSpec, onLog: (line: string) => void): Promise<TemplateBuildResult>;
+	/** Optional. Templates the provider knows about. */
+	listTemplates?(): Promise<ProviderTemplate[]>;
+	/** Optional. Delete a template by its provider id. */
+	deleteTemplate?(templateId: string): Promise<void>;
 }
 
 export type SandboxErrorCode =

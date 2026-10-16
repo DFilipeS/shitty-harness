@@ -236,6 +236,11 @@ export class SandboxManager {
 		return sandboxProviderFactory(providerId).displayName;
 	}
 
+	/** The configured provider, with its credentials; shared with the template manager. */
+	provider(): SandboxProvider {
+		return this.#provider(this.settings.provider);
+	}
+
 	/** Whether the configured provider has a usable credential. */
 	configured(): boolean {
 		const settings = this.settings;

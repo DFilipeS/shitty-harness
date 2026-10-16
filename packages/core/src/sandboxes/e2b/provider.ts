@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import {
 	SandboxError,
 	type AgentForwarding,
+	type ProviderTemplate,
 	type SandboxConnectOptions,
 	type SandboxExecOptions,
 	type SandboxFileInfo,
@@ -16,6 +17,8 @@ import {
 	type SandboxProviderConfig,
 	type SandboxProviderFactory,
 	type SandboxSpec,
+	type TemplateBuildResult,
+	type TemplateBuildSpec,
 } from "../provider.ts";
 import { shellQuote } from "../shell.ts";
 
@@ -27,6 +30,10 @@ const WEBSOCAT_PORT = 8081;
 const AGENT_SOCKET = "/tmp/harness-agent.sock";
 const WEBSOCAT_BASE_URL = "https://github.com/vi/websocat/releases/latest/download";
 const WS_PROXY_PATH = fileURLToPath(new URL("./ws-proxy.mjs", import.meta.url));
+/** How often a running template build is polled for status and new log lines. */
+const BUILD_POLL_MS = 1_000;
+/** Cap the REST template listing so a bad cursor cannot loop forever. */
+const MAX_TEMPLATE_PAGES = 20;
 
 /** The `e2b` module, loaded only when a sandbox is actually used. */
 function importSdk() {
@@ -69,6 +76,47 @@ function fileKind(type: string | undefined): SandboxFileInfo["kind"] {
 	if (type === "dir") return "directory";
 	if (type === "symlink") return "symlink";
 	return "file";
+}
+
+/** Base URL for the REST endpoints the SDK does not expose; `E2B_API_URL` overrides it in tests. */
+function restBaseUrl(): string {
+	return process.env.E2B_API_URL ?? `https://api.${process.env.E2B_DOMAIN ?? "e2b.dev"}`;
+}
+
+function restHeaders(apiKey: string | undefined): Record<string, string> {
+	return {
+		"content-type": "application/json",
+		...(apiKey === undefined || apiKey === "" ? {} : { "X-API-KEY": apiKey }),
+	};
+}
+
+function timeOf(value: unknown): number | undefined {
+	if (typeof value !== "string") return undefined;
+	const time = Date.parse(value);
+	return Number.isNaN(time) ? undefined : time;
+}
+
+/** One item of `GET /v2/templates`, defensively parsed. */
+function providerTemplateOf(value: unknown): ProviderTemplate | undefined {
+	if (typeof value !== "object" || value === null) return undefined;
+	const item = value as Record<string, unknown>;
+	const templateId = typeof item.templateID === "string" ? item.templateID : undefined;
+	if (templateId === undefined || templateId === "") return undefined;
+	const template: ProviderTemplate = {
+		templateId,
+		names: Array.isArray(item.names) ? item.names.filter((name): name is string => typeof name === "string") : [],
+	};
+	if (typeof item.buildID === "string") template.buildId = item.buildID;
+	if (typeof item.buildStatus === "string") template.buildStatus = item.buildStatus;
+	const createdAt = timeOf(item.createdAt);
+	if (createdAt !== undefined) template.createdAt = createdAt;
+	const updatedAt = timeOf(item.updatedAt);
+	if (updatedAt !== undefined) template.updatedAt = updatedAt;
+	const lastSpawnedAt = timeOf(item.lastSpawnedAt);
+	if (lastSpawnedAt !== undefined) template.lastSpawnedAt = lastSpawnedAt;
+	if (typeof item.spawnCount === "number") template.spawnCount = item.spawnCount;
+	if (typeof item.public === "boolean") template.public = item.public;
+	return template;
 }
 
 interface RawResult {
@@ -569,6 +617,100 @@ class E2BProvider implements SandboxProvider {
 			});
 		} catch (error) {
 			throw mapError(error);
+		}
+	}
+
+	/**
+	 * Build a template in the background and wait for it, streaming the build's log lines. The
+	 * build is not tied to the caller; a server restart loses the stream, and E2B keeps building.
+	 */
+	async buildTemplate(spec: TemplateBuildSpec, onLog: (line: string) => void): Promise<TemplateBuildResult> {
+		const { Template } = await loadSdk();
+		try {
+			const builder =
+				spec.source.kind === "image"
+					? Template().fromImage(spec.source.image)
+					: spec.source.kind === "template"
+						? Template().fromTemplate(spec.source.name)
+						: Template().fromBaseImage();
+			let template = builder;
+			for (const command of spec.run) template = template.runCmd(command);
+			const info = await Template.buildInBackground(template, spec.name, {
+				...(this.#credentials.apiKey === undefined ? {} : { apiKey: this.#credentials.apiKey }),
+				cpuCount: 2,
+				memoryMB: 2048,
+			});
+			let offset = 0;
+			for (;;) {
+				const status = await Template.getBuildStatus(
+					{ templateId: info.templateId, buildId: info.buildId },
+					{
+						...(this.#credentials.apiKey === undefined ? {} : { apiKey: this.#credentials.apiKey }),
+						logsOffset: offset,
+					},
+				);
+				for (const entry of status.logEntries ?? []) onLog(entry.message);
+				offset += status.logEntries?.length ?? 0;
+				if (status.status === "ready") return { templateId: info.templateId, buildId: info.buildId };
+				if (status.status === "error") {
+					throw new SandboxError("unknown", status.reason?.message ?? "The template build failed");
+				}
+				await new Promise((resolve) => setTimeout(resolve, BUILD_POLL_MS));
+			}
+		} catch (error) {
+			throw mapError(error);
+		}
+	}
+
+	async listTemplates(): Promise<ProviderTemplate[]> {
+		const headers = restHeaders(this.#credentials.apiKey);
+		const templates: ProviderTemplate[] = [];
+		let nextToken: string | undefined;
+		for (let page = 0; page < MAX_TEMPLATE_PAGES; page += 1) {
+			const url = new URL(`${restBaseUrl()}/v2/templates`);
+			if (nextToken !== undefined) url.searchParams.set("nextToken", nextToken);
+			let response: Response;
+			try {
+				response = await fetch(url, { headers });
+			} catch (error) {
+				throw mapError(error);
+			}
+			if (!response.ok) {
+				throw new SandboxError(
+					response.status === 401 || response.status === 403 ? "auth" : "unknown",
+					`Listing templates failed with status ${response.status}`,
+				);
+			}
+			const items = (await response.json()) as unknown;
+			if (Array.isArray(items)) {
+				for (const item of items) {
+					const template = providerTemplateOf(item);
+					if (template !== undefined) templates.push(template);
+				}
+			}
+			const token = response.headers.get("x-next-token");
+			if (token === null || token === "") break;
+			nextToken = token;
+		}
+		return templates;
+	}
+
+	async deleteTemplate(templateId: string): Promise<void> {
+		let response: Response;
+		try {
+			response = await fetch(`${restBaseUrl()}/templates/${encodeURIComponent(templateId)}`, {
+				method: "DELETE",
+				headers: restHeaders(this.#credentials.apiKey),
+			});
+		} catch (error) {
+			throw mapError(error);
+		}
+		if (response.status === 404) return;
+		if (!response.ok) {
+			throw new SandboxError(
+				response.status === 401 || response.status === 403 ? "auth" : "unknown",
+				`Deleting the template failed with status ${response.status}`,
+			);
 		}
 	}
 }
