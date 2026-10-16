@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { CommandPage } from "../src/lib/commands.tsx";
+import type { CommandContext, CommandPage } from "../src/lib/commands.tsx";
 import { buildFolderPage, targetLabel } from "../src/lib/target-commands.tsx";
 
 const emptyPage = (): CommandPage => ({ kind: "commands", title: "Empty", commands: [] });
+
+const context = (overrides: Partial<CommandContext> = {}): CommandContext => ({
+	pushPage: () => {},
+	replacePage: () => {},
+	prompt: () => {},
+	close: () => {},
+	...overrides,
+});
 
 describe("targetLabel", () => {
 	it("names the scratch directory and shows folder paths", () => {
@@ -54,7 +62,7 @@ describe("buildFolderPage", () => {
 		let chosen: string | undefined;
 		const page = buildFolderPage(listing, emptyPage, (path) => (chosen = path), async () => undefined);
 		if (page.kind !== "commands") throw new Error("expected a command page");
-		page.commands[0]?.run({ pushPage: () => {}, prompt: () => {}, close: () => {} });
+		page.commands[0]?.run(context());
 		expect(chosen).toBe("/Users/me");
 	});
 
@@ -62,7 +70,7 @@ describe("buildFolderPage", () => {
 		let pushed: CommandPage | undefined;
 		const page = buildFolderPage(listing, (path) => ({ kind: "loading", title: path, load: async () => emptyPage() }), () => {}, async () => undefined);
 		if (page.kind !== "commands") throw new Error("expected a command page");
-		page.commands[2]?.run({ pushPage: (next) => (pushed = next), prompt: () => {}, close: () => {} });
+		page.commands[2]?.run(context({ pushPage: (next) => (pushed = next) }));
 		expect(pushed?.kind).toBe("loading");
 	});
 
@@ -81,11 +89,7 @@ describe("buildFolderPage", () => {
 		if (page.kind !== "commands") throw new Error("expected a command page");
 		const newFolder = page.commands[page.commands.length - 1];
 		let submitted: ((value: string) => boolean | void | Promise<boolean | void>) | undefined;
-		newFolder?.run({
-			pushPage: () => {},
-			prompt: (options) => (submitted = options.onSubmit),
-			close: () => {},
-		});
+		newFolder?.run(context({ prompt: (options) => (submitted = options.onSubmit) }));
 		await submitted?.("project");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(requested).toEqual({ parent: "/Users/me", name: "project" });

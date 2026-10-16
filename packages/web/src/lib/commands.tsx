@@ -24,6 +24,11 @@ export type Command = {
 	/** Marks the row as the current choice, e.g. the active model. */
 	current?: boolean;
 	/**
+	 * Keeps the palette open after the command runs, e.g. a toggle whose row updates in place, or a
+	 * command that replaces its page after an await.
+	 */
+	keepOpen?: boolean;
+	/**
 	 * Runs the command. Navigation (`pushPage`/`prompt`) must happen synchronously: the palette
 	 * closes itself when the command does neither.
 	 */
@@ -33,6 +38,8 @@ export type Command = {
 export type CommandContext = {
 	/** Replaces the palette list with a nested page, e.g. a list of models. */
 	pushPage(page: CommandPage): void;
+	/** Rebuilds the current page in place, e.g. after a toggle changed its rows. */
+	replacePage(page: CommandPage): void;
 	/** Asks for one line of text, e.g. a session name. */
 	prompt(options: PromptOptions): void;
 	/** Closes the palette. */
@@ -51,6 +58,11 @@ export type PromptOptions = {
 	placeholder?: string;
 	/** Masks the input, e.g. for API keys. */
 	secret?: boolean;
+	/**
+	 * After submit, returns to the page the prompt was opened from instead of closing the palette.
+	 * Use it for prompts that change a setting the page shows.
+	 */
+	returnToPage?: boolean;
 	/** Return `false` to keep the palette open, e.g. when the value is empty. */
 	onSubmit(value: string): boolean | void | Promise<boolean | void>;
 };
@@ -207,6 +219,7 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 			event.preventDefault();
 			void command.run({
 				pushPage: (page) => controls.openPage(page),
+				replacePage: (page) => controls.openPage(page),
 				prompt: (options) => controls.openPrompt(options),
 				close: () => undefined,
 			});

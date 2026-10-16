@@ -196,6 +196,8 @@ export function CommandPalette({
 
 	const runCommand = (command: Command) => {
 		let navigated = false;
+		// The page the command runs on; a later replacePage must not clobber a page the user moved to.
+		const pageAtRun = state.pages[state.pages.length - 1];
 		const context: CommandContext = {
 			pushPage: (next) => {
 				navigated = true;
@@ -207,6 +209,15 @@ export function CommandPalette({
 					prompt: undefined,
 					promptValue: "",
 				}));
+			},
+			replacePage: (next) => {
+				navigated = true;
+				setState((current) => {
+					if (current.pages[current.pages.length - 1] !== pageAtRun) return current;
+					const pages = [...current.pages];
+					pages[pages.length - 1] = next;
+					return { ...current, pages };
+				});
 			},
 			prompt: (options) => {
 				navigated = true;
@@ -220,7 +231,7 @@ export function CommandPalette({
 			close: onClose,
 		};
 		void command.run(context);
-		if (!navigated) onClose();
+		if (!navigated && command.keepOpen !== true) onClose();
 	};
 
 	const goBack = () => {
@@ -240,6 +251,10 @@ export function CommandPalette({
 		if (prompt === undefined) return;
 		const result = prompt.onSubmit(state.promptValue);
 		if (result === false) return;
+		if (prompt.returnToPage === true) {
+			setState((current) => ({ ...current, prompt: undefined, promptValue: "", selected: 0 }));
+			return;
+		}
 		onClose();
 	};
 
