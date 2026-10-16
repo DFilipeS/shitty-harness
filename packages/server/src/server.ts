@@ -60,7 +60,6 @@ const COMMAND_TYPES = new Set<string>([
 	"sandboxes.resume",
 	"sandboxes.kill",
 	"sandboxes.metrics",
-	"sandboxes.build",
 	"sandboxes.configure",
 	"sandboxes.settings",
 	"providers.list",
@@ -400,9 +399,6 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 						),
 					},
 				};
-			}
-			case "sandboxes.build": {
-				return { data: await service.buildSandboxTemplate() };
 			}
 			case "sandboxes.configure": {
 				const provider = requireString(command.provider, "provider");

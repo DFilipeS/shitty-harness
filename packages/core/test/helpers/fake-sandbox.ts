@@ -181,24 +181,6 @@ export class FakeSandboxProvider implements SandboxProvider {
 	readonly capabilities = { pauseResume: true, metrics: true, agentForwarding: true };
 	readonly #sandboxes = new Map<string, FakeSandboxHandle>();
 	#nextId = 1;
-	#builtTemplate: string | undefined;
-	#buildCount = 0;
-
-	/** The template name the provider built, for tests. */
-	get builtTemplate(): string | undefined {
-		return this.#builtTemplate;
-	}
-
-	/** How many template builds were requested, for tests. */
-	get buildCount(): number {
-		return this.#buildCount;
-	}
-
-	async buildTemplate(name: string, onLog?: (line: string) => void): Promise<void> {
-		this.#buildCount += 1;
-		this.#builtTemplate = name;
-		onLog?.(`built ${name}`);
-	}
 
 	/** Every sandbox this provider created, for tests. */
 	get handles(): readonly FakeSandboxHandle[] {

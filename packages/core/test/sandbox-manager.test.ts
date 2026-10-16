@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { describe, expect, it } from "vitest";
-import { SandboxManager, SANDBOX_TEMPLATE_NAME, type SandboxStatus } from "../src/sandboxes/manager.ts";
+import { SandboxManager, type SandboxStatus } from "../src/sandboxes/manager.ts";
 import {
 	FakeSandboxProvider,
 	FakeSandboxSettingsStore,
@@ -105,18 +105,6 @@ describe("SandboxManager", () => {
 			store: new FakeSandboxSettingsStore({ providers: {} }),
 		});
 		expect(bare.configured()).toBe(false);
-	});
-
-	it("builds a template and makes it the default", async () => {
-		const provider = new FakeSandboxProvider();
-		registerFakeSandboxProvider(provider);
-		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore() });
-		const logs: string[] = [];
-		const name = await manager.buildTemplate((line) => logs.push(line));
-		expect(name).toBe(SANDBOX_TEMPLATE_NAME);
-		expect(provider.builtTemplate).toBe(SANDBOX_TEMPLATE_NAME);
-		expect(manager.settings.template).toBe(SANDBOX_TEMPLATE_NAME);
-		expect(logs).toEqual([`built ${SANDBOX_TEMPLATE_NAME}`]);
 	});
 
 	it("forwards the SSH agent and stops it on pause and kill", async () => {

@@ -543,28 +543,6 @@ class E2BProvider implements SandboxProvider {
 			throw mapError(error);
 		}
 	}
-
-	async buildTemplate(name: string, onLog?: (line: string) => void): Promise<void> {
-		const { Template } = await loadSdk();
-		try {
-			const template = Template()
-				.fromBaseImage()
-				.runCmd(
-					[
-						'ARCH=$(uname -m); case "$ARCH" in aarch64|arm64) ASSET=websocat.aarch64-unknown-linux-musl ;; *) ASSET=websocat.x86_64-unknown-linux-musl ;; esac; curl -fsSL -o /usr/local/bin/websocat "https://github.com/vi/websocat/releases/latest/download/$ASSET" && chmod +x /usr/local/bin/websocat',
-					],
-					{ user: "root" },
-				);
-			await Template.build(template, name, {
-				...(this.#credentials.apiKey === undefined ? {} : { apiKey: this.#credentials.apiKey }),
-				cpuCount: 2,
-				memoryMB: 2048,
-				onBuildLogs: (entry) => onLog?.(entry.message),
-			});
-		} catch (error) {
-			throw mapError(error);
-		}
-	}
 }
 
 export const E2BProviderFactory: SandboxProviderFactory = {

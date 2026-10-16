@@ -118,8 +118,6 @@ export interface SandboxProvider {
 	connect(id: string, options?: { workspaceDir?: string }): Promise<SandboxHandle>;
 	list(filter?: { labels?: Record<string, string> }): Promise<SandboxInfo[]>;
 	kill(id: string): Promise<void>;
-	/** Optional. Build a provider template that makes future sandboxes start faster. */
-	buildTemplate?(name: string, onLog?: (line: string) => void): Promise<void>;
 }
 
 export type SandboxErrorCode =

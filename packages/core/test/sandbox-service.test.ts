@@ -203,31 +203,6 @@ describe("sandbox targets", () => {
 		}
 	});
 
-	it("builds the sandbox template once and makes it the default", async () => {
-		const provider = new FakeSandboxProvider();
-		registerFakeSandboxProvider(provider);
-		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore() });
-		const { providers } = createFauxProviders();
-		const service = await HarnessService.create({
-			storage: new MemoryStorage(),
-			providers,
-			environment: localEnvironment(),
-			sandboxes: manager,
-		});
-		try {
-			const [first, second] = await Promise.all([
-				service.buildSandboxTemplate(),
-				service.buildSandboxTemplate(),
-			]);
-			expect(first.template).toBe("harness-base");
-			expect(second.template).toBe("harness-base");
-			expect(provider.buildCount).toBe(1);
-			expect((await service.listSandboxes()).settings.template).toBe("harness-base");
-		} finally {
-			await service.close();
-		}
-	});
-
 	it("rejects a sandbox key the provider refuses", async () => {
 		const provider = new FakeSandboxProvider();
 		registerFakeSandboxProvider(provider, async () => {

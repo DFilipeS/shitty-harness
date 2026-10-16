@@ -202,9 +202,7 @@ lets you pause, resume, kill, and read metrics. When a sandbox is gone, tool cal
 clear error; the harness never falls back to running them on this machine.
 
 Two sessions can share one sandbox. The list shows when a sandbox is working, and the target chip
-turns amber when another session is working in the sandbox this session is attached to. Run **Build
-sandbox template…** under Sandbox defaults to build the `harness-base` template with websocat
-preinstalled, so new sandboxes skip the first-use download and start faster.
+turns amber when another session is working in the sandbox this session is attached to.
 
 The sandbox runs the same `ExecutionEnv` contract over the provider's file and shell APIs
 (`SandboxExecutionEnv`), so `read`, `write`, `edit`, and `bash` behave the same as locally. Files

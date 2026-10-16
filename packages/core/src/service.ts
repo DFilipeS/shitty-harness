@@ -215,7 +215,6 @@ export class HarnessService {
 	#indexWatch: DocumentWatch<SessionIndexState> | undefined;
 	#taskGraphWatch: TaskGraphWatch | undefined;
 	#working = new Set<string>();
-	#templateBuild: Promise<string> | undefined;
 	#closed = false;
 
 	private constructor(
@@ -735,24 +734,6 @@ export class HarnessService {
 
 	async sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined> {
 		return this.#requireSandboxes().metrics(provider, sandboxId);
-	}
-
-	/** Build the provider template once; concurrent callers share the build. */
-	async buildSandboxTemplate(): Promise<{ template: string }> {
-		const manager = this.#requireSandboxes();
-		let build = this.#templateBuild;
-		if (build === undefined) {
-			build = manager.buildTemplate((line) => console.log(`[sandbox] ${line}`));
-			this.#templateBuild = build;
-			void build
-				.finally(() => {
-					if (this.#templateBuild === build) this.#templateBuild = undefined;
-				})
-				.catch(() => undefined);
-		}
-		const template = await build;
-		await this.#emitSandboxes();
-		return { template };
 	}
 
 	async configureSandboxProvider(provider: string, apiKey: string | null): Promise<SandboxesState> {

@@ -1,6 +1,6 @@
 # Plan: workspaces and remote sandboxes
 
-Status: M1 (local targets and scratch workspaces), M2 (sandbox seam and E2B), M3 (SSH agent forwarding), and M4 (polish) implemented.
+Status: M1 (local targets and scratch workspaces), M2 (sandbox seam and E2B), M3 (SSH agent forwarding), and M4 (concurrency warning, key validation, docs) implemented. The sandbox template build is deferred.
 
 The harness keeps running on the user's machine. Tools run either on the local machine or in a
 remote sandbox, chosen by the user per session. This plan turns that into code. The vocabulary is
@@ -250,13 +250,15 @@ enters the sandbox, and the tunnel stops on pause and kill.
 
 ### M4 — Polish
 
-- Metrics display, concurrency warning, rename, a "Build sandbox template" command, error surfaces,
-  README and docs.
+- Metrics display, concurrency warning, error surfaces, README and docs. (Rename and a template
+  build command were dropped; see Deferred.)
 
 ## Deferred
 
 - Copying a local workspace into a sandbox (git is the transport in v1).
 - Snapshots and forks.
+- A prebuilt `harness-base` template with websocat, so sandboxes skip the first-use download. The
+  build command was removed for now; the E2B adapter installs websocat at runtime instead.
 - Renaming a sandbox: E2B metadata is set at creation and cannot be updated, so the harness would
   need its own alias store.
 - Docker and other providers.

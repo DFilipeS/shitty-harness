@@ -323,7 +323,6 @@ type HarnessContextValue = {
 		forwardAgent?: boolean | null;
 	}): Promise<void>;
 	sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined>;
-	buildSandboxTemplate(): Promise<void>;
 	setDefaults(change: {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
@@ -711,22 +710,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		[client],
 	);
 
-	const buildSandboxTemplate = useCallback(async () => {
-		dispatch({
-			type: "notice/set",
-			notice: { text: "Building the sandbox template… this takes a few minutes.", tone: "info" },
-		});
-		try {
-			const { template } = await client.send({ type: "sandboxes.build" });
-			dispatch({
-				type: "notice/set",
-				notice: { text: `Sandbox template ${template} is ready and is now the default.`, tone: "info" },
-			});
-		} catch (error) {
-			dispatch({ type: "error/set", error: errorMessage(error) });
-		}
-	}, [client]);
-
 	const browseWorkspaces = useCallback(
 		async (path?: string) =>
 			client.send({ type: "workspaces.browse", ...(path === undefined ? {} : { path }) }),
@@ -821,7 +804,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureSandbox,
 			setSandboxSettings,
 			sandboxMetrics,
-			buildSandboxTemplate,
 			setDefaults,
 			refreshProviders,
 			clearError: () => dispatch({ type: "error/clear" }),
@@ -850,7 +832,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureSandbox,
 			setSandboxSettings,
 			sandboxMetrics,
-			buildSandboxTemplate,
 			setDefaults,
 			refreshProviders,
 			clearNotice,
