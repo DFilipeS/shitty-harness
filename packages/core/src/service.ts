@@ -340,8 +340,11 @@ export class HarnessService {
 		this.#emit({ type: "sessions", sessions: await this.listSessions() });
 	}
 
-	async #emitSandboxes(): Promise<void> {
-		this.#emit({ type: "sandboxes", ...(await this.listSandboxes()) });
+	/** Lists once, announces the result to every client, and returns the same state to the caller. */
+	async #listAndEmitSandboxes(): Promise<SandboxesState> {
+		const state = await this.listSandboxes();
+		this.#emit({ type: "sandboxes", ...state });
+		return state;
 	}
 
 	/** Lazy sandbox progress: the target chip updates, and a ready sandbox refreshes both lists. */
@@ -357,7 +360,7 @@ export class HarnessService {
 		});
 		if (status.phase === "ready") {
 			void this.#emitSessions();
-			void this.#emitSandboxes();
+			void this.#listAndEmitSandboxes();
 		}
 	}
 
@@ -710,26 +713,22 @@ export class HarnessService {
 			...(source === undefined ? {} : { source }),
 			...(choice.forwardAgent === undefined ? {} : { forwardAgent: choice.forwardAgent }),
 		});
-		await this.#emitSandboxes();
-		return this.listSandboxes();
+		return await this.#listAndEmitSandboxes();
 	}
 
 	async pauseSandbox(provider: string, sandboxId: string): Promise<SandboxesState> {
 		await this.#requireSandboxes().pause(provider, sandboxId);
-		await this.#emitSandboxes();
-		return this.listSandboxes();
+		return await this.#listAndEmitSandboxes();
 	}
 
 	async resumeSandbox(provider: string, sandboxId: string): Promise<SandboxesState> {
 		await this.#requireSandboxes().resume(provider, sandboxId);
-		await this.#emitSandboxes();
-		return this.listSandboxes();
+		return await this.#listAndEmitSandboxes();
 	}
 
 	async killSandbox(provider: string, sandboxId: string): Promise<SandboxesState> {
 		await this.#requireSandboxes().kill(provider, sandboxId);
-		await this.#emitSandboxes();
-		return this.listSandboxes();
+		return await this.#listAndEmitSandboxes();
 	}
 
 	async sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined> {
@@ -743,8 +742,7 @@ export class HarnessService {
 			await sandboxProviderFactory(provider).validate({ apiKey });
 		}
 		await manager.setSettings({ apiKey: { provider, key: apiKey } });
-		await this.#emitSandboxes();
-		return this.listSandboxes();
+		return await this.#listAndEmitSandboxes();
 	}
 
 	async setSandboxSettings(change: {
@@ -756,8 +754,7 @@ export class HarnessService {
 		forwardAgent?: boolean | null;
 	}): Promise<SandboxesState> {
 		await this.#requireSandboxes().setSettings(change);
-		await this.#emitSandboxes();
-		return this.listSandboxes();
+		return await this.#listAndEmitSandboxes();
 	}
 
 	#requireSandboxes(): SandboxManager {

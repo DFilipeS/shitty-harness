@@ -93,7 +93,9 @@ export class SandboxManager {
 
 	async setSettings(change: SandboxSettingsChange): Promise<SandboxSettings> {
 		const settings = await this.#options.store.setSandboxSettings(change);
-		await this.invalidate();
+		// Only a credential or provider change drops providers, environments, and live forwards.
+		// The other settings apply to the sandboxes created after them, so cached ones stay usable.
+		if (change.apiKey !== undefined || change.provider !== undefined) await this.invalidate();
 		return settings;
 	}
 

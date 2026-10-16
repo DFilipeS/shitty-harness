@@ -139,4 +139,40 @@ describe("SandboxManager", () => {
 			await rm(root, { recursive: true, force: true });
 		}
 	});
+
+	it("keeps sandboxes and forwards on a settings change, and drops them on a credential change", async () => {
+		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-manager-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const store = new FakeSandboxSettingsStore();
+		const manager = new SandboxManager({
+			store,
+			resolveHostAgentSocket: async () => "/tmp/host-agent.sock",
+		});
+		try {
+			const env = await manager.environment(
+				{ kind: "sandbox", provider: "fake", workspaceDir: root, forwardAgent: true },
+				"13",
+				BACKGROUND_CONTEXT,
+			);
+			const handle = env.handle as FakeSandboxHandle;
+
+			// A toggle only affects sandboxes created later: the live one keeps its forward and cache.
+			await manager.setSettings({ autoPause: false });
+			expect(store.getSandboxSettings().autoPause).toBe(false);
+			expect(handle.forwarding?.closed).toBe(false);
+			const again = await manager.environment(
+				{ kind: "sandbox", provider: "fake", sandboxId: env.sandboxId, workspaceDir: root, forwardAgent: true },
+				"13",
+				BACKGROUND_CONTEXT,
+			);
+			expect(again).toBe(env);
+
+			// A new key invalidates: the sandbox must be used through a fresh provider and forward.
+			await manager.setSettings({ apiKey: { provider: "fake", key: "another-key" } });
+			expect(handle.forwarding?.closed).toBe(true);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 });

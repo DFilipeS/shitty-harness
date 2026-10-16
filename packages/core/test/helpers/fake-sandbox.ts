@@ -181,6 +181,12 @@ export class FakeSandboxProvider implements SandboxProvider {
 	readonly capabilities = { pauseResume: true, metrics: true, agentForwarding: true };
 	readonly #sandboxes = new Map<string, FakeSandboxHandle>();
 	#nextId = 1;
+	#listCount = 0;
+
+	/** How many times the provider was asked to list its sandboxes, for tests. */
+	get listCount(): number {
+		return this.#listCount;
+	}
 
 	/** Every sandbox this provider created, for tests. */
 	get handles(): readonly FakeSandboxHandle[] {
@@ -202,6 +208,7 @@ export class FakeSandboxProvider implements SandboxProvider {
 	}
 
 	async list(): Promise<SandboxInfo[]> {
+		this.#listCount += 1;
 		return [...this.#sandboxes.values()].map((handle) => ({
 			id: handle.id,
 			provider: this.name,
