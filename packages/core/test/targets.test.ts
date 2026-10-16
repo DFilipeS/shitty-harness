@@ -36,6 +36,12 @@ describe("targets", () => {
 		).toContain("sandbox E2B:abc123");
 	});
 
+	it("tells the model that bash has no default timeout", () => {
+		const prompt = targetPrompt({ kind: "local", path: "/tmp/workspace", scratch: false });
+		expect(prompt).toContain("no default timeout");
+		expect(prompt).toContain("Do not background a job");
+	});
+
 	it("gives a new session a scratch target under the workspaces root", async () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const providers = createFakeProviders();

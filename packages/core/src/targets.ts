@@ -159,16 +159,23 @@ export type TargetChangeData = {
 
 export const TargetChangeEntry = defineEntry<TargetChangeData>("app.target");
 
+/**
+ * What the model should know about `bash` timeouts. Without it, agents invent small timeouts and
+ * poll long jobs instead of letting a build or test run finish.
+ */
+const TIMEOUT_NOTE =
+	" The `bash` tool has no default timeout: long builds and test runs are expected, so let them finish and pass `timeout` only to bound a command that could hang. Do not background a job and poll it with `sleep`.";
+
 /** The system prompt line that tells the model where its tools run. */
 export function targetPrompt(target: ResolvedTarget, providerName?: string): string {
 	if (target.kind === "sandbox") {
 		const name = providerName ?? target.provider;
 		const where = target.sandboxId === undefined ? "a new sandbox" : `sandbox ${name}:${target.sandboxId}`;
 		const agent = target.forwardAgent ? " The host SSH agent is forwarded, so `git` over SSH works." : "";
-		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.${agent}`;
+		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.${agent}${TIMEOUT_NOTE}`;
 	}
 	const note = target.scratch ? " (the session's scratch directory)" : "";
-	return `Your tools run on the local machine in \`${target.path}\`${note}. Saved file paths refer to this target.`;
+	return `Your tools run on the local machine in \`${target.path}\`${note}. Saved file paths refer to this target.${TIMEOUT_NOTE}`;
 }
 
 export type TargetSectionOptions = {
