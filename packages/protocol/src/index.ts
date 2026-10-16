@@ -33,6 +33,8 @@ export type TargetInfo =
 	| {
 			kind: "sandbox";
 			provider: string;
+			/** Human-readable provider name, e.g. "E2B". */
+			providerName: string;
 			/** Absent while the sandbox has not been created yet. */
 			sandboxId?: string;
 			name?: string;
@@ -61,6 +63,8 @@ export type TargetChoice =
 /** A sandbox as the client lists it. */
 export type SandboxInfo = {
 	provider: string;
+	/** Human-readable provider name, e.g. "E2B". */
+	providerName: string;
 	id: string;
 	name?: string;
 	state: "running" | "paused" | "stopped";
@@ -74,6 +78,8 @@ export type SandboxInfo = {
 
 export type SandboxSettingsInfo = {
 	provider: string;
+	/** Human-readable provider name, e.g. "E2B". */
+	providerName: string;
 	template?: string;
 	idleTimeoutMs: number;
 	autoPause: boolean;

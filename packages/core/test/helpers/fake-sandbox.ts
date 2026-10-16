@@ -151,6 +151,7 @@ export class FakeSandboxHandle implements SandboxHandle {
 /** A provider that hands out local directories as sandboxes. */
 export class FakeSandboxProvider implements SandboxProvider {
 	readonly name = "fake";
+	readonly displayName = "Fake";
 	readonly capabilities = { pauseResume: true, metrics: true };
 	readonly #sandboxes = new Map<string, FakeSandboxHandle>();
 	#nextId = 1;
@@ -190,6 +191,7 @@ export class FakeSandboxProvider implements SandboxProvider {
 export function registerFakeSandboxProvider(provider: FakeSandboxProvider): void {
 	registerSandboxProvider({
 		name: "fake",
+		displayName: "Fake",
 		needsApiKey: true,
 		create: () => provider,
 		validate: async () => {},

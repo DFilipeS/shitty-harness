@@ -153,10 +153,16 @@ function EntryView({
 			path?: unknown;
 			scratch?: unknown;
 			provider?: unknown;
+			providerName?: unknown;
 			sandboxId?: unknown;
 		} | undefined;
 		if (data?.kind === "sandbox") {
-			const provider = typeof data.provider === "string" ? data.provider : "sandbox";
+			const provider =
+				typeof data.providerName === "string"
+					? data.providerName
+					: typeof data.provider === "string"
+						? data.provider
+						: "sandbox";
 			const sandboxId = typeof data.sandboxId === "string" ? data.sandboxId : undefined;
 			return (
 				<Divider

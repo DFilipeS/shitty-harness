@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { lazyEnvironment } from "../src/environment.ts";
 import { HarnessService } from "../src/index.ts";
 import { localEnvironment } from "../src/node.ts";
+import { targetPrompt } from "../src/targets.ts";
 import { createFakeProviders, createFauxProviders } from "./helpers/fake-providers.ts";
 
 /** Poll a predicate until it holds or `timeoutMs` passes. */
@@ -26,6 +27,12 @@ async function exists(path: string): Promise<boolean> {
 }
 
 describe("targets", () => {
+	it("names the provider in the target prompt", () => {
+		expect(
+			targetPrompt({ kind: "sandbox", provider: "e2b", sandboxId: "abc123", workspaceDir: "/home/user/workspace" }, "E2B"),
+		).toContain("sandbox E2B:abc123");
+	});
+
 	it("gives a new session a scratch target under the workspaces root", async () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const providers = createFakeProviders();

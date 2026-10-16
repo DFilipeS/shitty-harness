@@ -10,6 +10,21 @@ describe("targetLabel", () => {
 		expect(targetLabel({ kind: "local", path: "/tmp/scratch", scratch: true })).toBe("Scratch");
 		expect(targetLabel({ kind: "local", path: "/Users/me/project", scratch: false })).toBe("/Users/me/project");
 	});
+
+	it("shows the provider's display name for sandboxes", () => {
+		expect(
+			targetLabel({
+				kind: "sandbox",
+				provider: "e2b",
+				providerName: "E2B",
+				sandboxId: "abc12345def",
+				workspaceDir: "/home/user/workspace",
+			}),
+		).toBe("E2B:abc12345");
+		expect(
+			targetLabel({ kind: "sandbox", provider: "e2b", providerName: "E2B", workspaceDir: "/home/user/workspace" }),
+		).toBe("New sandbox");
+	});
 });
 
 describe("buildFolderPage", () => {

@@ -141,6 +141,8 @@ export type TargetChangeData = {
 	path: string;
 	scratch: boolean;
 	provider?: string;
+	/** Human-readable provider name, e.g. "E2B". */
+	providerName?: string;
 	sandboxId?: string;
 	name?: string;
 };
@@ -148,10 +150,11 @@ export type TargetChangeData = {
 export const TargetChangeEntry = defineEntry<TargetChangeData>("app.target");
 
 /** The system prompt line that tells the model where its tools run. */
-export function targetPrompt(target: ResolvedTarget): string {
+export function targetPrompt(target: ResolvedTarget, providerName?: string): string {
 	if (target.kind === "sandbox") {
-		const name = target.sandboxId === undefined ? "a new sandbox" : `sandbox ${target.provider}:${target.sandboxId}`;
-		return `Your tools run in the remote ${name} at \`${target.workspaceDir}\`. Saved file paths refer to this target.`;
+		const name = providerName ?? target.provider;
+		const where = target.sandboxId === undefined ? "a new sandbox" : `sandbox ${name}:${target.sandboxId}`;
+		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.`;
 	}
 	const note = target.scratch ? " (the session's scratch directory)" : "";
 	return `Your tools run on the local machine in \`${target.path}\`${note}. Saved file paths refer to this target.`;
@@ -161,6 +164,8 @@ export type TargetSectionOptions = {
 	workspacesDir?: string;
 	defaultTarget: () => DefaultTargetConfig | undefined;
 	sandboxDefaults: () => { provider: string; template?: string; workspaceDir?: string };
+	/** Human-readable provider name for the prompt. */
+	providerName?: (provider: string) => string;
 };
 
 /** The `execution-target` prompt section: it renders only the current target, never changes it. */
@@ -171,6 +176,6 @@ export function createTargetSection(options: TargetSectionOptions) {
 			defaultTarget: options.defaultTarget(),
 			sandboxDefaults: options.sandboxDefaults(),
 		});
-		return targetPrompt(target);
+		return targetPrompt(target, target.kind === "sandbox" ? options.providerName?.(target.provider) : undefined);
 	});
 }

@@ -23,10 +23,11 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 	} = useHarness();
 	const { openPage } = useCommandPalette();
 	const configured = sandboxSettings?.configured === true;
+	const providerLabel = sandboxSettings?.providerName ?? sandboxProvider;
 
 	const configurePage = (): CommandPage => ({
 		kind: "commands",
-		title: `Configure ${sandboxProvider}`,
+		title: `Configure ${providerLabel}`,
 		placeholder: "Settings…",
 		commands: [
 			{
@@ -36,7 +37,7 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 				icon: <KeyIcon />,
 				run: ({ prompt }) =>
 					prompt({
-						title: `${sandboxProvider} API key`,
+						title: `${providerLabel} API key`,
 						secret: true,
 						onSubmit: (value) => {
 							const key = value.trim();
@@ -216,7 +217,7 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 		: [
 				{
 					id: "sandbox.configure",
-					title: `Configure ${sandboxProvider}…`,
+					title: `Configure ${providerLabel}…`,
 					group: "Sandboxes",
 					detail: "Add an API key to use sandboxes",
 					icon: <KeyIcon />,

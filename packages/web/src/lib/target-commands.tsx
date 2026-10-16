@@ -19,7 +19,7 @@ export function targetLabel(target: TargetInfo | undefined): string {
 	if (target === undefined) return "Scratch";
 	if (target.kind === "local") return target.scratch ? "Scratch" : target.path;
 	if (target.sandboxId === undefined) return "New sandbox";
-	return `${target.provider}:${target.sandboxId.slice(0, 8)}`;
+	return `${target.providerName}:${target.sandboxId.slice(0, 8)}`;
 }
 
 /** The folder browser: use the current folder, walk into a child, go up, or create a new folder. */
@@ -125,7 +125,7 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 				id: "sandbox.new.git",
 				title: "Clone a Git repository…",
 				group: "New sandbox",
-				detail: "Public HTTPS or SSH with a forwarded agent",
+				detail: "Clone a repository into the new sandbox",
 				icon: <FolderIcon />,
 				run: ({ prompt }) =>
 					prompt({
@@ -196,13 +196,13 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 		: [
 				{
 					id: "target.sandbox.configure",
-					title: `Configure ${sandboxProvider}…`,
+					title: `Configure ${sandboxSettings?.providerName ?? sandboxProvider}…`,
 					group: "Sandbox",
 					detail: "Add an API key to use sandboxes",
 					icon: <KeyIcon />,
 					run: ({ prompt }) =>
 						prompt({
-							title: `${sandboxProvider} API key`,
+							title: `${sandboxSettings?.providerName ?? sandboxProvider} API key`,
 							secret: true,
 							onSubmit: (value) => {
 								const key = value.trim();

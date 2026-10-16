@@ -92,6 +92,8 @@ export interface SandboxHandle {
 
 export interface SandboxProvider {
 	readonly name: string;
+	/** Human-readable name for user-facing text, e.g. "E2B". */
+	readonly displayName: string;
 	readonly capabilities: {
 		pauseResume: boolean;
 		metrics: boolean;
@@ -133,6 +135,8 @@ export type SandboxProviderConfig = {
 
 export interface SandboxProviderFactory {
 	readonly name: string;
+	/** Human-readable name for user-facing text, e.g. "E2B". */
+	readonly displayName: string;
 	/** Environment variable the adapter also honors, e.g. "E2B_API_KEY". */
 	readonly envVar?: string;
 	/** False when the provider works without a credential, e.g. a local Docker daemon. */

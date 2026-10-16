@@ -126,11 +126,12 @@ export type HarnessServiceDependencies = {
 };
 
 /** The protocol view of a resolved target. */
-function targetInfo(target: ResolvedTarget): TargetInfo {
+function targetInfo(target: ResolvedTarget, providerName?: string): TargetInfo {
 	if (target.kind === "local") return { kind: "local", path: target.path, scratch: target.scratch };
 	return {
 		kind: "sandbox",
 		provider: target.provider,
+		providerName: providerName ?? target.provider,
 		...(target.sandboxId === undefined ? {} : { sandboxId: target.sandboxId }),
 		...(target.name === undefined ? {} : { name: target.name }),
 		workspaceDir: target.workspaceDir,
@@ -151,9 +152,14 @@ function sandboxDefaults(manager: SandboxManager | undefined): {
 	};
 }
 
-function sandboxSettingsInfo(settings: SandboxSettings, configured: boolean): SandboxSettingsInfo {
+function sandboxSettingsInfo(
+	settings: SandboxSettings,
+	configured: boolean,
+	providerName: string,
+): SandboxSettingsInfo {
 	return {
 		provider: settings.provider,
+		providerName,
 		...(settings.template === undefined ? {} : { template: settings.template }),
 		idleTimeoutMs: settings.idleTimeoutMs,
 		autoPause: settings.autoPause,
@@ -245,6 +251,7 @@ export class HarnessService {
 							: { workspacesDir: dependencies.workspacesDir }),
 						defaultTarget: () => providers.getDefaults().target,
 						sandboxDefaults: () => sandboxDefaults(dependencies.sandboxes),
+						providerName: (provider) => dependencies.sandboxes?.displayName(provider) ?? provider,
 					}),
 				],
 			}),
@@ -379,14 +386,20 @@ export class HarnessService {
 		const index = await this.#harness.snapshot(SessionIndex, BACKGROUND_CONTEXT);
 		const entries = [...(index?.sessions ?? [])].sort((a, b) => b.updatedAt - a.updatedAt);
 		return Promise.all(
-			entries.map(async (entry) => ({
-				id: entry.id,
-				title: entry.title,
-				createdAt: entry.createdAt,
-				updatedAt: entry.updatedAt,
-				working: this.#working.has(entry.id),
-				target: targetInfo(await this.#resolveTarget(parseConversationId(entry.id))),
-			})),
+			entries.map(async (entry) => {
+				const resolved = await this.#resolveTarget(parseConversationId(entry.id));
+				return {
+					id: entry.id,
+					title: entry.title,
+					createdAt: entry.createdAt,
+					updatedAt: entry.updatedAt,
+					working: this.#working.has(entry.id),
+					target: targetInfo(
+						resolved,
+						resolved.kind === "sandbox" ? this.#sandboxes?.displayName(resolved.provider) : undefined,
+					),
+				};
+			}),
 		);
 	}
 
@@ -614,6 +627,7 @@ export class HarnessService {
 				path: workspaceDir,
 				scratch: false,
 				provider,
+				providerName: manager.displayName(provider),
 				...(target.name === undefined ? {} : { name: target.name }),
 			},
 		};
@@ -646,7 +660,11 @@ export class HarnessService {
 		}
 		return {
 			provider: settings.provider,
-			settings: sandboxSettingsInfo(settings, configured),
+				settings: sandboxSettingsInfo(
+					settings,
+					configured,
+					this.#sandboxes?.displayName(settings.provider) ?? settings.provider,
+				),
 			sandboxes: sandboxes.map((sandbox) => ({ ...sandbox, sessions: attached.get(sandbox.id) ?? [] })),
 		};
 	}

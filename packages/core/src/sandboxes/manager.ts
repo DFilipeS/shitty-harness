@@ -25,6 +25,7 @@ export type ResolvedSandboxTarget = {
 /** One sandbox as the UI lists it. */
 export type SandboxSummary = {
 	provider: string;
+	providerName: string;
 	id: string;
 	name?: string;
 	state: "running" | "paused" | "stopped";
@@ -157,6 +158,11 @@ export class SandboxManager {
 		return new SandboxExecutionEnv(handle);
 	}
 
+	/** Human-readable provider name for user-facing text. */
+	displayName(providerId: string): string {
+		return sandboxProviderFactory(providerId).displayName;
+	}
+
 	/** Whether the configured provider has a usable credential. */
 	configured(): boolean {
 		const settings = this.settings;
@@ -174,7 +180,7 @@ export class SandboxManager {
 		const provider = this.#provider(settings.provider);
 		const infos = await provider.list({ labels: SANDBOX_LABELS });
 		return infos
-			.map((info) => summaryOf(info))
+			.map((info) => summaryOf(info, provider.displayName))
 			.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 	}
 
@@ -198,6 +204,7 @@ export class SandboxManager {
 		this.#handles.set(handle.id, handle);
 		return {
 			provider: handle.provider,
+			providerName: provider.displayName,
 			id: handle.id,
 			...(choice.name === undefined ? {} : { name: choice.name }),
 			state: "running",
@@ -261,9 +268,10 @@ export class SandboxManager {
 	}
 }
 
-function summaryOf(info: SandboxInfo): SandboxSummary {
+function summaryOf(info: SandboxInfo, providerName: string): SandboxSummary {
 	return {
 		provider: info.provider,
+		providerName,
 		id: info.id,
 		...(info.name === undefined ? {} : { name: info.name }),
 		state: info.state,

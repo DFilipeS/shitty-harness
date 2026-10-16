@@ -226,6 +226,7 @@ async function cloneInto(
 
 class E2BProvider implements SandboxProvider {
 	readonly name = "e2b";
+	readonly displayName = "E2B";
 	readonly capabilities = { pauseResume: true, metrics: true };
 	readonly #config: SandboxProviderConfig;
 	readonly #credentials: { apiKey?: string };
@@ -314,6 +315,7 @@ class E2BProvider implements SandboxProvider {
 
 export const E2BProviderFactory: SandboxProviderFactory = {
 	name: "e2b",
+	displayName: "E2B",
 	envVar: "E2B_API_KEY",
 	needsApiKey: true,
 	create: (config, credentials) => new E2BProvider(config, credentials),
