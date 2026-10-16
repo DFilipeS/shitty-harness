@@ -1,7 +1,16 @@
 import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { ModelInfo } from "@harness/protocol";
 import { describe, expect, it } from "vitest";
-import { hasHiddenOutput, generatedImageInfo, toolResultImages, toolResultText, userParts } from "../src/lib/messages.ts";
+import {
+	applyMessageChanges,
+	assistantError,
+	fromAssistantMessage,
+	hasHiddenOutput,
+	generatedImageInfo,
+	toolResultImages,
+	toolResultText,
+	userParts,
+} from "../src/lib/messages.ts";
 
 function result(content: ToolResultMessage["content"]): ToolResultMessage {
 	return {
@@ -51,6 +60,27 @@ function assistant(overrides: Partial<AssistantMessage> = {}): AssistantMessage 
 		...overrides,
 	};
 }
+
+describe("model errors", () => {
+	it("reads the failure a committed assistant message carries", () => {
+		expect(assistantError(assistant({ stopReason: "error", errorMessage: "412 suspended" }))).toBe("412 suspended");
+		expect(assistantError(assistant({ stopReason: "error" }))).toBe("The model request failed.");
+		expect(assistantError(assistant())).toBeUndefined();
+		expect(assistantError(assistant({ stopReason: "aborted" }))).toBeUndefined();
+	});
+
+	it("keeps the failure on the live message as it streams", () => {
+		const live = fromAssistantMessage(
+			assistant({ content: [], stopReason: "error", errorMessage: "suspended" }),
+		);
+		expect(live.error).toBe("suspended");
+
+		const updated = applyMessageChanges(live, live.usage ?? assistant().usage, [
+			{ type: "message", message: assistant({ content: [], stopReason: "error", errorMessage: "still suspended" }) },
+		]);
+		expect(updated.error).toBe("still suspended");
+	});
+});
 
 describe("hasHiddenOutput", () => {
 	it("spots an image model that billed image tokens but shows only thinking", () => {

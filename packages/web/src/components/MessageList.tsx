@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { EntryRecord, ModelInfo } from "@harness/protocol";
 import {
+	assistantError,
 	assistantMessageOf,
 	generatedImageInfo,
 	hasHiddenOutput,
@@ -128,6 +129,7 @@ function EntryView({
 					blocks={assistant.content.map(toLiveBlock)}
 					usage={assistant.usage}
 					toolResults={toolResults}
+					error={assistantError(assistant)}
 				/>
 				{hasHiddenOutput(assistant, models) && <HiddenOutputNotice />}
 			</>

@@ -79,6 +79,7 @@ export function AssistantBubble({
 	usage,
 	toolResults,
 	streaming = false,
+	error,
 }: {
 	messageKey: string;
 	blocks: LiveBlock[];
@@ -86,13 +87,15 @@ export function AssistantBubble({
 	/** Results of this message's tool calls, keyed by tool call id. */
 	toolResults?: ReadonlyMap<string, ToolResultView>;
 	streaming?: boolean;
+	/** What the model request failed with, when it did. */
+	error?: string;
 }) {
 	const hasVisible = blocks.some((block) => {
 		if (block.type === "text") return block.text !== "";
 		if (block.type === "thinking") return block.thinking !== "";
 		return true;
 	});
-	if (!hasVisible && !streaming) return null;
+	if (!hasVisible && !streaming && error === undefined) return null;
 	return (
 		<div className="flex flex-col gap-2">
 			{blocks.map((block, index) => {
@@ -100,6 +103,17 @@ export function AssistantBubble({
 				if (block.type === "thinking" && block.thinking === "") return null;
 				return <BlockView key={index} block={block} stateKey={`${messageKey}:${index}`} toolResults={toolResults} />;
 			})}
+			{error !== undefined && (
+				<div
+					data-model-error
+					className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:bg-red-950/20 dark:text-red-300"
+				>
+					<div className="font-medium">The model request failed.</div>
+					{error !== "" && (
+						<pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono">{error}</pre>
+					)}
+				</div>
+			)}
 			{usage !== undefined && usage.input + usage.output > 0 && (
 				<div className="text-[11px] text-fg-faint">
 					{formatTokens(usage.input)} in · {formatTokens(usage.output)} out

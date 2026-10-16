@@ -113,6 +113,7 @@ export function LiveMessage({
 			usage={message.usage}
 			toolResults={toolResults}
 			streaming={!done}
+			error={message.error}
 		/>
 	);
 }

@@ -11,6 +11,8 @@ export type LiveBlock =
 export type LiveMessage = {
 	blocks: LiveBlock[];
 	usage?: Usage;
+	/** Set when the model request failed; such a message carries no useful content. */
+	error?: string;
 };
 
 type MessageChanges = Extract<AgentEvent, { type: "message_update" }>["changes"];
@@ -28,7 +30,18 @@ export function toLiveBlock(block: AssistantBlock): LiveBlock {
 }
 
 export function fromAssistantMessage(message: AssistantMessage): LiveMessage {
-	return { blocks: message.content.map(toLiveBlock), usage: message.usage };
+	const error = assistantError(message);
+	return {
+		blocks: message.content.map(toLiveBlock),
+		usage: message.usage,
+		...(error === undefined ? {} : { error }),
+	};
+}
+
+/** The failure a committed assistant message carries, when the model request failed. */
+export function assistantError(message: AssistantMessage): string | undefined {
+	if (message.stopReason !== "error") return undefined;
+	return message.errorMessage ?? "The model request failed.";
 }
 
 function setBlock(blocks: LiveBlock[], index: number, block: LiveBlock): LiveBlock[] {
@@ -49,10 +62,12 @@ function updateBlock(blocks: LiveBlock[], index: number, change: (block: LiveBlo
 /** Apply one `message_update` batch to the live message. */
 export function applyMessageChanges(live: LiveMessage, usage: Usage, changes: MessageChanges): LiveMessage {
 	let blocks = live.blocks;
+	let error = live.error;
 	for (const change of changes) {
 		switch (change.type) {
 			case "message":
 				blocks = change.message.content.map(toLiveBlock);
+				error = assistantError(change.message);
 				break;
 			case "text_start": {
 				const block = change.block;
@@ -96,7 +111,7 @@ export function applyMessageChanges(live: LiveMessage, usage: Usage, changes: Me
 				break;
 		}
 	}
-	return { blocks, usage };
+	return { blocks, usage, ...(error === undefined ? {} : { error }) };
 }
 
 export function userMessageOf(entry: EntryRecord): UserMessage | undefined {
