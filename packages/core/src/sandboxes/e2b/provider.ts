@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import {
 	SandboxError,
 	type AgentForwarding,
+	type SandboxConnectOptions,
 	type SandboxExecOptions,
 	type SandboxFileInfo,
 	type SandboxHandle,
@@ -279,14 +280,31 @@ class E2BSandboxHandle implements SandboxHandle {
 	readonly id: string;
 	readonly provider = "e2b";
 	readonly workspaceDir: string;
+	readonly lifetimeMs: number | undefined;
 	readonly #sandbox: import("e2b").Sandbox;
 	readonly #stateDir: string | undefined;
 
-	constructor(sandbox: import("e2b").Sandbox, workspaceDir: string, stateDir: string | undefined) {
+	constructor(
+		sandbox: import("e2b").Sandbox,
+		workspaceDir: string,
+		stateDir: string | undefined,
+		lifetimeMs?: number,
+	) {
 		this.#sandbox = sandbox;
 		this.#stateDir = stateDir;
 		this.id = sandbox.sandboxId;
 		this.workspaceDir = workspaceDir;
+		this.lifetimeMs = lifetimeMs;
+	}
+
+	/** Reset E2B's running-time clock, so the sandbox pauses only after a quiet period. */
+	async keepAlive(): Promise<void> {
+		if (this.lifetimeMs === undefined || this.lifetimeMs <= 0) return;
+		try {
+			await this.#sandbox.setTimeout(this.lifetimeMs);
+		} catch (error) {
+			throw mapError(error);
+		}
 	}
 
 	async exec(command: string, options: SandboxExecOptions = {}): Promise<{ exitCode: number | null }> {
@@ -491,22 +509,26 @@ class E2BProvider implements SandboxProvider {
 				},
 			});
 			await sandbox.files.makeDir(spec.workspaceDir);
-			return new E2BSandboxHandle(sandbox, spec.workspaceDir, this.#config.stateDir);
+			return new E2BSandboxHandle(sandbox, spec.workspaceDir, this.#config.stateDir, spec.idleTimeoutMs);
 		} catch (error) {
 			await sandbox?.kill().catch(() => undefined);
 			throw mapError(error);
 		}
 	}
 
-	async connect(id: string, options?: { workspaceDir?: string }): Promise<SandboxHandle> {
+	async connect(id: string, options?: SandboxConnectOptions): Promise<SandboxHandle> {
 		const { Sandbox } = await loadSdk();
 		try {
 			const sandbox = await Sandbox.connect(id, {
 				...(this.#credentials.apiKey === undefined ? {} : { apiKey: this.#credentials.apiKey }),
 			});
+			const idleTimeoutMs = options?.idleTimeoutMs;
+			if (idleTimeoutMs !== undefined && idleTimeoutMs > 0) {
+				await sandbox.setTimeout(idleTimeoutMs).catch(() => undefined);
+			}
 			const workspaceDir = options?.workspaceDir ?? "/home/user/workspace";
 			await sandbox.files.makeDir(workspaceDir);
-			return new E2BSandboxHandle(sandbox, workspaceDir, this.#config.stateDir);
+			return new E2BSandboxHandle(sandbox, workspaceDir, this.#config.stateDir, idleTimeoutMs);
 		} catch (error) {
 			throw mapError(error);
 		}

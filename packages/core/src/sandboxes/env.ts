@@ -654,6 +654,28 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		return { code: result.exitCode, stdout, stderr };
 	}
 
+	/**
+	 * Renew the sandbox's idle timeout while a command runs, so a build that outlives the timeout
+	 * is not cut off midway. Returns a stop function, or `undefined` when the sandbox has none.
+	 */
+	#startKeepAlive(): (() => void) | undefined {
+		const handle = this.handle;
+		const lifetimeMs = handle.lifetimeMs;
+		if (handle.keepAlive === undefined || lifetimeMs === undefined || lifetimeMs <= 0) return undefined;
+		const renew = (): void => {
+			const pending = handle.keepAlive?.();
+			if (pending === undefined) return;
+			void pending.catch((error: unknown) => {
+				console.warn("[sandbox] could not renew the sandbox idle timeout:", error);
+			});
+		};
+		renew();
+		// Half the idle timeout leaves room for one slow renewal without a pause.
+		const timer = setInterval(renew, Math.max(1, Math.floor(lifetimeMs / 2)));
+		timer.unref();
+		return () => clearInterval(timer);
+	}
+
 	async exec(
 		command: string | readonly string[],
 		options: ShellExecOptions | undefined,
@@ -676,6 +698,7 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 			...(this.#agentSocket === undefined ? {} : { SSH_AUTH_SOCK: this.#agentSocket }),
 		};
 		let full = "";
+		const stopKeepAlive = this.#startKeepAlive();
 		try {
 			const result = await this.handle.exec(script, {
 				cwd: options?.cwd === undefined ? this.cwd : this.#absolute(options.cwd),
@@ -700,6 +723,7 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		} catch (error) {
 			return err(toExecutionError(error, context));
 		} finally {
+			stopKeepAlive?.();
 			this.#active.delete(controller);
 		}
 	}

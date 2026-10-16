@@ -58,6 +58,12 @@ export type SandboxExecOptions = {
 	onStderr?: (text: string) => void;
 };
 
+export type SandboxConnectOptions = {
+	workspaceDir?: string;
+	/** Preset the sandbox's idle timeout, in milliseconds. */
+	idleTimeoutMs?: number;
+};
+
 export type SandboxMetrics = {
 	cpuCount?: number;
 	/** CPU usage percentage across all cores. */
@@ -80,6 +86,11 @@ export interface SandboxHandle {
 	readonly id: string;
 	readonly provider: string;
 	readonly workspaceDir: string;
+	/**
+	 * How long the sandbox keeps running without activity, in milliseconds. A provider that has no
+	 * idle timeout omits it, and then nothing renews the sandbox.
+	 */
+	readonly lifetimeMs?: number;
 
 	exec(command: string, options?: SandboxExecOptions): Promise<{ exitCode: number | null }>;
 	readFile(path: string): Promise<Uint8Array>;
@@ -95,6 +106,12 @@ export interface SandboxHandle {
 	pause?(): Promise<void>;
 	kill(): Promise<void>;
 	metrics?(): Promise<SandboxMetrics | undefined>;
+
+	/**
+	 * Optional. Reset the sandbox's idle clock so it stays running longer. `SandboxExecutionEnv`
+	 * calls it while a command runs, so a long build is not cut off by the idle timeout.
+	 */
+	keepAlive?(): Promise<void>;
 
 	/**
 	 * Optional. Forward the host SSH agent into the sandbox. The private key stays on the host; the
@@ -115,7 +132,7 @@ export interface SandboxProvider {
 
 	create(spec: SandboxSpec): Promise<SandboxHandle>;
 	/** Connect to a sandbox; the provider resumes it when paused. */
-	connect(id: string, options?: { workspaceDir?: string }): Promise<SandboxHandle>;
+	connect(id: string, options?: SandboxConnectOptions): Promise<SandboxHandle>;
 	list(filter?: { labels?: Record<string, string> }): Promise<SandboxInfo[]>;
 	kill(id: string): Promise<void>;
 }

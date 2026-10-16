@@ -150,7 +150,10 @@ export class SandboxManager {
 		let created = false;
 		if (target.sandboxId !== undefined) {
 			try {
-				handle = await provider.connect(target.sandboxId, { workspaceDir: target.workspaceDir });
+				handle = await provider.connect(target.sandboxId, {
+					workspaceDir: target.workspaceDir,
+					idleTimeoutMs: this.settings.idleTimeoutMs,
+				});
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				this.onStatus?.({ conversationId, phase: "gone", sandboxId: target.sandboxId, message });
@@ -304,7 +307,7 @@ export class SandboxManager {
 	async resume(providerName: string, sandboxId: string): Promise<void> {
 		// Connecting resumes a paused sandbox; the cached handle keeps working afterwards.
 		const provider = this.#provider(providerName);
-		const handle = await provider.connect(sandboxId);
+		const handle = await provider.connect(sandboxId, { idleTimeoutMs: this.settings.idleTimeoutMs });
 		this.#handles.set(handle.id, handle);
 		if (this.#forwardEnabled.has(sandboxId)) await this.#startForwarding(handle, true);
 	}
@@ -348,7 +351,7 @@ export class SandboxManager {
 	async #handle(providerName: string, sandboxId: string): Promise<SandboxHandle> {
 		const cached = this.#handles.get(sandboxId);
 		if (cached !== undefined) return cached;
-		const handle = await this.#provider(providerName).connect(sandboxId);
+		const handle = await this.#provider(providerName).connect(sandboxId, { idleTimeoutMs: this.settings.idleTimeoutMs });
 		this.#handles.set(sandboxId, handle);
 		return handle;
 	}

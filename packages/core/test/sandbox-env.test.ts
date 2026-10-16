@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { getOrThrow } from "@earendil-works/pi-durable/env";
 import { createEnvConformance, type EnvConformanceAssertions } from "@earendil-works/pi-durable/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SandboxExecutionEnv } from "../src/sandboxes/env.ts";
 import { FakeSandboxProvider } from "./helpers/fake-sandbox.ts";
 
@@ -53,6 +53,52 @@ describe("SandboxExecutionEnv", () => {
 			getOrThrow(await env.exec("true", undefined, BACKGROUND_CONTEXT));
 			expect(handle.lastExecEnv).toEqual({ SSH_AUTH_SOCK: "/tmp/agent.sock" });
 		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("renews the sandbox lifetime while a command runs", async () => {
+		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-lifetime-"));
+		const provider = new FakeSandboxProvider();
+		const handle = await provider.create({ workspaceDir: root, idleTimeoutMs: 40 });
+		try {
+			const env = new SandboxExecutionEnv(handle);
+			const result = getOrThrow(await env.exec("sleep 0.15", undefined, BACKGROUND_CONTEXT));
+			expect(result.exitCode).toBe(0);
+			// One renewal before the command, then at least one during it.
+			expect(handle.keepAliveCalls).toBeGreaterThanOrEqual(2);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("renews nothing when the sandbox has no idle timeout", async () => {
+		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-lifetime-"));
+		const provider = new FakeSandboxProvider();
+		const handle = await provider.create({ workspaceDir: root });
+		try {
+			const env = new SandboxExecutionEnv(handle);
+			getOrThrow(await env.exec("true", undefined, BACKGROUND_CONTEXT));
+			expect(handle.keepAliveCalls).toBe(0);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("runs the command even when a renewal fails", async () => {
+		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-lifetime-"));
+		const provider = new FakeSandboxProvider();
+		const handle = await provider.create({ workspaceDir: root, idleTimeoutMs: 40 });
+		handle.keepAliveFails = true;
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const env = new SandboxExecutionEnv(handle);
+			const result = getOrThrow(await env.exec("true", undefined, BACKGROUND_CONTEXT));
+			expect(result.exitCode).toBe(0);
+			expect(handle.keepAliveCalls).toBeGreaterThanOrEqual(1);
+			expect(warn).toHaveBeenCalled();
+		} finally {
+			warn.mockRestore();
 			await rm(root, { recursive: true, force: true });
 		}
 	});

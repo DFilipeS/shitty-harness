@@ -5,6 +5,7 @@ import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import {
 	SandboxError,
 	type AgentForwarding,
+	type SandboxConnectOptions,
 	type SandboxExecOptions,
 	type SandboxFileInfo,
 	type SandboxHandle,
@@ -28,16 +29,27 @@ export class FakeSandboxHandle implements SandboxHandle {
 	readonly id: string;
 	readonly provider = "fake";
 	readonly workspaceDir: string;
+	/** Renewed through `keepAlive`; tests set it through the provider. */
+	lifetimeMs: number | undefined;
 	readonly #env: NodeExecutionEnv;
 	#paused = false;
 	#killed = false;
+	#keepAliveCalls = 0;
+	/** When true, `keepAlive` fails, for tests of error handling. */
+	keepAliveFails = false;
 	#forwarding: { hostSocket: string; closed: boolean } | undefined;
 	#lastExecEnv: Record<string, string> | undefined;
 
-	constructor(id: string, workspaceDir: string) {
+	constructor(id: string, workspaceDir: string, lifetimeMs?: number) {
 		this.id = id;
 		this.workspaceDir = workspaceDir;
+		this.lifetimeMs = lifetimeMs;
 		this.#env = new NodeExecutionEnv({ cwd: workspaceDir });
+	}
+
+	/** How many times the sandbox lifetime was renewed, for tests. */
+	get keepAliveCalls(): number {
+		return this.#keepAliveCalls;
 	}
 
 	get paused(): boolean {
@@ -129,6 +141,12 @@ export class FakeSandboxHandle implements SandboxHandle {
 		this.#paused = true;
 	}
 
+	async keepAlive(): Promise<void> {
+		this.#requireAlive();
+		this.#keepAliveCalls += 1;
+		if (this.keepAliveFails) throw new SandboxError("unavailable", "Sandbox is gone");
+	}
+
 	resume(): void {
 		this.#requireAlive();
 		this.#paused = false;
@@ -195,14 +213,15 @@ export class FakeSandboxProvider implements SandboxProvider {
 
 	async create(spec: SandboxSpec): Promise<FakeSandboxHandle> {
 		await mkdir(spec.workspaceDir, { recursive: true });
-		const handle = new FakeSandboxHandle(`fake-${this.#nextId++}`, spec.workspaceDir);
+		const handle = new FakeSandboxHandle(`fake-${this.#nextId++}`, spec.workspaceDir, spec.idleTimeoutMs);
 		this.#sandboxes.set(handle.id, handle);
 		return handle;
 	}
 
-	async connect(id: string): Promise<FakeSandboxHandle> {
+	async connect(id: string, options?: SandboxConnectOptions): Promise<FakeSandboxHandle> {
 		const handle = this.#sandboxes.get(id);
 		if (handle === undefined) throw new SandboxError("not_found", `Unknown sandbox: ${id}`);
+		handle.lifetimeMs = options?.idleTimeoutMs;
 		handle.resume();
 		return handle;
 	}

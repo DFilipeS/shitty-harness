@@ -56,6 +56,26 @@ describe("SandboxManager", () => {
 		}
 	});
 
+	it("connects a session's sandbox with the configured idle timeout", async () => {
+		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-manager-"));
+		const provider = new FakeSandboxProvider();
+		registerFakeSandboxProvider(provider);
+		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore({ idleTimeoutMs: 30_000 }) });
+		try {
+			const created = await manager.create({ workspaceDir: root });
+			await manager.setSettings({ idleTimeoutMs: 60_000 });
+			manager.forget("1");
+			const env = await manager.environment(
+				{ kind: "sandbox", provider: "fake", sandboxId: created.id, workspaceDir: root, forwardAgent: false },
+				"1",
+				BACKGROUND_CONTEXT,
+			);
+			expect((env.handle as FakeSandboxHandle).lifetimeMs).toBe(60_000);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("pauses, resumes, kills, and reports metrics", async () => {
 		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-manager-"));
 		const provider = new FakeSandboxProvider();
