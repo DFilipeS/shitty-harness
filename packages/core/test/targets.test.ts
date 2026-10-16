@@ -57,7 +57,7 @@ describe("targets", () => {
 			unsubscribe();
 			const changes = snapshot.entries.filter((entry) => entry.kind === "app.target");
 			expect(changes).toHaveLength(1);
-			expect(changes[0]?.data).toEqual({ path: folder, scratch: false });
+			expect(changes[0]?.data).toEqual({ kind: "local", path: folder, scratch: false });
 
 			const back = await service.setTarget(session.id, { kind: "local" });
 			expect(back.target).toEqual({
@@ -104,7 +104,8 @@ describe("targets", () => {
 
 			await service.setDefaults({ target: null });
 			const second = await service.createSession();
-			expect(second.target.scratch).toBe(true);
+			expect(second.target.kind).toBe("local");
+			if (second.target.kind === "local") expect(second.target.scratch).toBe(true);
 
 			// The first session keeps the target it started with.
 			const listed = (await service.listSessions()).find((candidate) => candidate.id === first.id);

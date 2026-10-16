@@ -148,7 +148,24 @@ function EntryView({
 	}
 
 	if (entry.kind === "app.target") {
-		const data = entry.data as { path?: unknown; scratch?: unknown } | undefined;
+		const data = entry.data as {
+			kind?: unknown;
+			path?: unknown;
+			scratch?: unknown;
+			provider?: unknown;
+			sandboxId?: unknown;
+		} | undefined;
+		if (data?.kind === "sandbox") {
+			const provider = typeof data.provider === "string" ? data.provider : "sandbox";
+			const sandboxId = typeof data.sandboxId === "string" ? data.sandboxId : undefined;
+			return (
+				<Divider
+					label={
+						sandboxId === undefined ? "Target: new sandbox" : `Target: ${provider}:${sandboxId.slice(0, 8)}`
+					}
+				/>
+			);
+		}
 		const scratch = data?.scratch === true;
 		const path = typeof data?.path === "string" ? data.path : "";
 		return <Divider label={`Target: ${scratch ? "scratch directory" : path}`} />;

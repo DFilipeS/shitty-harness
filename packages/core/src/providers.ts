@@ -11,11 +11,17 @@ import type {
 	ProviderRefreshReport,
 	TargetChoice,
 } from "@harness/protocol";
-import { saveConfig, type AppConfig, type DefaultsConfig } from "./config.ts";
+import { saveConfig, type AppConfig, type DefaultsConfig, type SandboxConfig } from "./config.ts";
 import { ConfigCredentialStore } from "./credentials.ts";
 import { sortModelsForDisplay } from "./model-order.ts";
 import { FileModelsStore } from "./models-store.ts";
 import { withRemoteCatalog, type CatalogRefreshStatus } from "./remote-catalog.ts";
+import {
+	DEFAULT_SANDBOX_SETTINGS,
+	type SandboxSettings,
+	type SandboxSettingsChange,
+	type SandboxSettingsStore,
+} from "./sandboxes/settings.ts";
 
 /**
  * The providers module the harness depends on: the pi-ai model catalog plus the provider
@@ -54,7 +60,7 @@ export type ProviderManagerOptions = {
  * Owns the pi-ai model catalog and the provider credentials in `config.json`. All writes are
  * serialized and persisted before they resolve, so the settings UI always sees what is on disk.
  */
-export class ProviderManager implements Providers {
+export class ProviderManager implements Providers, SandboxSettingsStore {
 	readonly models: MutableModels;
 	readonly #configPath: string;
 	#config: AppConfig;
@@ -146,6 +152,7 @@ export class ProviderManager implements Providers {
 			}
 			if (change.target !== undefined) {
 				if (change.target === null) delete defaults.target;
+				else if (change.target.kind === "sandbox") defaults.target = { kind: "sandbox" };
 				else if (change.target.path === undefined || change.target.path === "") defaults.target = { kind: "local" };
 				else defaults.target = { kind: "local", path: change.target.path };
 			}
@@ -165,6 +172,47 @@ export class ProviderManager implements Providers {
 	 * Image models the tool can drive, alphabetically inside each provider. pi-ai's OpenRouter image
 	 * API speaks chat completions, so models that only answer on `/images` are left out.
 	 */
+	/** Sandbox defaults and stored provider credentials, from the same `config.json`. */
+	getSandboxSettings(): SandboxSettings {
+		const config = this.#config.sandboxes;
+		return {
+			provider: config?.provider ?? DEFAULT_SANDBOX_SETTINGS.provider,
+			...(config?.template === undefined ? {} : { template: config.template }),
+			idleTimeoutMs: config?.idleTimeoutMs ?? DEFAULT_SANDBOX_SETTINGS.idleTimeoutMs,
+			autoPause: config?.autoPause ?? DEFAULT_SANDBOX_SETTINGS.autoPause,
+			providers: { ...(config?.providers ?? {}) },
+		};
+	}
+
+	async setSandboxSettings(change: SandboxSettingsChange): Promise<SandboxSettings> {
+		await this.#mutate((config) => {
+			const sandboxes: SandboxConfig = config.sandboxes ?? {};
+			if (change.provider !== undefined) sandboxes.provider = change.provider;
+			if (change.template !== undefined) {
+				if (change.template === null) delete sandboxes.template;
+				else sandboxes.template = change.template;
+			}
+			if (change.idleTimeoutMs !== undefined) {
+				if (change.idleTimeoutMs === null) delete sandboxes.idleTimeoutMs;
+				else sandboxes.idleTimeoutMs = change.idleTimeoutMs;
+			}
+			if (change.autoPause !== undefined) {
+				if (change.autoPause === null) delete sandboxes.autoPause;
+				else sandboxes.autoPause = change.autoPause;
+			}
+			if (change.apiKey !== undefined) {
+				const providers = sandboxes.providers ?? {};
+				if (change.apiKey.key === null || change.apiKey.key === "") delete providers[change.apiKey.provider];
+				else providers[change.apiKey.provider] = { apiKey: change.apiKey.key };
+				if (Object.keys(providers).length === 0) delete sandboxes.providers;
+				else sandboxes.providers = providers;
+			}
+			if (Object.keys(sandboxes).length === 0) delete config.sandboxes;
+			else config.sandboxes = sandboxes;
+		});
+		return this.getSandboxSettings();
+	}
+
 	async listImageModels(): Promise<ImageModelInfo[]> {
 		const available = await this.models.getAvailableOfType("image");
 		return sortModelsForDisplay(

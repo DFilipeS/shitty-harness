@@ -22,18 +22,86 @@ export type ModelRef = {
 	modelId: string;
 };
 
-/** Where a session's tools run. Local only for now; sandboxes arrive next. */
-export type TargetInfo = {
-	kind: "local";
-	path: string;
-	/** True when the path is the session's own scratch directory. */
-	scratch: boolean;
+/** Where a session's tools run. */
+export type TargetInfo =
+	| {
+			kind: "local";
+			path: string;
+			/** True when the path is the session's own scratch directory. */
+			scratch: boolean;
+		}
+	| {
+			kind: "sandbox";
+			provider: string;
+			/** Absent while the sandbox has not been created yet. */
+			sandboxId?: string;
+			name?: string;
+			workspaceDir: string;
+		};
+
+/** Where a new sandbox gets its files. */
+export type SandboxSourceChoice = { kind: "empty" } | { kind: "git"; url: string };
+
+/** A new sandbox to create, or an existing one to connect to. */
+export type SandboxChoice = {
+	provider?: string;
+	/** An existing sandbox; absent means create a new one. */
+	sandboxId?: string;
+	name?: string;
+	template?: string;
+	source?: SandboxSourceChoice;
+	workspaceDir?: string;
 };
 
-/** What the client asks for: a local folder, or the session's scratch directory when `path` is absent. */
-export type TargetChoice = {
-	kind: "local";
-	path?: string;
+/** What the client asks for: a local folder, a scratch directory, or a sandbox. */
+export type TargetChoice =
+	| { kind: "local"; path?: string }
+	| ({ kind: "sandbox" } & SandboxChoice);
+
+/** A sandbox as the client lists it. */
+export type SandboxInfo = {
+	provider: string;
+	id: string;
+	name?: string;
+	state: "running" | "paused" | "stopped";
+	workspaceDir: string;
+	template?: string;
+	createdAt?: number;
+	lastUsedAt?: number;
+	/** Ids of sessions whose current target is this sandbox. */
+	sessions: string[];
+};
+
+export type SandboxSettingsInfo = {
+	provider: string;
+	template?: string;
+	idleTimeoutMs: number;
+	autoPause: boolean;
+	/** True when the provider has a usable credential. */
+	configured: boolean;
+};
+
+export type SandboxesState = {
+	provider: string;
+	settings: SandboxSettingsInfo;
+	sandboxes: SandboxInfo[];
+};
+
+export type SandboxMetricsInfo = {
+	cpuCount?: number;
+	cpuUsedPct?: number;
+	memoryUsedBytes?: number;
+	memoryTotalBytes?: number;
+	diskUsedBytes?: number;
+	diskTotalBytes?: number;
+};
+
+/** Progress of a sandbox a session is lazily opening. */
+export type TargetStatus = {
+	sessionId: string;
+	phase: "starting" | "ready" | "gone" | "error";
+	sandboxId?: string;
+	message?: string;
 };
 
 /** One directory offered by the local folder browser. */
@@ -155,6 +223,12 @@ export type WorkspacesCreateFolderResult = {
 	path: string;
 };
 
+export type SandboxesListResult = SandboxesState;
+
+export type SandboxesMetricsResult = {
+	metrics?: SandboxMetricsInfo;
+};
+
 /** Commands the client sends to the server. Every command carries a correlation `id`. */
 export type ClientCommand =
 	| { id: string; type: "sessions.list" }
@@ -182,6 +256,21 @@ export type ClientCommand =
 	| { id: string; type: "sessions.setTarget"; sessionId: string; target: TargetChoice }
 	| { id: string; type: "workspaces.browse"; path?: string }
 	| { id: string; type: "workspaces.createFolder"; parent: string; name: string }
+	| { id: string; type: "sandboxes.list" }
+	| { id: string; type: "sandboxes.create"; choice: SandboxChoice }
+	| { id: string; type: "sandboxes.pause"; provider: string; sandboxId: string }
+	| { id: string; type: "sandboxes.resume"; provider: string; sandboxId: string }
+	| { id: string; type: "sandboxes.kill"; provider: string; sandboxId: string }
+	| { id: string; type: "sandboxes.metrics"; provider: string; sandboxId: string }
+	| { id: string; type: "sandboxes.configure"; provider: string; apiKey: string | null }
+	| {
+			id: string;
+			type: "sandboxes.settings";
+			provider?: string;
+			template?: string | null;
+			idleTimeoutMs?: number | null;
+			autoPause?: boolean | null;
+	  }
 	| { id: string; type: "providers.list" }
 	| { id: string; type: "providers.configure"; providerId: string; apiKey: string | null }
 	| { id: string; type: "providers.refresh" }
@@ -210,6 +299,14 @@ export type CommandResult = {
 	"sessions.setTarget": SessionsSetTargetResult;
 	"workspaces.browse": WorkspacesBrowseResult;
 	"workspaces.createFolder": WorkspacesCreateFolderResult;
+	"sandboxes.list": SandboxesListResult;
+	"sandboxes.create": SandboxesListResult;
+	"sandboxes.pause": SandboxesListResult;
+	"sandboxes.resume": SandboxesListResult;
+	"sandboxes.kill": SandboxesListResult;
+	"sandboxes.metrics": SandboxesMetricsResult;
+	"sandboxes.configure": SandboxesListResult;
+	"sandboxes.settings": SandboxesListResult;
 	"providers.list": ProvidersListResult;
 	"providers.configure": ProvidersListResult;
 	"providers.refresh": ProvidersRefreshResult;
@@ -229,6 +326,8 @@ export type ServerResponse =
 export type ServerEvent =
 	| { type: "session.event"; sessionId: string; event: AgentEvent }
 	| { type: "sessions.changed"; sessions: SessionSummary[] }
+	| ({ type: "sandboxes.changed" } & SandboxesState)
+	| { type: "session.target"; status: TargetStatus }
 	| {
 			type: "providers.changed";
 			providers: ProviderInfo[];

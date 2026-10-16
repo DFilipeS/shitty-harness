@@ -7,11 +7,16 @@ export type ProviderConfig = {
 	apiKey?: string;
 };
 
-/** Where new sessions run. Local only for now; sandboxes arrive next. */
-export type DefaultTargetConfig = {
-	kind: "local";
-	/** Absolute folder; absent means the session's scratch directory. */
-	path?: string;
+/** Where new sessions run. Local, or a fresh sandbox with the configured defaults. */
+export type DefaultTargetConfig = { kind: "local"; path?: string } | { kind: "sandbox" };
+
+/** Sandbox defaults and stored provider credentials. */
+export type SandboxConfig = {
+	provider?: string;
+	template?: string;
+	idleTimeoutMs?: number;
+	autoPause?: boolean;
+	providers?: Record<string, { apiKey?: string }>;
 };
 
 /** Model and thinking level applied to new sessions, plus the model `generate_image` uses. */
@@ -26,6 +31,7 @@ export type DefaultsConfig = {
 export type AppConfig = {
 	providers: Record<string, ProviderConfig>;
 	defaults?: DefaultsConfig;
+	sandboxes?: SandboxConfig;
 };
 
 export function emptyConfig(): AppConfig {
@@ -56,11 +62,33 @@ function parseDefaults(value: unknown): DefaultsConfig | undefined {
 	return Object.keys(defaults).length === 0 ? undefined : defaults;
 }
 
-/** A default target is valid only when it names a local folder, or nothing at all. */
+/** A default target is valid only when it names a local folder or a fresh sandbox. */
 function parseDefaultTarget(value: unknown): DefaultTargetConfig | undefined {
-	if (!isRecord(value) || value.kind !== "local") return undefined;
+	if (!isRecord(value)) return undefined;
+	if (value.kind === "sandbox") return { kind: "sandbox" };
+	if (value.kind !== "local") return undefined;
 	if (value.path === undefined) return { kind: "local" };
 	return typeof value.path === "string" && value.path !== "" ? { kind: "local", path: value.path } : undefined;
+}
+
+function parseSandboxConfig(value: unknown): SandboxConfig | undefined {
+	if (!isRecord(value)) return undefined;
+	const config: SandboxConfig = {};
+	if (typeof value.provider === "string" && value.provider !== "") config.provider = value.provider;
+	if (typeof value.template === "string" && value.template !== "") config.template = value.template;
+	if (typeof value.idleTimeoutMs === "number" && Number.isFinite(value.idleTimeoutMs) && value.idleTimeoutMs >= 0) {
+		config.idleTimeoutMs = value.idleTimeoutMs;
+	}
+	if (typeof value.autoPause === "boolean") config.autoPause = value.autoPause;
+	if (isRecord(value.providers)) {
+		const providers: Record<string, { apiKey?: string }> = {};
+		for (const [id, entry] of Object.entries(value.providers)) {
+			if (!isRecord(entry)) continue;
+			if (typeof entry.apiKey === "string" && entry.apiKey !== "") providers[id] = { apiKey: entry.apiKey };
+		}
+		if (Object.keys(providers).length > 0) config.providers = providers;
+	}
+	return Object.keys(config).length === 0 ? undefined : config;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,7 +121,12 @@ export async function loadConfig(path: string): Promise<AppConfig> {
 	}
 
 	const defaults = parseDefaults(parsed.defaults);
-	return { providers, ...(defaults === undefined ? {} : { defaults }) };
+	const sandboxes = parseSandboxConfig(parsed.sandboxes);
+	return {
+		providers,
+		...(defaults === undefined ? {} : { defaults }),
+		...(sandboxes === undefined ? {} : { sandboxes }),
+	};
 }
 
 export async function saveConfig(path: string, config: AppConfig): Promise<void> {

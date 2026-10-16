@@ -16,6 +16,7 @@ import {
 	CpuIcon,
 	FileIcon,
 	FolderIcon,
+	LayersIcon,
 	PaperclipIcon,
 	SendIcon,
 	StopIcon,
@@ -305,32 +306,52 @@ function ThinkingChip() {
 
 /** Where this session's tools run. Locked while a run is in flight, like the model and level. */
 function TargetChip() {
-	const { sessions, activeSessionId, activeSession } = useHarness();
+	const { sessions, activeSessionId, activeSession, targetStatus } = useHarness();
 	const targetPalette = useTargetPalette();
 	const session = sessions.find((candidate) => candidate.id === activeSessionId);
 	const target = session?.target;
+	const status = activeSessionId === undefined ? undefined : targetStatus[activeSessionId];
+	const phase = status?.phase;
 	const runActive = activeSession?.runActive ?? false;
+	const label =
+		phase === "starting"
+			? "starting…"
+			: phase === "gone"
+				? "gone"
+				: phase === "error"
+					? "error"
+					: targetLabel(target);
+	const title =
+		phase === "starting"
+			? "Creating the sandbox…"
+			: phase === "gone"
+				? (status?.message ?? "The sandbox is gone")
+				: phase === "error"
+					? (status?.message ?? "Could not start the sandbox")
+					: runActive
+						? "The target is locked while the agent is working"
+						: target === undefined
+							? "Choose where tools run"
+							: `Target: ${targetLabel(target)}`;
 	return (
 		<button
 			type="button"
 			data-target-chip
 			onClick={targetPalette.open}
 			disabled={runActive}
-			title={
-				runActive
-					? "The target is locked while the agent is working"
-					: target === undefined
-						? "Choose where tools run"
-						: `Target: ${target.scratch ? "scratch directory" : target.path}`
-			}
-			className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-fg-subtle hover:bg-raised hover:text-fg disabled:opacity-50 disabled:hover:bg-transparent"
+			title={title}
+			className={`flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] hover:bg-raised disabled:opacity-50 disabled:hover:bg-transparent ${
+				phase === "gone" || phase === "error" ? "text-warn" : "text-fg-subtle hover:text-fg"
+			}`}
 		>
-			{target !== undefined && !target.scratch ? (
+			{target !== undefined && target.kind === "sandbox" ? (
+				<LayersIcon className="h-3.5 w-3.5 shrink-0" />
+			) : target !== undefined && !target.scratch ? (
 				<FolderIcon className="h-3.5 w-3.5 shrink-0" />
 			) : (
 				<TerminalIcon className="h-3.5 w-3.5 shrink-0" />
 			)}
-			<span className="max-w-44 truncate">{targetLabel(target)}</span>
+			<span className="max-w-44 truncate">{label}</span>
 		</button>
 	);
 }

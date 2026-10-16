@@ -11,9 +11,14 @@ import type {
 	PromptAttachment,
 	ProviderInfo,
 	ProviderRefreshReport,
+	SandboxChoice,
+	SandboxInfo,
+	SandboxMetricsInfo,
+	SandboxSettingsInfo,
 	SessionSummary,
 	SnapshotEvent,
 	TargetChoice,
+	TargetStatus,
 	UsageState,
 	WorkspacesBrowseResult,
 } from "@harness/protocol";
@@ -52,6 +57,10 @@ type State = {
 	models: ModelInfo[];
 	imageModels: ImageModelInfo[];
 	defaults: DefaultsState;
+	sandboxProvider: string;
+	sandboxSettings?: SandboxSettingsInfo;
+	sandboxes: SandboxInfo[];
+	targetStatus: Record<string, TargetStatus>;
 	activeSessionId?: string;
 	sessionsById: Record<string, SessionState>;
 	error?: string;
@@ -76,6 +85,14 @@ type Action =
 			defaults: DefaultsState;
 	  }
 	| { type: "defaults/set"; defaults: DefaultsState }
+	| {
+			type: "sandboxes/set";
+			provider: string;
+			settings: SandboxSettingsInfo;
+			sandboxes: SandboxInfo[];
+	  }
+	| { type: "target/status"; status: TargetStatus }
+	| { type: "target/clear"; sessionId: string }
 	| { type: "session/activate"; id: string }
 	| { type: "session/deactivate" }
 	| { type: "session/attached"; id: string; snapshot: SnapshotEvent }
@@ -95,6 +112,9 @@ const initialState: State = {
 	models: [],
 	imageModels: [],
 	defaults: {},
+	sandboxProvider: "e2b",
+	sandboxes: [],
+	targetStatus: {},
 	sessionsById: {},
 };
 
@@ -200,6 +220,24 @@ function reducer(state: State, action: Action): State {
 			};
 		case "defaults/set":
 			return { ...state, defaults: action.defaults };
+		case "sandboxes/set":
+			return {
+				...state,
+				sandboxProvider: action.provider,
+				sandboxSettings: action.settings,
+				sandboxes: action.sandboxes,
+			};
+		case "target/status":
+			return {
+				...state,
+				targetStatus: { ...state.targetStatus, [action.status.sessionId]: action.status },
+			};
+		case "target/clear": {
+			if (state.targetStatus[action.sessionId] === undefined) return state;
+			const targetStatus = { ...state.targetStatus };
+			delete targetStatus[action.sessionId];
+			return { ...state, targetStatus };
+		}
 		case "session/activate":
 			return {
 				...state,
@@ -249,6 +287,10 @@ type HarnessContextValue = {
 	models: ModelInfo[];
 	imageModels: ImageModelInfo[];
 	defaults: DefaultsState;
+	sandboxProvider: string;
+	sandboxSettings?: SandboxSettingsInfo;
+	sandboxes: SandboxInfo[];
+	targetStatus: Record<string, TargetStatus>;
 	activeSessionId?: string;
 	activeSession?: SessionState;
 	error?: string;
@@ -266,6 +308,19 @@ type HarnessContextValue = {
 	setTarget(target: TargetChoice): Promise<void>;
 	browseWorkspaces(path?: string): Promise<WorkspacesBrowseResult>;
 	createWorkspaceFolder(parent: string, name: string): Promise<{ path: string } | undefined>;
+	refreshSandboxes(): Promise<void>;
+	createSandbox(choice: SandboxChoice): Promise<SandboxInfo | undefined>;
+	pauseSandbox(provider: string, sandboxId: string): Promise<void>;
+	resumeSandbox(provider: string, sandboxId: string): Promise<void>;
+	killSandbox(provider: string, sandboxId: string): Promise<void>;
+	configureSandbox(provider: string, apiKey: string | null): Promise<void>;
+	setSandboxSettings(change: {
+		provider?: string;
+		template?: string | null;
+		idleTimeoutMs?: number | null;
+		autoPause?: boolean | null;
+	}): Promise<void>;
+	sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined>;
 	setDefaults(change: {
 		model?: ModelRef | null;
 		thinkingLevel?: ModelThinkingLevel | null;
@@ -292,6 +347,15 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				dispatch({ type: "session/event", id: event.sessionId, event: event.event });
 			} else if (event.type === "sessions.changed") {
 				dispatch({ type: "sessions/set", sessions: event.sessions });
+			} else if (event.type === "sandboxes.changed") {
+				dispatch({
+					type: "sandboxes/set",
+					provider: event.provider,
+					settings: event.settings,
+					sandboxes: event.sandboxes,
+				});
+			} else if (event.type === "session.target") {
+				dispatch({ type: "target/status", status: event.status });
 			} else {
 				dispatch({
 					type: "providers/set",
@@ -315,9 +379,10 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		if (state.status !== "connected") return;
 		void (async () => {
 			try {
-				const [sessions, providers] = await Promise.all([
+				const [sessions, providers, sandboxes] = await Promise.all([
 					client.send({ type: "sessions.list" }),
 					client.send({ type: "providers.list" }),
+					client.send({ type: "sandboxes.list" }),
 				]);
 				dispatch({ type: "sessions/set", sessions: sessions.sessions });
 				dispatch({
@@ -326,6 +391,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					models: providers.models,
 					imageModels: providers.imageModels,
 					defaults: providers.defaults,
+				});
+				dispatch({
+					type: "sandboxes/set",
+					provider: sandboxes.provider,
+					settings: sandboxes.settings,
+					sandboxes: sandboxes.sandboxes,
 				});
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
@@ -520,11 +591,119 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			try {
 				const { session } = await client.send({ type: "sessions.setTarget", sessionId: id, target });
 				dispatch({ type: "sessions/upsert", session });
+				dispatch({ type: "target/clear", sessionId: id });
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
 			}
 		},
 		[client, state.activeSessionId],
+	);
+
+	const applySandboxes = useCallback(
+		(state: { provider: string; settings: SandboxSettingsInfo; sandboxes: SandboxInfo[] }) => {
+			dispatch({
+				type: "sandboxes/set",
+				provider: state.provider,
+				settings: state.settings,
+				sandboxes: state.sandboxes,
+			});
+		},
+		[],
+	);
+
+	const refreshSandboxes = useCallback(async () => {
+		try {
+			applySandboxes(await client.send({ type: "sandboxes.list" }));
+		} catch (error) {
+			dispatch({ type: "error/set", error: errorMessage(error) });
+		}
+	}, [client, applySandboxes]);
+
+	const createSandbox = useCallback(
+		async (choice: SandboxChoice) => {
+			try {
+				const state = await client.send({ type: "sandboxes.create", choice });
+				applySandboxes(state);
+				const id = state.sandboxes[0]?.id;
+				return state.sandboxes.find((sandbox) => sandbox.id === id);
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
+			}
+		},
+		[client, applySandboxes],
+	);
+
+	const pauseSandbox = useCallback(
+		async (provider: string, sandboxId: string) => {
+			try {
+				applySandboxes(await client.send({ type: "sandboxes.pause", provider, sandboxId }));
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, applySandboxes],
+	);
+
+	const resumeSandbox = useCallback(
+		async (provider: string, sandboxId: string) => {
+			try {
+				applySandboxes(await client.send({ type: "sandboxes.resume", provider, sandboxId }));
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, applySandboxes],
+	);
+
+	const killSandbox = useCallback(
+		async (provider: string, sandboxId: string) => {
+			try {
+				applySandboxes(await client.send({ type: "sandboxes.kill", provider, sandboxId }));
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, applySandboxes],
+	);
+
+	const configureSandbox = useCallback(
+		async (provider: string, apiKey: string | null) => {
+			try {
+				applySandboxes(await client.send({ type: "sandboxes.configure", provider, apiKey }));
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, applySandboxes],
+	);
+
+	const setSandboxSettings = useCallback(
+		async (change: {
+			provider?: string;
+			template?: string | null;
+			idleTimeoutMs?: number | null;
+			autoPause?: boolean | null;
+		}) => {
+			try {
+				applySandboxes(await client.send({ type: "sandboxes.settings", ...change }));
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, applySandboxes],
+	);
+
+	const sandboxMetrics = useCallback(
+		async (provider: string, sandboxId: string) => {
+			try {
+				return (await client.send({ type: "sandboxes.metrics", provider, sandboxId })).metrics;
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
+			}
+		},
+		[client],
 	);
 
 	const browseWorkspaces = useCallback(
@@ -590,6 +769,10 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			models: state.models,
 			imageModels: state.imageModels,
 			defaults: state.defaults,
+			sandboxProvider: state.sandboxProvider,
+			...(state.sandboxSettings === undefined ? {} : { sandboxSettings: state.sandboxSettings }),
+			sandboxes: state.sandboxes,
+			targetStatus: state.targetStatus,
 			...(state.activeSessionId === undefined ? {} : { activeSessionId: state.activeSessionId }),
 			...(state.activeSessionId === undefined || state.sessionsById[state.activeSessionId] === undefined
 				? {}
@@ -609,6 +792,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			setTarget,
 			browseWorkspaces,
 			createWorkspaceFolder,
+			refreshSandboxes,
+			createSandbox,
+			pauseSandbox,
+			resumeSandbox,
+			killSandbox,
+			configureSandbox,
+			setSandboxSettings,
+			sandboxMetrics,
 			setDefaults,
 			refreshProviders,
 			clearError: () => dispatch({ type: "error/clear" }),
@@ -629,6 +820,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			setTarget,
 			browseWorkspaces,
 			createWorkspaceFolder,
+			refreshSandboxes,
+			createSandbox,
+			pauseSandbox,
+			resumeSandbox,
+			killSandbox,
+			configureSandbox,
+			setSandboxSettings,
+			sandboxMetrics,
 			setDefaults,
 			refreshProviders,
 			clearNotice,

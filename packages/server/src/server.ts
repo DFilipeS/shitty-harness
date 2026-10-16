@@ -11,6 +11,8 @@ import {
 	type CommandResult,
 	type ModelRef,
 	type PromptAttachment,
+	type SandboxChoice,
+	type SandboxSourceChoice,
 	type ServerError,
 	type ServerMessage,
 	type TargetChoice,
@@ -52,6 +54,14 @@ const COMMAND_TYPES = new Set<string>([
 	"sessions.setTarget",
 	"workspaces.browse",
 	"workspaces.createFolder",
+	"sandboxes.list",
+	"sandboxes.create",
+	"sandboxes.pause",
+	"sandboxes.resume",
+	"sandboxes.kill",
+	"sandboxes.metrics",
+	"sandboxes.configure",
+	"sandboxes.settings",
 	"providers.list",
 	"providers.configure",
 	"providers.refresh",
@@ -92,6 +102,18 @@ function requireString(value: unknown, name: string): string {
 	return value;
 }
 
+function requireNumber(value: unknown, name: string): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		throw new ServiceError("invalid", `${name} must be a number`);
+	}
+	return value;
+}
+
+function requireBoolean(value: unknown, name: string): boolean {
+	if (typeof value !== "boolean") throw new ServiceError("invalid", `${name} must be a boolean`);
+	return value;
+}
+
 function optionalModelRef(value: unknown): ModelRef | null | undefined {
 	if (value === undefined) return undefined;
 	if (value === null) return null;
@@ -113,12 +135,38 @@ function optionalThinkingLevel(value: unknown): ModelThinkingLevel | null | unde
 function optionalTargetChoice(value: unknown): TargetChoice | null | undefined {
 	if (value === undefined) return undefined;
 	if (value === null) return null;
-	if (!isRecord(value) || value.kind !== "local") {
-		throw new ServiceError("invalid", "target must be a local target");
+	if (!isRecord(value) || typeof value.kind !== "string") {
+		throw new ServiceError("invalid", "target must be a local or sandbox target");
 	}
+	if (value.kind === "sandbox") return { kind: "sandbox", ...optionalSandboxChoice(value) };
+	if (value.kind !== "local") throw new ServiceError("invalid", "target.kind must be local or sandbox");
 	if (value.path === undefined) return { kind: "local" };
 	if (typeof value.path !== "string") throw new ServiceError("invalid", "target.path must be a string");
 	return { kind: "local", path: value.path };
+}
+
+function optionalSandboxSource(value: unknown): SandboxSourceChoice | undefined {
+	if (value === undefined) return undefined;
+	if (!isRecord(value) || typeof value.kind !== "string") {
+		throw new ServiceError("invalid", "sandbox.source must be an object");
+	}
+	if (value.kind === "empty") return { kind: "empty" };
+	if (value.kind === "git") return { kind: "git", url: requireString(value.url, "sandbox.source.url") };
+	throw new ServiceError("invalid", "sandbox.source.kind must be empty or git");
+}
+
+function optionalSandboxChoice(value: unknown): SandboxChoice {
+	if (value === undefined) return {};
+	if (!isRecord(value)) throw new ServiceError("invalid", "sandbox must be an object");
+	const choice: SandboxChoice = {};
+	if (value.provider !== undefined) choice.provider = requireString(value.provider, "sandbox.provider");
+	if (value.sandboxId !== undefined) choice.sandboxId = requireString(value.sandboxId, "sandbox.sandboxId");
+	if (value.name !== undefined) choice.name = requireString(value.name, "sandbox.name");
+	if (value.template !== undefined) choice.template = requireString(value.template, "sandbox.template");
+	if (value.workspaceDir !== undefined) choice.workspaceDir = requireString(value.workspaceDir, "sandbox.workspaceDir");
+	const source = optionalSandboxSource(value.source);
+	if (source !== undefined) choice.source = source;
+	return choice;
 }
 
 function requiredTargetChoice(value: unknown): TargetChoice {
@@ -311,6 +359,67 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				const name = requireString(command.name, "name");
 				return { data: await service.createWorkspaceFolder(parent, name) };
 			}
+			case "sandboxes.list": {
+				return { data: await service.listSandboxes() };
+			}
+			case "sandboxes.create": {
+				return { data: await service.createSandbox(optionalSandboxChoice(command.choice)) };
+			}
+			case "sandboxes.pause": {
+				return {
+					data: await service.pauseSandbox(
+						requireString(command.provider, "provider"),
+						requireString(command.sandboxId, "sandboxId"),
+					),
+				};
+			}
+			case "sandboxes.resume": {
+				return {
+					data: await service.resumeSandbox(
+						requireString(command.provider, "provider"),
+						requireString(command.sandboxId, "sandboxId"),
+					),
+				};
+			}
+			case "sandboxes.kill": {
+				return {
+					data: await service.killSandbox(
+						requireString(command.provider, "provider"),
+						requireString(command.sandboxId, "sandboxId"),
+					),
+				};
+			}
+			case "sandboxes.metrics": {
+				return {
+					data: {
+						metrics: await service.sandboxMetrics(
+							requireString(command.provider, "provider"),
+							requireString(command.sandboxId, "sandboxId"),
+						),
+					},
+				};
+			}
+			case "sandboxes.configure": {
+				const provider = requireString(command.provider, "provider");
+				const apiKey = command.apiKey === null ? null : requireString(command.apiKey, "apiKey");
+				return { data: await service.configureSandboxProvider(provider, apiKey) };
+			}
+			case "sandboxes.settings": {
+				return {
+					data: await service.setSandboxSettings({
+						...(command.provider === undefined ? {} : { provider: requireString(command.provider, "provider") }),
+						...(command.template === undefined
+							? {}
+							: { template: command.template === null ? null : requireString(command.template, "template") }),
+						...(command.idleTimeoutMs === undefined
+							? {}
+							: { idleTimeoutMs: command.idleTimeoutMs === null ? null : requireNumber(command.idleTimeoutMs, "idleTimeoutMs") }),
+						...(command.autoPause === undefined
+							? {}
+							: { autoPause: command.autoPause === null ? null : requireBoolean(command.autoPause, "autoPause") }),
+					}),
+				};
+			}
 			case "providers.list": {
 				return { data: await service.listProviders() };
 			}
@@ -391,16 +500,25 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 	});
 
 	const unsubscribeService = service.on((event) => {
-		const message: ServerMessage =
-			event.type === "sessions"
-				? { type: "sessions.changed", sessions: event.sessions }
-				: {
-						type: "providers.changed",
-						providers: event.providers,
-						models: event.models,
-						imageModels: event.imageModels,
-						defaults: event.defaults,
-					};
+		let message: ServerMessage;
+		if (event.type === "sessions") message = { type: "sessions.changed", sessions: event.sessions };
+		else if (event.type === "sandboxes") {
+			message = {
+				type: "sandboxes.changed",
+				provider: event.provider,
+				settings: event.settings,
+				sandboxes: event.sandboxes,
+			};
+		} else if (event.type === "target") message = { type: "session.target", status: event.status };
+		else {
+			message = {
+				type: "providers.changed",
+				providers: event.providers,
+				models: event.models,
+				imageModels: event.imageModels,
+				defaults: event.defaults,
+			};
+		}
 		for (const connection of connections) send(connection, message);
 	});
 

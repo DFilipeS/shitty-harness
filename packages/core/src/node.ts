@@ -5,6 +5,8 @@ import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite
 import { loadConfig } from "./config.ts";
 import { lazyEnvironment, type EnvironmentFactory } from "./environment.ts";
 import { ProviderManager } from "./providers.ts";
+import "./sandboxes/e2b/index.ts";
+import { SandboxManager } from "./sandboxes/manager.ts";
 import { HarnessService } from "./service.ts";
 
 export type OpenHarnessServiceOptions = {
@@ -41,11 +43,13 @@ export async function openHarnessService(options: OpenHarnessServiceOptions): Pr
 	});
 	const storage = await openNodeSqliteStorage(join(dataDir, "sessions.sqlite"));
 	const environment = options.environment ?? localEnvironment();
+	const sandboxes = new SandboxManager({ store: providers, stateDir: join(dataDir, "sandboxes") });
 
 	return HarnessService.create({
 		storage,
 		providers,
 		environment,
 		workspacesDir: join(dataDir, "workspaces"),
+		sandboxes,
 	});
 }

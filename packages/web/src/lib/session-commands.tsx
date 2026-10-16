@@ -251,7 +251,10 @@ export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 				id: "defaults.target",
 				title: "Default target",
 				group: "Defaults",
-				detail: defaults.target?.path ?? "Scratch directory",
+				detail:
+					defaults.target?.kind === "sandbox"
+						? "New sandbox"
+						: defaults.target?.path ?? "Scratch directory",
 				icon: <FolderIcon />,
 				run: ({ pushPage }) => pushPage(targetPalette.page()),
 			},

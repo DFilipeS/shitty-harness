@@ -12,10 +12,12 @@ import {
 	SettingsIcon,
 	SlidersIcon,
 	SunIcon,
+	TerminalIcon,
 } from "./components/icons.tsx";
 import { CommandPaletteProvider, useRegisterCommands, type Command } from "./lib/commands.tsx";
 import { relativeTime } from "./lib/format.ts";
 import { useProviderPalette } from "./lib/provider-commands.tsx";
+import { useSandboxesPalette } from "./lib/sandbox-commands.tsx";
 import { useDefaultsPalette } from "./lib/session-commands.tsx";
 import { SHORTCUTS } from "./lib/shortcuts.ts";
 import { HarnessProvider, useHarness } from "./lib/store.tsx";
@@ -107,6 +109,7 @@ function useGlobalCommands(toggleSidebar: () => void) {
 	const { theme, toggleTheme } = useTheme();
 	const providersPalette = useProviderPalette();
 	const defaultsPalette = useDefaultsPalette();
+	const sandboxesPalette = useSandboxesPalette();
 
 	const commands: Command[] = [
 		{
@@ -154,6 +157,14 @@ function useGlobalCommands(toggleSidebar: () => void) {
 			keywords: ["default", "model", "thinking", "reasoning", "target", "folder", "new session"],
 			icon: <SlidersIcon />,
 			run: ({ pushPage }) => pushPage(defaultsPalette.page()),
+		},
+		{
+			id: "sandboxes.open",
+			title: "Manage sandboxes…",
+			group: "App",
+			keywords: ["sandbox", "e2b", "remote", "kill", "pause"],
+			icon: <TerminalIcon />,
+			run: ({ pushPage }) => pushPage(sandboxesPalette.page()),
 		},
 		{
 			id: "providers.refresh",

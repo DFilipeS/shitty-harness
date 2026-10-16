@@ -35,22 +35,37 @@ import type {
 	PromptAttachment,
 	ProviderInfo,
 	ProviderRefreshReport,
+	SandboxChoice,
+	SandboxMetricsInfo,
+	SandboxesState,
+	SandboxSettingsInfo,
 	SessionSummary,
 	TargetChoice,
 	TargetInfo,
+	TargetStatus,
 	WorkspacesBrowseResult,
 } from "@harness/protocol";
 import type { EnvironmentFactory } from "./environment.ts";
 import { sortModelsForDisplay } from "./model-order.ts";
 import type { Providers } from "./providers.ts";
+import { SandboxManager, type ResolvedSandboxTarget, type SandboxStatus } from "./sandboxes/manager.ts";
+import type { SandboxSource } from "./sandboxes/provider.ts";
+import {
+	DEFAULT_SANDBOX_SETTINGS,
+	DEFAULT_SANDBOX_WORKSPACE,
+	type SandboxSettings,
+} from "./sandboxes/settings.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
 import {
 	createTargetSection,
 	resolveTarget,
+	sandboxTargetState,
 	scratchPath,
 	SessionTargetDoc,
 	TargetChangeEntry,
 	type ResolvedTarget,
+	type SessionTargetState,
+	type TargetChangeData,
 } from "./targets.ts";
 
 const NEW_SESSION_TITLE = "New session";
@@ -85,9 +100,11 @@ type SessionAgentChange = {
 
 export { ServiceError };
 
-/** Provider and session-list changes the server forwards to every connected client. */
+/** Provider, session-list, sandbox, and target changes the server forwards to every client. */
 export type ServiceEvent =
 	| { type: "sessions"; sessions: SessionSummary[] }
+	| { type: "target"; status: TargetStatus }
+	| ({ type: "sandboxes" } & SandboxesState)
 	| ({ type: "providers" } & ProvidersState);
 
 export type ProvidersState = {
@@ -104,25 +121,69 @@ export type HarnessServiceDependencies = {
 	environment?: EnvironmentFactory;
 	/** Root directory that holds per-session scratch workspaces. */
 	workspacesDir?: string;
+	/** Sandbox providers and their per-session environments. */
+	sandboxes?: SandboxManager;
 };
 
 /** The protocol view of a resolved target. */
 function targetInfo(target: ResolvedTarget): TargetInfo {
-	return { kind: "local", path: target.path, scratch: target.scratch };
+	if (target.kind === "local") return { kind: "local", path: target.path, scratch: target.scratch };
+	return {
+		kind: "sandbox",
+		provider: target.provider,
+		...(target.sandboxId === undefined ? {} : { sandboxId: target.sandboxId }),
+		...(target.name === undefined ? {} : { name: target.name }),
+		workspaceDir: target.workspaceDir,
+	};
 }
 
-/** Resolve the session's target, then build the local environment at its directory. */
-function composeEnvironment(
-	local: EnvironmentFactory,
-	workspacesDir: string | undefined,
-	providers: Providers,
-): EnvironmentFactory {
+/** Defaults for a sandbox target that names no provider or workspace of its own. */
+function sandboxDefaults(manager: SandboxManager | undefined): {
+	provider: string;
+	template?: string;
+	workspaceDir: string;
+} {
+	const settings = manager?.settings;
+	return {
+		provider: settings?.provider ?? DEFAULT_SANDBOX_SETTINGS.provider,
+		...(settings?.template === undefined ? {} : { template: settings.template }),
+		workspaceDir: DEFAULT_SANDBOX_WORKSPACE,
+	};
+}
+
+function sandboxSettingsInfo(settings: SandboxSettings, configured: boolean): SandboxSettingsInfo {
+	return {
+		provider: settings.provider,
+		...(settings.template === undefined ? {} : { template: settings.template }),
+		idleTimeoutMs: settings.idleTimeoutMs,
+		autoPause: settings.autoPause,
+		configured,
+	};
+}
+
+type ComposeEnvironmentOptions = {
+	local: EnvironmentFactory;
+	workspacesDir?: string;
+	providers: Providers;
+	sandboxes?: SandboxManager;
+	sandboxDefaults: () => { provider: string; template?: string; workspaceDir?: string };
+};
+
+/** Resolve the session's target, then build the local environment or open its sandbox. */
+function composeEnvironment(options: ComposeEnvironmentOptions): EnvironmentFactory {
 	return async (target, context) => {
 		const resolved = await resolveTarget(target.read, target.conversationId, context, {
-			...(workspacesDir === undefined ? {} : { workspacesDir }),
-			defaultTarget: providers.getDefaults().target,
+			...(options.workspacesDir === undefined ? {} : { workspacesDir: options.workspacesDir }),
+			defaultTarget: options.providers.getDefaults().target,
+			sandboxDefaults: options.sandboxDefaults(),
 		});
-		return local({ ...target, ...(resolved.path === "" ? {} : { cwd: resolved.path }) }, context);
+		if (resolved.kind === "local") {
+			return options.local({ ...target, ...(resolved.path === "" ? {} : { cwd: resolved.path }) }, context);
+		}
+		if (options.sandboxes === undefined) {
+			throw new ServiceError("sandbox_unavailable", "Sandboxes are not configured");
+		}
+		return options.sandboxes.environment(resolved, String(target.conversationId), context);
 	};
 }
 
@@ -135,6 +196,7 @@ export class HarnessService {
 	readonly #providers: Providers;
 	readonly #environment: EnvironmentFactory | undefined;
 	readonly #workspacesDir: string | undefined;
+	readonly #sandboxes: SandboxManager | undefined;
 	/** Live session event streams, one per `subscribeSession` caller. */
 	readonly #streams = new Set<AgentEventStream>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
@@ -148,11 +210,13 @@ export class HarnessService {
 		providers: Providers,
 		environment: EnvironmentFactory | undefined,
 		workspacesDir: string | undefined,
+		sandboxes: SandboxManager | undefined,
 	) {
 		this.#harness = harness;
 		this.#providers = providers;
 		this.#environment = environment;
 		this.#workspacesDir = workspacesDir;
+		this.#sandboxes = sandboxes;
 	}
 
 	/**
@@ -180,6 +244,7 @@ export class HarnessService {
 							? {}
 							: { workspacesDir: dependencies.workspacesDir }),
 						defaultTarget: () => providers.getDefaults().target,
+						sandboxDefaults: () => sandboxDefaults(dependencies.sandboxes),
 					}),
 				],
 			}),
@@ -187,7 +252,13 @@ export class HarnessService {
 		const environment =
 			dependencies.environment === undefined
 				? undefined
-				: composeEnvironment(dependencies.environment, dependencies.workspacesDir, providers);
+				: composeEnvironment({
+						local: dependencies.environment,
+						...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+						providers,
+						...(dependencies.sandboxes === undefined ? {} : { sandboxes: dependencies.sandboxes }),
+						sandboxDefaults: () => sandboxDefaults(dependencies.sandboxes),
+					});
 		const harness = await Harness.open(
 			dependencies.storage,
 			{
@@ -214,7 +285,24 @@ export class HarnessService {
 		}, BACKGROUND_CONTEXT);
 		harness.resume();
 
-		const service = new HarnessService(harness, providers, environment, dependencies.workspacesDir);
+		const service = new HarnessService(
+			harness,
+			providers,
+			environment,
+			dependencies.workspacesDir,
+			dependencies.sandboxes,
+		);
+		if (dependencies.sandboxes !== undefined) {
+			dependencies.sandboxes.rememberSandboxId = async (conversationId, sandboxId) => {
+				await harness.commit(async (tx) => {
+					const doc = await tx.doc(SessionTargetDoc, parseConversationId(conversationId));
+					if (doc.kind === "sandbox" && doc.sandbox !== null && doc.sandbox.sandboxId === null) {
+						doc.sandbox.sandboxId = sandboxId;
+					}
+				}, BACKGROUND_CONTEXT);
+			};
+			dependencies.sandboxes.onStatus = (status) => service.#handleSandboxStatus(status);
+		}
 		await service.#watchSessionIndex();
 		await service.#watchTaskGraph();
 		// Startup uses the cached catalog when it is fresh; the client can force a refresh.
@@ -237,6 +325,27 @@ export class HarnessService {
 
 	async #emitSessions(): Promise<void> {
 		this.#emit({ type: "sessions", sessions: await this.listSessions() });
+	}
+
+	async #emitSandboxes(): Promise<void> {
+		this.#emit({ type: "sandboxes", ...(await this.listSandboxes()) });
+	}
+
+	/** Lazy sandbox progress: the target chip updates, and a ready sandbox refreshes both lists. */
+	#handleSandboxStatus(status: SandboxStatus): void {
+		this.#emit({
+			type: "target",
+			status: {
+				sessionId: status.conversationId,
+				phase: status.phase,
+				...(status.sandboxId === undefined ? {} : { sandboxId: status.sandboxId }),
+				...(status.message === undefined ? {} : { message: status.message }),
+			},
+		});
+		if (status.phase === "ready") {
+			void this.#emitSessions();
+			void this.#emitSandboxes();
+		}
 	}
 
 	async #watchSessionIndex(): Promise<void> {
@@ -286,6 +395,7 @@ export class HarnessService {
 		return resolveTarget(this.#harness, conversationId, BACKGROUND_CONTEXT, {
 			...(this.#workspacesDir === undefined ? {} : { workspacesDir: this.#workspacesDir }),
 			defaultTarget: this.#providers.getDefaults().target,
+			sandboxDefaults: sandboxDefaults(this.#sandboxes),
 		});
 	}
 
@@ -299,10 +409,27 @@ export class HarnessService {
 		// Snapshot the default target, so changing the setting later leaves this session alone.
 		await this.#harness.commit(async (tx) => {
 			const target = await tx.doc(SessionTargetDoc, conversation.id);
-			target.kind = "local";
-			target.path = this.#providers.getDefaults().target?.path ?? null;
+			this.#writeDefaultTarget(target);
 		}, BACKGROUND_CONTEXT);
 		return this.#requireSession(String(conversation.id));
+	}
+
+	#writeDefaultTarget(doc: SessionTargetState): void {
+		const defaults = this.#providers.getDefaults().target;
+		if (defaults?.kind === "sandbox") {
+			const sandbox = sandboxDefaults(this.#sandboxes);
+			doc.kind = "sandbox";
+			doc.path = null;
+			doc.sandbox = sandboxTargetState({
+				provider: sandbox.provider,
+				...(sandbox.template === undefined ? {} : { template: sandbox.template }),
+				workspaceDir: sandbox.workspaceDir,
+			});
+			return;
+		}
+		doc.kind = "local";
+		doc.path = defaults?.path ?? null;
+		doc.sandbox = null;
 	}
 
 	async renameSession(id: string, title: string): Promise<SessionSummary> {
@@ -406,8 +533,8 @@ export class HarnessService {
 	}
 
 	/**
-	 * Point a session at a local folder, or back at its scratch directory. The change takes effect on
-	 * the next run; a visible entry records it so the transcript and the model stay honest.
+	 * Point a session at a local folder, its scratch directory, or a sandbox. The change takes effect
+	 * on the next run; a visible entry records it so the transcript and the model stay honest.
 	 */
 	async setTarget(id: string, choice: TargetChoice): Promise<SessionSummary> {
 		const conversationId = parseConversationId(id);
@@ -415,27 +542,175 @@ export class HarnessService {
 		if (this.#working.has(id)) {
 			throw new ServiceError("busy", "Wait for the run to finish before changing the target");
 		}
-		const path = choice.path?.trim();
-		if (path !== undefined && path !== "") {
-			const info = await stat(path).catch(() => undefined);
-			if (info === undefined || !info.isDirectory()) {
-				throw new ServiceError("invalid", `Not a directory: ${path}`);
-			}
-		}
-		const target: ResolvedTarget =
-			path === undefined || path === ""
-				? { kind: "local", path: scratchPath(this.#workspacesDir, conversationId), scratch: true }
-				: { kind: "local", path, scratch: false };
+		const prepared = choice.kind === "local" ? await this.#localTarget(conversationId, choice.path) : this.#sandboxTarget(choice);
 		await this.#harness.commit(async (tx) => {
 			const doc = await tx.doc(SessionTargetDoc, conversationId);
-			doc.kind = "local";
-			doc.path = target.scratch ? null : target.path;
-			await tx.appendEntry(TargetChangeEntry, conversationId, {
-				data: { path: target.path, scratch: target.scratch },
-			});
+			if (prepared.target.kind === "local") {
+				doc.kind = "local";
+				doc.path = prepared.target.scratch ? null : prepared.target.path;
+				doc.sandbox = null;
+			} else {
+				doc.kind = "sandbox";
+				doc.path = null;
+				doc.sandbox = sandboxTargetState(prepared.target);
+			}
+			await tx.appendEntry(TargetChangeEntry, conversationId, { data: prepared.entry });
 		}, BACKGROUND_CONTEXT);
+		this.#sandboxes?.forget(id);
 		await this.#emitSessions();
 		return this.#requireSession(id);
+	}
+
+	async #localTarget(
+		conversationId: ConversationId,
+		path: string | undefined,
+	): Promise<{ target: ResolvedTarget; entry: TargetChangeData }> {
+		const trimmed = path?.trim();
+		if (trimmed !== undefined && trimmed !== "") {
+			const info = await stat(trimmed).catch(() => undefined);
+			if (info === undefined || !info.isDirectory()) {
+				throw new ServiceError("invalid", `Not a directory: ${trimmed}`);
+			}
+			return {
+				target: { kind: "local", path: trimmed, scratch: false },
+				entry: { kind: "local", path: trimmed, scratch: false },
+			};
+		}
+		const scratch = scratchPath(this.#workspacesDir, conversationId);
+		return {
+			target: { kind: "local", path: scratch, scratch: true },
+			entry: { kind: "local", path: scratch, scratch: true },
+		};
+	}
+
+	#sandboxTarget(choice: SandboxChoice): { target: ResolvedSandboxTarget; entry: TargetChangeData } {
+		const manager = this.#requireSandboxes();
+		if (!manager.configured()) {
+			throw new ServiceError("sandbox_unavailable", "Configure a sandbox provider first");
+		}
+		const provider = choice.provider ?? manager.settings.provider;
+		const workspaceDir = choice.workspaceDir ?? DEFAULT_SANDBOX_WORKSPACE;
+		if (choice.sandboxId !== undefined) {
+			return {
+				target: { kind: "sandbox", provider, sandboxId: choice.sandboxId, workspaceDir },
+				entry: { kind: "sandbox", path: workspaceDir, scratch: false, provider, sandboxId: choice.sandboxId },
+			};
+		}
+		const name = choice.name?.trim();
+		const template = choice.template?.trim();
+		const source = this.#sandboxSource(choice.source);
+		const target: ResolvedSandboxTarget = {
+			kind: "sandbox",
+			provider,
+			workspaceDir,
+			...(name === undefined || name === "" ? {} : { name }),
+			...(template === undefined || template === "" ? {} : { template }),
+			...(source === undefined ? {} : { source }),
+		};
+		return {
+			target,
+			entry: {
+				kind: "sandbox",
+				path: workspaceDir,
+				scratch: false,
+				provider,
+				...(target.name === undefined ? {} : { name: target.name }),
+			},
+		};
+	}
+
+	#sandboxSource(source: SandboxSource | undefined): SandboxSource | undefined {
+		if (source === undefined) return undefined;
+		if (source.kind === "empty") return source;
+		const url = source.url.trim();
+		if (url === "") throw new ServiceError("invalid", "Git URL must not be empty");
+		return { kind: "git", url };
+	}
+
+	/** Sandboxes the harness created, with the sessions currently attached to each. */
+	async listSandboxes(): Promise<SandboxesState> {
+		const manager = this.#sandboxes;
+		const settings = manager?.settings ?? DEFAULT_SANDBOX_SETTINGS;
+		const configured = manager?.configured() ?? false;
+		const sandboxes = configured && manager !== undefined ? await manager.list().catch((error: unknown) => {
+			console.warn("[core] listing sandboxes failed:", error);
+			return [];
+		}) : [];
+		const attached = new Map<string, string[]>();
+		for (const session of await this.listSessions()) {
+			const target = session.target;
+			if (target.kind !== "sandbox" || target.sandboxId === undefined) continue;
+			const list = attached.get(target.sandboxId) ?? [];
+			list.push(session.id);
+			attached.set(target.sandboxId, list);
+		}
+		return {
+			provider: settings.provider,
+			settings: sandboxSettingsInfo(settings, configured),
+			sandboxes: sandboxes.map((sandbox) => ({ ...sandbox, sessions: attached.get(sandbox.id) ?? [] })),
+		};
+	}
+
+	async createSandbox(choice: SandboxChoice): Promise<SandboxesState> {
+		const manager = this.#requireSandboxes();
+		if (!manager.configured()) throw new ServiceError("sandbox_unavailable", "Configure a sandbox provider first");
+		const source = this.#sandboxSource(choice.source);
+		const name = choice.name?.trim();
+		const template = choice.template?.trim();
+		await manager.create({
+			workspaceDir: choice.workspaceDir ?? DEFAULT_SANDBOX_WORKSPACE,
+			...(name === undefined || name === "" ? {} : { name }),
+			...(template === undefined || template === "" ? {} : { template }),
+			...(source === undefined ? {} : { source }),
+		});
+		await this.#emitSandboxes();
+		return this.listSandboxes();
+	}
+
+	async pauseSandbox(provider: string, sandboxId: string): Promise<SandboxesState> {
+		await this.#requireSandboxes().pause(provider, sandboxId);
+		await this.#emitSandboxes();
+		return this.listSandboxes();
+	}
+
+	async resumeSandbox(provider: string, sandboxId: string): Promise<SandboxesState> {
+		await this.#requireSandboxes().resume(provider, sandboxId);
+		await this.#emitSandboxes();
+		return this.listSandboxes();
+	}
+
+	async killSandbox(provider: string, sandboxId: string): Promise<SandboxesState> {
+		await this.#requireSandboxes().kill(provider, sandboxId);
+		await this.#emitSandboxes();
+		return this.listSandboxes();
+	}
+
+	async sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined> {
+		return this.#requireSandboxes().metrics(provider, sandboxId);
+	}
+
+	async configureSandboxProvider(provider: string, apiKey: string | null): Promise<SandboxesState> {
+		await this.#requireSandboxes().setSettings({ apiKey: { provider, key: apiKey } });
+		await this.#emitSandboxes();
+		return this.listSandboxes();
+	}
+
+	async setSandboxSettings(change: {
+		provider?: string;
+		template?: string | null;
+		idleTimeoutMs?: number | null;
+		autoPause?: boolean | null;
+	}): Promise<SandboxesState> {
+		await this.#requireSandboxes().setSettings(change);
+		await this.#emitSandboxes();
+		return this.listSandboxes();
+	}
+
+	#requireSandboxes(): SandboxManager {
+		if (this.#sandboxes === undefined) {
+			throw new ServiceError("sandbox_unavailable", "Sandboxes are not configured");
+		}
+		return this.#sandboxes;
 	}
 
 	/** List the directories under `path` for the local folder picker; defaults to the home directory. */
@@ -541,11 +816,18 @@ export class HarnessService {
 			}
 		}
 		if (change.target !== undefined && change.target !== null) {
-			const path = change.target.path?.trim();
-			if (path !== undefined && path !== "") {
-				const info = await stat(path).catch(() => undefined);
-				if (info === undefined || !info.isDirectory()) {
-					throw new ServiceError("invalid", `Not a directory: ${path}`);
+			if (change.target.kind === "sandbox") {
+				const manager = this.#requireSandboxes();
+				if (!manager.configured()) {
+					throw new ServiceError("sandbox_unavailable", "Configure a sandbox provider first");
+				}
+			} else {
+				const path = change.target.path?.trim();
+				if (path !== undefined && path !== "") {
+					const info = await stat(path).catch(() => undefined);
+					if (info === undefined || !info.isDirectory()) {
+						throw new ServiceError("invalid", `Not a directory: ${path}`);
+					}
 				}
 			}
 		}
