@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { LiveTool } from "../lib/live-tools.ts";
 import type { ToolResultView } from "../lib/messages.ts";
 import { useHarness, type LiveMessageState } from "../lib/store.tsx";
 import { AssistantBubble } from "./MessageBubbles.tsx";
@@ -49,11 +50,13 @@ export function LiveMessage({
 	message,
 	onReveal,
 	toolResults,
+	liveTools,
 }: {
 	sessionId: string;
 	message: LiveMessageState;
 	onReveal?: () => void;
 	toolResults?: ReadonlyMap<string, ToolResultView>;
+	liveTools?: Readonly<Record<string, LiveTool>>;
 }) {
 	const { finishLive } = useHarness();
 	const reducedMotion = useMemo(prefersReducedMotion, []);
@@ -112,6 +115,7 @@ export function LiveMessage({
 			blocks={blocks}
 			usage={message.usage}
 			toolResults={toolResults}
+			{...(liveTools === undefined ? {} : { liveTools })}
 			streaming={!done}
 			error={message.error}
 		/>

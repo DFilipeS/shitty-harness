@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { EntryRecord, ModelInfo } from "@harness/protocol";
+import type { LiveTool } from "../lib/live-tools.ts";
 import {
 	assistantError,
 	assistantMessageOf,
@@ -39,6 +40,7 @@ export function MessageList() {
 	}, []);
 
 	const live = activeSession?.live;
+	const liveTools = activeSession?.liveTools ?? {};
 	const entries = activeSession?.entries ?? [];
 	// The committed entry stays hidden while the live reveal is still catching up to it.
 	const visibleEntries = live?.entryId === undefined ? entries : entries.filter((entry) => entry.id !== live.entryId);
@@ -86,6 +88,7 @@ export function MessageList() {
 						entry={entry}
 						toolResults={toolResults}
 						toolCallIds={toolCallIds}
+						liveTools={liveTools}
 						models={models}
 					/>
 				))}
@@ -96,6 +99,7 @@ export function MessageList() {
 						message={live}
 						onReveal={handleReveal}
 						toolResults={toolResults}
+						liveTools={liveTools}
 					/>
 				)}
 				{entries.length === 0 && live === undefined && (
@@ -110,11 +114,13 @@ function EntryView({
 	entry,
 	toolResults,
 	toolCallIds,
+	liveTools,
 	models,
 }: {
 	entry: EntryRecord;
 	toolResults: ReadonlyMap<string, ToolResultView>;
 	toolCallIds: ReadonlySet<string>;
+	liveTools: Readonly<Record<string, LiveTool>>;
 	models: readonly ModelInfo[];
 }) {
 	const user = userMessageOf(entry);
@@ -129,6 +135,7 @@ function EntryView({
 					blocks={assistant.content.map(toLiveBlock)}
 					usage={assistant.usage}
 					toolResults={toolResults}
+					liveTools={liveTools}
 					error={assistantError(assistant)}
 				/>
 				{hasHiddenOutput(assistant, models) && <HiddenOutputNotice />}

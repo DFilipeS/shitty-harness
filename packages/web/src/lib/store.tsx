@@ -30,6 +30,7 @@ import type {
 } from "@harness/protocol";
 import { HarnessClient, ServerCommandError, type ConnectionStatus } from "./client.ts";
 import { errorMessage, formatRefreshNotice } from "./format.ts";
+import { applyToolOutput, liveToolsFromSnapshot, type LiveTool } from "./live-tools.ts";
 import { applyMessageChanges, fromAssistantMessage, type LiveMessage } from "./messages.ts";
 import { sessionIdFromPath, sessionPath } from "./url.ts";
 
@@ -49,6 +50,8 @@ export type SessionState = {
 	attached: boolean;
 	entries: EntryRecord[];
 	live?: LiveMessageState;
+	/** Output of the tool calls that are running, keyed by tool call id. */
+	liveTools: Record<string, LiveTool>;
 	runActive: boolean;
 	agent: AgentState;
 	inbox: { id: string; mode: string }[];
@@ -145,7 +148,7 @@ const initialState: State = {
 };
 
 function emptySession(id: string): SessionState {
-	return { id, attached: false, entries: [], runActive: false, agent: {}, inbox: [] };
+	return { id, attached: false, entries: [], liveTools: {}, runActive: false, agent: {}, inbox: [] };
 }
 
 function fromSnapshot(id: string, snapshot: SnapshotEvent): SessionState {
@@ -161,6 +164,7 @@ function fromSnapshot(id: string, snapshot: SnapshotEvent): SessionState {
 						key: String(snapshot.generation.message.timestamp),
 					},
 				}),
+		liveTools: liveToolsFromSnapshot(snapshot.tools),
 		runActive: snapshot.run !== undefined,
 		agent: snapshot.agent,
 		inbox: snapshot.inbox.map((item) => ({ id: String(item.id), mode: item.mode })),
@@ -173,6 +177,15 @@ function appendEntry(entries: EntryRecord[], entry: EntryRecord): EntryRecord[] 
 	return [...entries, entry];
 }
 
+/** Drop a tool's live state once its result is committed; the entry takes over. */
+function withoutResultTool(liveTools: Record<string, LiveTool>, entry: EntryRecord): Record<string, LiveTool> {
+	const message = entry.model?.[0];
+	if (message?.role !== "toolResult" || liveTools[message.toolCallId] === undefined) return liveTools;
+	const next = { ...liveTools };
+	delete next[message.toolCallId];
+	return next;
+}
+
 function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 	switch (event.type) {
 		case "snapshot":
@@ -180,7 +193,8 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 		case "run_start":
 			return { ...session, runActive: true };
 		case "run_end":
-			return { ...session, runActive: false };
+			// Live tool output belongs to the run; committed entries carry the results afterwards.
+			return { ...session, runActive: false, liveTools: {} };
 		case "message_start":
 			return event.message.role === "assistant"
 				? { ...session, live: { ...fromAssistantMessage(event.message), key: String(event.message.timestamp) } }
@@ -198,15 +212,52 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 			};
 		case "message_end": {
 			const entries = appendEntry(session.entries, event.entry);
-			if (session.live === undefined) return { ...session, entries };
+			const liveTools = withoutResultTool(session.liveTools, event.entry);
+			if (session.live === undefined) return { ...session, entries, liveTools };
 			return {
 				...session,
 				entries,
+				liveTools,
 				live: { ...session.live, entryId: event.entry.id, finished: true },
 			};
 		}
 		case "entry_appended":
-			return { ...session, entries: appendEntry(session.entries, event.entry) };
+			return {
+				...session,
+				entries: appendEntry(session.entries, event.entry),
+				liveTools: withoutResultTool(session.liveTools, event.entry),
+			};
+		case "tool_execution_start":
+			return {
+				...session,
+				liveTools: {
+					...session.liveTools,
+					[event.toolCallId]: { name: event.toolName, output: "", running: true },
+				},
+			};
+		case "tool_execution_update": {
+			const existing = session.liveTools[event.toolCallId] ?? {
+				name: event.toolName,
+				output: "",
+				running: true,
+			};
+			const output =
+				event.output === undefined ? existing.output : applyToolOutput(existing.output, event.output);
+			return {
+				...session,
+				liveTools: { ...session.liveTools, [event.toolCallId]: { ...existing, output } },
+			};
+		}
+		case "tool_execution_end": {
+			const existing = session.liveTools[event.toolCallId];
+			if (existing === undefined) return session;
+			// A committed result replaces the live window; without one, keep the output for reading.
+			if (event.entry !== undefined) return { ...session, liveTools: withoutResultTool(session.liveTools, event.entry) };
+			return {
+				...session,
+				liveTools: { ...session.liveTools, [event.toolCallId]: { ...existing, running: false } },
+			};
+		}
 		case "inbox_update":
 			return { ...session, inbox: event.items.map((item) => ({ id: String(item.id), mode: item.mode })) };
 		case "agent_changed":

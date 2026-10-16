@@ -169,6 +169,11 @@ the provider's image API (the chat stream cannot carry images), saves the pictur
 a file path to edit or reference an existing picture, such as one from an earlier `Saved ...`
 note.
 
+While a tool runs, its output streams into the tool's block in the transcript: the block opens by
+default, follows the newest output unless you scroll up, and keeps a fixed height with its own
+scrollbar. When the call finishes, the committed result replaces the live output and the block
+stays open; tool calls from earlier in the conversation start collapsed.
+
 **Model defaults…** picks the image model the tool uses; without one it takes the image sibling of
 the conversation's model, then the first image model that also returns text. Only those are
 listed: pi-ai's OpenRouter image API speaks chat completions, so `/images`-only models (FLUX,

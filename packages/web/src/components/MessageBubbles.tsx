@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatTokens } from "../lib/format.ts";
+import type { LiveTool } from "../lib/live-tools.ts";
 import {
 	parseToolArguments,
 	toolCallSummary,
@@ -78,6 +79,7 @@ export function AssistantBubble({
 	blocks,
 	usage,
 	toolResults,
+	liveTools,
 	streaming = false,
 	error,
 }: {
@@ -86,6 +88,8 @@ export function AssistantBubble({
 	usage?: LiveMessage["usage"];
 	/** Results of this message's tool calls, keyed by tool call id. */
 	toolResults?: ReadonlyMap<string, ToolResultView>;
+	/** Output of this message's running tool calls, keyed by tool call id. */
+	liveTools?: Readonly<Record<string, LiveTool>>;
 	streaming?: boolean;
 	/** What the model request failed with, when it did. */
 	error?: string;
@@ -101,7 +105,15 @@ export function AssistantBubble({
 			{blocks.map((block, index) => {
 				if (block.type === "text" && block.text === "") return null;
 				if (block.type === "thinking" && block.thinking === "") return null;
-				return <BlockView key={index} block={block} stateKey={`${messageKey}:${index}`} toolResults={toolResults} />;
+				return (
+					<BlockView
+						key={index}
+						block={block}
+						stateKey={`${messageKey}:${index}`}
+						toolResults={toolResults}
+						{...(liveTools === undefined ? {} : { liveTools })}
+					/>
+				);
 			})}
 			{error !== undefined && (
 				<div
@@ -127,16 +139,18 @@ function BlockView({
 	block,
 	stateKey,
 	toolResults,
+	liveTools,
 }: {
 	block: LiveBlock;
 	stateKey: string;
 	toolResults?: ReadonlyMap<string, ToolResultView>;
+	liveTools?: Readonly<Record<string, LiveTool>>;
 }) {
 	if (block.type === "thinking") {
 		return <ThinkingBlock stateKey={stateKey} thinking={block.thinking} />;
 	}
 	if (block.type === "toolCall") {
-		return <ToolCallBlock call={block} result={toolResults?.get(block.id)} />;
+		return <ToolCallBlock call={block} result={toolResults?.get(block.id)} live={liveTools?.[block.id]} />;
 	}
 	return <Markdown text={block.text} />;
 }
@@ -159,12 +173,34 @@ function ToolIcon({ name, className }: { name: string; className?: string }) {
 	}
 }
 
-/** One collapsible row per tool call, holding the arguments and the result, like a thinking block. */
-function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultView }) {
-	const [open, setOpen] = useState(() => toolOpenState.get(call.id) ?? false);
+/** One collapsible row per tool call, holding the arguments, live output, and the result. */
+function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolResultView; live?: LiveTool }) {
+	const [open, setOpen] = useState(() => {
+		const stored = toolOpenState.get(call.id);
+		if (stored !== undefined) return stored;
+		// A running call opens by default and stays open once its result arrives.
+		if (result === undefined) {
+			toolOpenState.set(call.id, true);
+			return true;
+		}
+		return false;
+	});
 	const args = parseToolArguments(call.argumentsText);
 	const preview = toolCallSummary(args);
 	const failed = result?.isError === true;
+	const running = result === undefined;
+	// The committed result is the tool's own text; while running, show the retained live window.
+	const output = result?.text ?? live?.output ?? "";
+	const contentRef = useRef<HTMLDivElement>(null);
+	const stickToBottom = useRef(true);
+
+	// Follow the newest output while it streams, unless the reader scrolled up.
+	useEffect(() => {
+		const element = contentRef.current;
+		if (element === null || !running) return;
+		if (stickToBottom.current) element.scrollTop = element.scrollHeight;
+	}, [output, running]);
+
 	return (
 		<>
 			<details
@@ -182,7 +218,7 @@ function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultVi
 					<ToolIcon name={call.name} className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-red-500" : "text-fg-subtle"}`} />
 					<span className="shrink-0 font-mono text-fg">{call.name}</span>
 					{preview !== "" && <span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>}
-					{result === undefined && (
+					{running && (
 						<span className="shrink-0 text-fg-faint motion-safe:animate-pulse">running…</span>
 					)}
 					{failed && <span className="shrink-0 text-red-500">failed</span>}
@@ -198,7 +234,14 @@ function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultVi
 						<ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
 					</span>
 				</summary>
-				<div className="mt-1.5 flex flex-col gap-1.5">
+				<div
+					ref={contentRef}
+					onScroll={(event) => {
+						const element = event.currentTarget;
+						stickToBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+					}}
+					className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto"
+				>
 					<ToolArguments name={call.name} text={call.argumentsText} args={args} />
 					{result?.imageModel !== undefined && (
 						<div className="text-fg-faint">
@@ -206,13 +249,13 @@ function ToolCallBlock({ call, result }: { call: ToolCall; result?: ToolResultVi
 							{result.imageModel.modelId})
 						</div>
 					)}
-					{result !== undefined && result.text !== "" && (
+					{output !== "" && (
 						<pre
-							className={`max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${
+							className={`border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${
 								failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
 							}`}
 						>
-							{result.text}
+							{output}
 						</pre>
 					)}
 				</div>
@@ -241,12 +284,12 @@ function ToolArguments({
 }) {
 	if (args === undefined) {
 		// Still streaming, or not an object: show what arrived.
-		return <pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">{text}</pre>;
+		return <pre className="whitespace-pre-wrap font-mono text-fg-muted">{text}</pre>;
 	}
 	const command = typeof args.command === "string" ? args.command : undefined;
 	if (name === "bash" && command !== undefined) {
 		return (
-			<pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">
+			<pre className="whitespace-pre-wrap font-mono text-fg-muted">
 				<span className="text-fg-faint">$ </span>
 				{command}
 			</pre>
@@ -257,16 +300,14 @@ function ToolArguments({
 	const edits = Array.isArray(args.edits) ? args.edits : undefined;
 	if (path === undefined && content === undefined && edits === undefined) {
 		return (
-			<pre className="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">
-				{JSON.stringify(args, null, 2)}
-			</pre>
+			<pre className="whitespace-pre-wrap font-mono text-fg-muted">{JSON.stringify(args, null, 2)}</pre>
 		);
 	}
 	return (
 		<div className="flex flex-col gap-1.5">
 			{path !== undefined && <div className="truncate font-mono text-fg-subtle">{path}</div>}
 			{content !== undefined && (
-				<pre className="max-h-80 overflow-auto whitespace-pre-wrap font-mono text-fg-muted">{content}</pre>
+				<pre className="whitespace-pre-wrap font-mono text-fg-muted">{content}</pre>
 			)}
 			{edits?.map((edit, index) => {
 				const entry = record(edit);
@@ -275,12 +316,12 @@ function ToolArguments({
 				return (
 					<div key={index} className="overflow-hidden rounded border border-line">
 						{oldText !== undefined && (
-							<pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-red-500/10 px-2 py-1 font-mono text-red-700 dark:text-red-300">
+							<pre className="whitespace-pre-wrap bg-red-500/10 px-2 py-1 font-mono text-red-700 dark:text-red-300">
 								- {oldText}
 							</pre>
 						)}
 						{newText !== undefined && (
-							<pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-green-500/10 px-2 py-1 font-mono text-green-700 dark:text-green-300">
+							<pre className="whitespace-pre-wrap bg-green-500/10 px-2 py-1 font-mono text-green-700 dark:text-green-300">
 								+ {newText}
 							</pre>
 						)}
