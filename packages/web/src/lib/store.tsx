@@ -15,6 +15,7 @@ import type {
 	SandboxInfo,
 	SandboxMetricsInfo,
 	SandboxSettingsInfo,
+	SandboxesState,
 	SessionSummary,
 	SnapshotEvent,
 	TargetChoice,
@@ -308,10 +309,10 @@ type HarnessContextValue = {
 	setTarget(target: TargetChoice): Promise<void>;
 	browseWorkspaces(path?: string): Promise<WorkspacesBrowseResult>;
 	createWorkspaceFolder(parent: string, name: string): Promise<{ path: string } | undefined>;
-	refreshSandboxes(): Promise<void>;
+	refreshSandboxes(): Promise<SandboxesState | undefined>;
 	createSandbox(choice: SandboxChoice): Promise<SandboxInfo | undefined>;
-	pauseSandbox(provider: string, sandboxId: string): Promise<void>;
-	resumeSandbox(provider: string, sandboxId: string): Promise<void>;
+	pauseSandbox(provider: string, sandboxId: string): Promise<SandboxesState | undefined>;
+	resumeSandbox(provider: string, sandboxId: string): Promise<SandboxesState | undefined>;
 	killSandbox(provider: string, sandboxId: string): Promise<void>;
 	configureSandbox(provider: string, apiKey: string | null): Promise<void>;
 	setSandboxSettings(change: {
@@ -321,7 +322,7 @@ type HarnessContextValue = {
 		autoPause?: boolean | null;
 		sshAgentSocket?: string | null;
 		forwardAgent?: boolean | null;
-	}): Promise<void>;
+	}): Promise<SandboxesState | undefined>;
 	sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined>;
 	setDefaults(change: {
 		model?: ModelRef | null;
@@ -615,9 +616,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 
 	const refreshSandboxes = useCallback(async () => {
 		try {
-			applySandboxes(await client.send({ type: "sandboxes.list" }));
+			const state = await client.send({ type: "sandboxes.list" });
+			applySandboxes(state);
+			return state;
 		} catch (error) {
 			dispatch({ type: "error/set", error: errorMessage(error) });
+			return undefined;
 		}
 	}, [client, applySandboxes]);
 
@@ -639,9 +643,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	const pauseSandbox = useCallback(
 		async (provider: string, sandboxId: string) => {
 			try {
-				applySandboxes(await client.send({ type: "sandboxes.pause", provider, sandboxId }));
+				const state = await client.send({ type: "sandboxes.pause", provider, sandboxId });
+				applySandboxes(state);
+				return state;
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
 			}
 		},
 		[client, applySandboxes],
@@ -650,9 +657,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	const resumeSandbox = useCallback(
 		async (provider: string, sandboxId: string) => {
 			try {
-				applySandboxes(await client.send({ type: "sandboxes.resume", provider, sandboxId }));
+				const state = await client.send({ type: "sandboxes.resume", provider, sandboxId });
+				applySandboxes(state);
+				return state;
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
 			}
 		},
 		[client, applySandboxes],
@@ -690,9 +700,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			forwardAgent?: boolean | null;
 		}) => {
 			try {
-				applySandboxes(await client.send({ type: "sandboxes.settings", ...change }));
+				const state = await client.send({ type: "sandboxes.settings", ...change });
+				applySandboxes(state);
+				return state;
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
+				return undefined;
 			}
 		},
 		[client, applySandboxes],

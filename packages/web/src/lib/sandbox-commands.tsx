@@ -1,8 +1,116 @@
-import type { SandboxInfo } from "@harness/protocol";
+import type { SandboxInfo, SandboxesState, SandboxSettingsInfo } from "@harness/protocol";
 import { CheckIcon, KeyIcon, RefreshIcon, SlidersIcon, TerminalIcon, TrashIcon } from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
 import { formatBytes } from "./format.ts";
 import { useHarness } from "./store.tsx";
+
+type SandboxSettingsChange = {
+	provider?: string;
+	template?: string | null;
+	idleTimeoutMs?: number | null;
+	autoPause?: boolean | null;
+	sshAgentSocket?: string | null;
+	forwardAgent?: boolean | null;
+};
+
+/**
+ * The sandbox defaults page. Rows that change a setting replace the page with a fresh copy built
+ * from the returned settings, so the palette stays open and every row shows the new value.
+ */
+export function buildSandboxSettingsPage(
+	settings: SandboxSettingsInfo | undefined,
+	setSettings: (change: SandboxSettingsChange) => Promise<SandboxesState | undefined>,
+): CommandPage {
+	const page = (current: SandboxSettingsInfo | undefined): CommandPage => ({
+		kind: "commands",
+		title: "Sandbox defaults",
+		placeholder: "Settings…",
+		commands: [
+			{
+				id: "sandbox.settings.template",
+				title: "Template",
+				group: "Defaults",
+				detail: current?.template ?? "provider default",
+				icon: <SlidersIcon />,
+				run: ({ prompt, replacePage }) =>
+					prompt({
+						title: "Sandbox template",
+						initialValue: current?.template ?? "",
+						placeholder: "base",
+						returnToPage: true,
+						onSubmit: async (value) => {
+							const template = value.trim();
+							const state = await setSettings({ template: template === "" ? null : template });
+							if (state !== undefined) replacePage(page(state.settings));
+						},
+					}),
+			},
+			{
+				id: "sandbox.settings.idle",
+				title: "Idle timeout",
+				group: "Defaults",
+				detail: `${Math.round((current?.idleTimeoutMs ?? 0) / 60_000)} min`,
+				icon: <SlidersIcon />,
+				run: ({ prompt, replacePage }) =>
+					prompt({
+						title: "Idle timeout in minutes",
+						initialValue: String(Math.round((current?.idleTimeoutMs ?? 0) / 60_000)),
+						returnToPage: true,
+						onSubmit: async (value) => {
+							const minutes = Number(value.trim());
+							if (!Number.isFinite(minutes) || minutes < 0) return false;
+							const state = await setSettings({ idleTimeoutMs: Math.round(minutes * 60_000) });
+							if (state !== undefined) replacePage(page(state.settings));
+						},
+					}),
+			},
+			{
+				id: "sandbox.settings.autopause",
+				title: current?.autoPause === true ? "Auto-pause: on" : "Auto-pause: off",
+				group: "Defaults",
+				detail: "Pause when idle instead of killing",
+				icon: <SlidersIcon />,
+				keepOpen: true,
+				run: async ({ replacePage }) => {
+					const state = await setSettings({ autoPause: current?.autoPause !== true });
+					if (state !== undefined) replacePage(page(state.settings));
+				},
+			},
+			{
+				id: "sandbox.settings.forward",
+				title: current?.forwardAgent === true ? "Forward SSH agent: on" : "Forward SSH agent: off",
+				group: "Defaults",
+				detail: "Default for new sandboxes",
+				icon: <KeyIcon />,
+				keepOpen: true,
+				run: async ({ replacePage }) => {
+					const state = await setSettings({ forwardAgent: current?.forwardAgent !== true });
+					if (state !== undefined) replacePage(page(state.settings));
+				},
+			},
+			{
+				id: "sandbox.settings.agent-socket",
+				title: "SSH agent socket",
+				group: "Defaults",
+				detail: current?.sshAgentSocket ?? "Detected automatically",
+				icon: <KeyIcon />,
+				run: ({ prompt, replacePage }) =>
+					prompt({
+						title: "SSH agent socket",
+						initialValue: current?.sshAgentSocket ?? "",
+						placeholder: "$SSH_AUTH_SOCK",
+						returnToPage: true,
+						onSubmit: async (value) => {
+							const socket = value.trim();
+							const state = await setSettings({ sshAgentSocket: socket === "" ? null : socket });
+							if (state !== undefined) replacePage(page(state.settings));
+						},
+					}),
+			},
+		],
+	});
+	return page(settings);
+}
 
 /** The sandboxes page: list, connect, pause, resume, kill, metrics, and provider settings. */
 export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
@@ -57,80 +165,7 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 		],
 	});
 
-	const settingsPage = (): CommandPage => ({
-		kind: "commands",
-		title: "Sandbox defaults",
-		placeholder: "Settings…",
-		commands: [
-			{
-				id: "sandbox.settings.template",
-				title: "Template",
-				group: "Defaults",
-				detail: sandboxSettings?.template ?? "provider default",
-				icon: <SlidersIcon />,
-				run: ({ prompt }) =>
-					prompt({
-						title: "Sandbox template",
-						initialValue: sandboxSettings?.template ?? "",
-						placeholder: "base",
-						onSubmit: (value) => {
-							const template = value.trim();
-							void setSandboxSettings({ template: template === "" ? null : template });
-						},
-					}),
-			},
-			{
-				id: "sandbox.settings.idle",
-				title: "Idle timeout",
-				group: "Defaults",
-				detail: `${Math.round((sandboxSettings?.idleTimeoutMs ?? 0) / 60_000)} min`,
-				icon: <SlidersIcon />,
-				run: ({ prompt }) =>
-					prompt({
-						title: "Idle timeout in minutes",
-						initialValue: String(Math.round((sandboxSettings?.idleTimeoutMs ?? 0) / 60_000)),
-						onSubmit: (value) => {
-							const minutes = Number(value.trim());
-							if (!Number.isFinite(minutes) || minutes < 0) return false;
-							void setSandboxSettings({ idleTimeoutMs: Math.round(minutes * 60_000) });
-						},
-					}),
-			},
-			{
-				id: "sandbox.settings.autopause",
-				title: sandboxSettings?.autoPause === true ? "Auto-pause: on" : "Auto-pause: off",
-				group: "Defaults",
-				detail: "Pause when idle instead of killing",
-				icon: <SlidersIcon />,
-				run: () => void setSandboxSettings({ autoPause: sandboxSettings?.autoPause !== true }),
-			},
-			{
-				id: "sandbox.settings.forward",
-				title: sandboxSettings?.forwardAgent === true ? "Forward SSH agent: on" : "Forward SSH agent: off",
-				group: "Defaults",
-				detail: "Default for new sandboxes",
-				icon: <KeyIcon />,
-				run: () => void setSandboxSettings({ forwardAgent: sandboxSettings?.forwardAgent !== true }),
-			},
-			{
-				id: "sandbox.settings.agent-socket",
-				title: "SSH agent socket",
-				group: "Defaults",
-				detail: sandboxSettings?.sshAgentSocket ?? "Detected automatically",
-				icon: <KeyIcon />,
-				run: ({ prompt }) =>
-					prompt({
-						title: "SSH agent socket",
-						initialValue: sandboxSettings?.sshAgentSocket ?? "",
-						placeholder: "$SSH_AUTH_SOCK",
-						onSubmit: (value) => {
-							const socket = value.trim();
-							void setSandboxSettings({ sshAgentSocket: socket === "" ? null : socket });
-						},
-					}),
-			},
-		],
-	});
+	const settingsPage = (): CommandPage => buildSandboxSettingsPage(sandboxSettings, setSandboxSettings);
 
 	const metricsPage = (sandbox: SandboxInfo): CommandPage => ({
 		kind: "loading",
@@ -190,13 +225,23 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 						title: "Pause",
 						group: "Actions",
 						detail: "Keeps the files and stops the compute",
-						run: () => void pauseSandbox(sandbox.provider, sandbox.id),
+						keepOpen: true,
+						run: async ({ replacePage }) => {
+							const state = await pauseSandbox(sandbox.provider, sandbox.id);
+							const fresh = state?.sandboxes.find((candidate) => candidate.id === sandbox.id);
+							if (fresh !== undefined) replacePage(sandboxPage(fresh));
+						},
 					}
 				: {
 						id: "sandbox.resume",
 						title: "Resume",
 						group: "Actions",
-						run: () => void resumeSandbox(sandbox.provider, sandbox.id),
+						keepOpen: true,
+						run: async ({ replacePage }) => {
+							const state = await resumeSandbox(sandbox.provider, sandbox.id);
+							const fresh = state?.sandboxes.find((candidate) => candidate.id === sandbox.id);
+							if (fresh !== undefined) replacePage(sandboxPage(fresh));
+						},
 					},
 			{
 				id: "sandbox.metrics",
@@ -290,7 +335,11 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 				title: "Refresh sandboxes",
 				group: "Settings",
 				icon: <RefreshIcon />,
-				run: () => void refreshSandboxes(),
+				keepOpen: true,
+				run: async ({ replacePage }) => {
+					const state = await refreshSandboxes();
+					if (state !== undefined) replacePage(page());
+				},
 			},
 		],
 	});

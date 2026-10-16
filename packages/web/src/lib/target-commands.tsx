@@ -149,10 +149,10 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 				detail: forward ? "Private repositories and git push work" : "The host keys stay out of the sandbox",
 				icon: <KeyIcon />,
 				current: forward,
-				run: ({ pushPage }) => {
+				run: ({ replacePage }) => {
 					const next = !forward;
 					setForwardOverride(next);
-					pushPage(newSandbox(next));
+					replacePage(newSandbox(next));
 				},
 			},
 		],
