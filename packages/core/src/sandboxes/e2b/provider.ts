@@ -634,7 +634,9 @@ class E2BProvider implements SandboxProvider {
 						? Template().fromTemplate(spec.source.name)
 						: Template().fromBaseImage();
 			let template = builder;
-			for (const command of spec.run) template = template.runCmd(command);
+			// E2B runs the build's commands as its default user; a recipe's commands are documented to
+			// run as root, so apt and similar tools work.
+			for (const command of spec.run) template = template.runCmd(command, { user: "root" });
 			const info = await Template.buildInBackground(template, spec.name, {
 				...(this.#credentials.apiKey === undefined ? {} : { apiKey: this.#credentials.apiKey }),
 				cpuCount: 2,

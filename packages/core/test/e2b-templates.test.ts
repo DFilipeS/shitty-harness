@@ -1,6 +1,77 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { E2BProviderFactory } from "../src/sandboxes/e2b/provider.ts";
+
+/** Records what the fake E2B Template builder was asked to do. */
+const recorder = vi.hoisted(() => ({
+	template: "" as string,
+	commands: [] as { command: string; options: unknown }[],
+}));
+
+vi.mock("e2b", () => {
+	const builder = {
+		fromBaseImage: () => {
+			recorder.template = "base";
+			return builder;
+		},
+		fromTemplate: (name: string) => {
+			recorder.template = `template:${name}`;
+			return builder;
+		},
+		fromImage: (image: string) => {
+			recorder.template = `image:${image}`;
+			return builder;
+		},
+		runCmd: (command: string, options: unknown) => {
+			recorder.commands.push({ command, options });
+			return builder;
+		},
+	};
+	const Template = Object.assign(() => builder, {
+		buildInBackground: async (_template: unknown, name: string) => ({
+			templateId: `tpl-${name}`,
+			buildId: `build-${name}`,
+		}),
+		getBuildStatus: async () => ({
+			status: "ready",
+			logEntries: [{ message: "layer cached" }],
+		}),
+	});
+	return { Template };
+});
+
+describe("E2B template builds", () => {
+	it("runs every recipe command as root, from the recipe's source", async () => {
+		recorder.template = "";
+		recorder.commands = [];
+		const provider = E2BProviderFactory.create({}, { apiKey: "test-key" });
+		const logs: string[] = [];
+		const result = await provider.buildTemplate?.(
+			{
+				name: "tools",
+				source: { kind: "template", name: "harness-base" },
+				run: ["apt-get update", "true"],
+			},
+			(line) => logs.push(line),
+		);
+		expect(recorder.template).toBe("template:harness-base");
+		expect(recorder.commands).toEqual([
+			{ command: "apt-get update", options: { user: "root" } },
+			{ command: "true", options: { user: "root" } },
+		]);
+		expect(result).toEqual({ templateId: "tpl-tools", buildId: "build-tools" });
+		expect(logs).toEqual(["layer cached"]);
+	});
+
+	it("starts from the provider base image when the recipe names none", async () => {
+		recorder.template = "";
+		recorder.commands = [];
+		const provider = E2BProviderFactory.create({}, { apiKey: "test-key" });
+		await provider.buildTemplate?.({ name: "plain", source: { kind: "default" }, run: [] }, () => {});
+		expect(recorder.template).toBe("base");
+		expect(recorder.commands).toEqual([]);
+	});
+});
 
 type Handler = (request: IncomingMessage, response: ServerResponse, url: URL) => void;
 
