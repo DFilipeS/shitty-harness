@@ -181,21 +181,34 @@ A wand-marked chat model can also answer with an image of its own. A chat messag
 one, so such a reply shows only its thinking; the conversation says so when it happens. Text
 models avoid it: they always call the tool.
 
-Tools touch files and processes only through an `ExecutionEnv`. Today the only implementation is
-the local machine (`NodeExecutionEnv`). Each session has a **target**: the directory its tools run
-in. New sessions start in their own scratch directory under `data/workspaces/<session-id>`; the
-composer's target control switches a session to any folder on the machine. Switching appends a
-visible entry to the transcript and takes effect on the next run. **Commands run as the server user
-with no sandbox**, so only point the target at folders where that is fine.
+Tools touch files and processes only through an `ExecutionEnv`. Each session has a **target**: the
+directory its tools run in. New sessions start in their own scratch directory under
+`data/workspaces/<session-id>`; the composer's target control switches a session to any folder on
+the machine, or to a remote sandbox. Switching appends a visible entry to the transcript, takes
+effect on the next run, and never moves files. **Local commands run as the server user with no
+sandbox**, so only point a local target at folders where that is fine.
 
-The target is the seam for remote execution: a sandbox will be another kind of target, and
-`openHarnessService` takes an `environment` factory, so anything implementing pi-durable's
-`ExecutionEnv` works.
+### Sandboxes
+
+A **sandbox** is a remote execution environment managed by a provider; E2B is the first. Run
+**Configure E2B…** in the target picker (or **Manage sandboxes…** in the palette) and paste an API
+key, or set `E2B_API_KEY`. Then a session's target can be a **new sandbox** — empty, or a clone of a
+Git repository — or an **existing sandbox** created earlier, by this or another session.
+
+Sandboxes are created lazily on first use, auto-pause after the configured idle timeout, and are
+killed only when you kill them. They outlive their sessions: deleting a session never kills a
+sandbox, and any session can connect to one. **Manage sandboxes…** lists them with their state and
+lets you pause, resume, kill, and read metrics. When a sandbox is gone, tool calls fail with a
+clear error; the harness never falls back to running them on this machine.
+
+The sandbox runs the same `ExecutionEnv` contract over the provider's file and shell APIs
+(`SandboxExecutionEnv`), so `read`, `write`, `edit`, and `bash` behave the same as locally. Files
+written by a session — attachments, generated images — live in the sandbox, not on this machine.
 
 ## Current scope
 
-- Local tools only: each session runs its tools in a target directory on the machine that runs the
-  server; a remote sandbox target is not implemented yet.
+- Targets are the local machine or an E2B sandbox. Git clone into a sandbox is public HTTPS only:
+  SSH agent forwarding, Docker, and other providers are not implemented yet.
 - API keys only: no OAuth login flows.
 - Built-in providers only: no custom OpenAI/Anthropic-compatible endpoints.
 - Single user, local-first: the server trusts every client on localhost.

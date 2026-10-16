@@ -1,6 +1,6 @@
 # Plan: workspaces and remote sandboxes
 
-Status: M1 (local targets and scratch workspaces) implemented; sandboxes not started.
+Status: M1 (local targets and scratch workspaces) and M2 (sandbox seam and E2B) implemented; SSH agent forwarding (M3) not started.
 
 The harness keeps running on the user's machine. Tools run either on the local machine or in a
 remote sandbox, chosen by the user per session. This plan turns that into code. The vocabulary is
