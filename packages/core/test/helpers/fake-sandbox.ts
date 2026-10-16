@@ -5,6 +5,7 @@ import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import {
 	SandboxError,
 	type AgentForwarding,
+	type ProviderTemplate,
 	type SandboxConnectOptions,
 	type SandboxExecOptions,
 	type SandboxFileInfo,
@@ -12,6 +13,8 @@ import {
 	type SandboxInfo,
 	type SandboxProvider,
 	type SandboxSpec,
+	type TemplateBuildResult,
+	type TemplateBuildSpec,
 } from "../../src/sandboxes/provider.ts";
 import { registerSandboxProvider } from "../../src/sandboxes/registry.ts";
 import {
@@ -201,6 +204,19 @@ export class FakeSandboxProvider implements SandboxProvider {
 	#nextId = 1;
 	#listCount = 0;
 
+	/** Templates the provider knows about, keyed by template id. */
+	readonly templates = new Map<string, ProviderTemplate>();
+	/** Every build the provider was asked for, for tests. */
+	readonly templateBuilds: { spec: TemplateBuildSpec; result: TemplateBuildResult }[] = [];
+	/** Names of builds in the order they started, for tests of the queue. */
+	readonly buildStarts: string[] = [];
+	/** When set, each build waits for this before finishing, so a test can control the queue. */
+	buildGate?: Promise<void>;
+	/** When set, every build fails with this message. */
+	buildError?: string;
+	/** Lines every build reports, then the build ends. */
+	buildLogLines: string[] = ["step one", "step two"];
+
 	/** How many times the provider was asked to list its sandboxes, for tests. */
 	get listCount(): number {
 		return this.#listCount;
@@ -241,6 +257,33 @@ export class FakeSandboxProvider implements SandboxProvider {
 		const handle = this.#sandboxes.get(id);
 		if (handle === undefined) throw new SandboxError("not_found", `Unknown sandbox: ${id}`);
 		await handle.kill();
+	}
+
+	async buildTemplate(spec: TemplateBuildSpec, onLog: (line: string) => void): Promise<TemplateBuildResult> {
+		this.buildStarts.push(spec.name);
+		for (const line of this.buildLogLines) onLog(line);
+		if (this.buildGate !== undefined) await this.buildGate;
+		if (this.buildError !== undefined) throw new SandboxError("unknown", this.buildError);
+		const result = { templateId: `tpl-${spec.name}`, buildId: `build-${spec.name}` };
+		this.templateBuilds.push({ spec, result });
+		this.templates.set(result.templateId, {
+			names: [spec.name],
+			templateId: result.templateId,
+			buildId: result.buildId,
+			buildStatus: "ready",
+		});
+		return result;
+	}
+
+	async listTemplates(): Promise<ProviderTemplate[]> {
+		return [...this.templates.values()];
+	}
+
+	async deleteTemplate(templateId: string): Promise<void> {
+		if (!this.templates.has(templateId)) {
+			throw new SandboxError("not_found", `Unknown template: ${templateId}`);
+		}
+		this.templates.delete(templateId);
 	}
 }
 
