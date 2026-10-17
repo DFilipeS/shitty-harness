@@ -2,15 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { formatTokens } from "../lib/format.ts";
 import type { LiveTool } from "../lib/live-tools.ts";
 import {
+	parseSkillBlock,
 	parseToolArguments,
 	toolCallSummary,
 	type LiveBlock,
+	type SkillBlock,
 	type LiveMessage,
 	type ToolResultImage,
 	type ToolResultView,
 	type UserPart,
 } from "../lib/messages.ts";
 import {
+	BookIcon,
 	BrainIcon,
 	ChevronDownIcon,
 	FileIcon,
@@ -50,6 +53,7 @@ export function UserBubble({ parts }: { parts: UserPart[] }) {
 						);
 					}
 					if (part.type === "file") return <AttachedFileCard key={index} file={part} />;
+					if (part.type === "skill") return <SkillCard key={index} skill={part.skill} />;
 					return <Markdown key={index} text={part.text} variant="user" />;
 				})}
 			</div>
@@ -70,6 +74,41 @@ function AttachedFileCard({ file }: { file: Extract<UserPart, { type: "file" }> 
 			<pre className="mt-1.5 max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono text-fg-muted">
 				{file.text}
 			</pre>
+		</details>
+	);
+}
+
+/**
+ * A skill's instructions, collapsed until opened: the same card whether the user invoked the skill
+ * or the model activated it with the `skill` tool.
+ */
+function SkillCard({ skill }: { skill: SkillBlock }) {
+	return (
+		<details data-skill-card={skill.name} className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs">
+			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
+				<BookIcon className="h-3.5 w-3.5 shrink-0 text-link" />
+				<span className="shrink-0 text-fg-subtle">skill</span>
+				<span className="min-w-0 truncate font-mono text-fg">{skill.name}</span>
+				<span className="shrink-0 text-fg-faint">{skill.scope}</span>
+				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
+			</summary>
+			<div className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto border-t border-line pt-1.5">
+				<Markdown text={skill.instructions} />
+				{skill.directory !== undefined && (
+					<div className="truncate font-mono text-[11px] text-fg-faint" title={skill.directory}>
+						{skill.directory}
+					</div>
+				)}
+				{skill.files.length > 0 && (
+					<ul className="font-mono text-[11px] text-fg-subtle">
+						{skill.files.map((file) => (
+							<li key={file} className="truncate">
+								{file}
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
 		</details>
 	);
 }
@@ -150,7 +189,11 @@ function BlockView({
 		return <ThinkingBlock stateKey={stateKey} thinking={block.thinking} />;
 	}
 	if (block.type === "toolCall") {
-		return <ToolCallBlock call={block} result={toolResults?.get(block.id)} live={liveTools?.[block.id]} />;
+		const result = toolResults?.get(block.id);
+		// A loaded skill reads as the skill itself; running, failed, and "already active" calls stay tool rows.
+		const skill = block.name === "skill" && result?.isError === false ? parseSkillBlock(result.text) : undefined;
+		if (skill !== undefined) return <SkillCard skill={skill} />;
+		return <ToolCallBlock call={block} result={result} live={liveTools?.[block.id]} />;
 	}
 	return <Markdown text={block.text} />;
 }
@@ -168,6 +211,8 @@ function ToolIcon({ name, className }: { name: string; className?: string }) {
 			return <FilePlusIcon className={className} />;
 		case "edit":
 			return <PencilIcon className={className} />;
+		case "skill":
+			return <BookIcon className={className} />;
 		default:
 			return <WrenchIcon className={className} />;
 	}

@@ -18,6 +18,7 @@ import type {
 	SandboxSettingsInfo,
 	SandboxesState,
 	SessionSummary,
+	SessionsSkillsResult,
 	SnapshotEvent,
 	TargetChoice,
 	TargetStatus,
@@ -400,6 +401,8 @@ type HarnessContextValue = {
 	configureProvider(providerId: string, apiKey: string | null): Promise<void>;
 	setTarget(target: TargetChoice): Promise<void>;
 	browseWorkspaces(path?: string): Promise<WorkspacesBrowseResult>;
+	/** A session's skills; undefined when the server could not list them. */
+	listSkills(sessionId: string): Promise<SessionsSkillsResult | undefined>;
 	createWorkspaceFolder(parent: string, name: string): Promise<{ path: string } | undefined>;
 	refreshSandboxes(): Promise<SandboxesState | undefined>;
 	createSandbox(choice: SandboxChoice): Promise<SandboxInfo | undefined>;
@@ -962,6 +965,18 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		[templateCommand, client],
 	);
 
+	const listSkills = useCallback(
+		async (sessionId: string) => {
+			try {
+				return await client.send({ type: "sessions.skills", sessionId });
+			} catch (error) {
+				console.warn("[skills] listing failed:", error);
+				return undefined;
+			}
+		},
+		[client],
+	);
+
 	const browseWorkspaces = useCallback(
 		async (path?: string) =>
 			client.send({ type: "workspaces.browse", ...(path === undefined ? {} : { path }) }),
@@ -1053,6 +1068,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureProvider,
 			setTarget,
 			browseWorkspaces,
+			listSkills,
 			createWorkspaceFolder,
 			refreshSandboxes,
 			createSandbox,
@@ -1090,6 +1106,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			configureProvider,
 			setTarget,
 			browseWorkspaces,
+			listSkills,
 			createWorkspaceFolder,
 			refreshSandboxes,
 			createSandbox,

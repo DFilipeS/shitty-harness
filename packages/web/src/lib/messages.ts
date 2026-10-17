@@ -132,11 +132,49 @@ export function toolResultOf(entry: EntryRecord): ToolResultMessage | undefined 
 	return message?.role === "toolResult" ? message : undefined;
 }
 
-/** One display part of a user message: text, an attached image, or an attached text file. */
+/** One display part of a user message: text, an attached image, an attached text file, or a skill. */
 export type UserPart =
 	| { type: "text"; text: string }
 	| { type: "image"; data: string; mimeType: string }
-	| { type: "file"; name: string; mimeType: string; text: string };
+	| { type: "file"; name: string; mimeType: string; text: string }
+	| { type: "skill"; skill: SkillBlock };
+
+/** A skill's content as the harness hands it to the model, by invocation or by the `skill` tool. */
+export type SkillBlock = {
+	name: string;
+	scope: string;
+	instructions: string;
+	directory?: string;
+	files: string[];
+};
+
+/** The `<skill>` block the harness writes around an activated skill. */
+const SKILL_BLOCK_PATTERN = /^<skill name="([^"]*)" scope="([^"]*)">\n([\s\S]*)\n<\/skill>$/;
+const SKILL_DIRECTORY_MARKER = "\n\nSkill directory: ";
+
+/** Parses a skill block; undefined for any other text. */
+export function parseSkillBlock(text: string): SkillBlock | undefined {
+	const match = SKILL_BLOCK_PATTERN.exec(text);
+	if (match === null) return undefined;
+	const [, name, scope, content] = match;
+	if (name === undefined || scope === undefined || content === undefined) return undefined;
+	const split = content.lastIndexOf(SKILL_DIRECTORY_MARKER);
+	const instructions = split === -1 ? content : content.slice(0, split);
+	const footer = split === -1 ? "" : content.slice(split + SKILL_DIRECTORY_MARKER.length);
+	const directory = footer.split("\n", 1)[0];
+	const files = [...footer.matchAll(/^<file>(.*)<\/file>$/gm)].map((file) => unescapeText(file[1] ?? ""));
+	return {
+		name: unescapeAttribute(name),
+		scope,
+		instructions: instructions.trim(),
+		...(directory === undefined || directory === "" ? {} : { directory }),
+		files,
+	};
+}
+
+function unescapeText(value: string): string {
+	return value.replaceAll("&lt;", "<").replaceAll("&gt;", ">").replaceAll("&amp;", "&");
+}
 
 /** The `<attached-file>` block the harness writes around an attached text file. */
 const ATTACHED_FILE_PATTERN = /^<attached-file name="([^"]*)" mime="([^"]*)">\n([\s\S]*)\n<\/attached-file>$/;
@@ -146,6 +184,8 @@ export function userParts(message: UserMessage): UserPart[] {
 	if (typeof message.content === "string") return [{ type: "text", text: message.content }];
 	return message.content.map((part): UserPart => {
 		if (part.type === "image") return { type: "image", data: part.data, mimeType: part.mimeType };
+		const skill = parseSkillBlock(part.text);
+		if (skill !== undefined) return { type: "skill", skill };
 		return parseAttachedFile(part.text) ?? { type: "text", text: part.text };
 	});
 }
