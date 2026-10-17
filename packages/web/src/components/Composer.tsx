@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState, type Ref } from "react";
-import { ATTACHMENT_LIMITS } from "@harness/protocol";
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
+import { ATTACHMENT_LIMITS, type SkillInfo } from "@harness/protocol";
 import {
 	attachmentAccept,
 	isImageAttachment,
@@ -9,9 +9,11 @@ import {
 import { formatBytes } from "../lib/format.ts";
 import { useProviderPalette } from "../lib/provider-commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
+import { completeInvocation, invokedSkill, matchSkills, skillQuery } from "../lib/skills.ts";
 import { useTargetPalette, targetLabel } from "../lib/target-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
 import {
+	BookIcon,
 	BrainIcon,
 	CpuIcon,
 	FileIcon,
@@ -30,8 +32,9 @@ const MAX_TEXTAREA_HEIGHT = 160;
 
 /** Floating message composer. ChatPanel positions it and reserves its height in the message list. */
 export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
-	const { activeSession, sendPrompt, abortSession, status, models } = useHarness();
+	const { activeSession, activeSessionId, sendPrompt, abortSession, status, models } = useHarness();
 	const [text, setText] = useState("");
+	const [caret, setCaret] = useState(0);
 	const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
 	const [attachError, setAttachError] = useState<string | undefined>(undefined);
 	const [dragging, setDragging] = useState(false);
@@ -45,8 +48,18 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 	);
 	const hasImages = attachments.some((pending) => isImageAttachment(pending.attachment));
 	const imagesBlocked = hasImages && modelInfo !== undefined && !modelInfo.input.includes("image");
+	const skills = useSessionSkills(activeSessionId, text.startsWith("/"));
+	const completion = useSkillCompletion(text, caret, skills);
+	const invoked = invokedSkill(text);
+	// Only a loaded list can say a skill is unknown; the server rejects it either way.
+	const unknownSkill =
+		invoked !== undefined && skills !== undefined && !skills.some((skill) => skill.name === invoked) ? invoked : undefined;
 	const canSend =
-		(text.trim() !== "" || attachments.length > 0) && model !== undefined && status === "connected" && !imagesBlocked;
+		(text.trim() !== "" || attachments.length > 0) &&
+		model !== undefined &&
+		status === "connected" &&
+		!imagesBlocked &&
+		unknownSkill === undefined;
 
 	useLayoutEffect(() => {
 		const element = textareaRef.current;
@@ -93,6 +106,16 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 		if (problems.length > 0) setAttachError(problems.join(" "));
 	};
 
+	const complete = (skill: SkillInfo) => {
+		const next = completeInvocation(text, skill.name);
+		setText(next.text);
+		setCaret(next.caret);
+		requestAnimationFrame(() => {
+			textareaRef.current?.focus();
+			textareaRef.current?.setSelectionRange(next.caret, next.caret);
+		});
+	};
+
 	const submit = async () => {
 		if (!canSend) return;
 		const value = text;
@@ -110,6 +133,14 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 			className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4"
 		>
 			<div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-1.5">
+				{completion.open && (
+					<SkillSuggestions
+						matches={completion.matches}
+						selected={completion.selected}
+						onHover={completion.select}
+						onPick={complete}
+					/>
+				)}
 				<div
 					onDragOver={(event) => {
 						if (!event.dataTransfer.types.includes("Files")) return;
@@ -169,7 +200,11 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 						value={text}
 						rows={1}
 						placeholder="Send a message…"
-						onChange={(event) => setText(event.target.value)}
+						onChange={(event) => {
+							setText(event.target.value);
+							setCaret(event.target.selectionStart);
+						}}
+						onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
 						onPaste={(event) => {
 							const files = [...(event.clipboardData?.files ?? [])];
 							if (files.length === 0) return;
@@ -177,6 +212,25 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 							void addFiles(files);
 						}}
 						onKeyDown={(event) => {
+							if (completion.open && !event.nativeEvent.isComposing) {
+								if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+									event.preventDefault();
+									completion.move(event.key === "ArrowDown" ? 1 : -1);
+									return;
+								}
+								if ((event.key === "Tab" || event.key === "Enter") && !event.shiftKey) {
+									event.preventDefault();
+									const skill = completion.matches[completion.selected];
+									if (skill !== undefined) complete(skill);
+									return;
+								}
+								if (event.key === "Escape") {
+									event.preventDefault();
+									event.stopPropagation();
+									completion.dismiss();
+									return;
+								}
+							}
 							if (event.key === "Enter" && !event.shiftKey) {
 								event.preventDefault();
 								void submit();
@@ -214,6 +268,11 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 							</span>
 						)}
 						{attachError !== undefined && <span className="text-[11px] text-red-500">{attachError}</span>}
+						{unknownSkill !== undefined && (
+							<span className="text-[11px] text-warn">
+								{unknownSkill === "" ? "Name a skill after /skill:" : `Unknown skill: ${unknownSkill}`}
+							</span>
+						)}
 						{runActive && (
 							<span className="ml-auto flex flex-wrap items-center justify-end gap-x-1.5 text-[11px] text-fg-faint">
 								<span className="flex items-center gap-1.5">
@@ -228,6 +287,106 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 						)}
 					</div>
 				</div>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The session's skills, fetched each time the message starts to look like an invocation. Keeps the
+ * last list while a new one loads, so the card does not flicker.
+ */
+function useSessionSkills(sessionId: string | undefined, wanted: boolean): SkillInfo[] | undefined {
+	const { listSkills } = useHarness();
+	const [loaded, setLoaded] = useState<{ sessionId: string; skills: SkillInfo[] } | undefined>(undefined);
+	useEffect(() => {
+		if (!wanted || sessionId === undefined) return;
+		let cancelled = false;
+		void listSkills(sessionId).then((result) => {
+			if (!cancelled && result !== undefined) setLoaded({ sessionId, skills: result.skills });
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [wanted, sessionId, listSkills]);
+	return loaded !== undefined && loaded.sessionId === sessionId ? loaded.skills : undefined;
+}
+
+type SkillCompletion = {
+	open: boolean;
+	matches: SkillInfo[];
+	selected: number;
+	select(index: number): void;
+	move(step: number): void;
+	dismiss(): void;
+};
+
+/** Which skills the card offers for the leading token, which one is highlighted, and whether `esc` hid it. */
+function useSkillCompletion(text: string, caret: number, skills: SkillInfo[] | undefined): SkillCompletion {
+	const query = skillQuery(text, caret);
+	const matches = query === undefined || skills === undefined ? [] : matchSkills(skills, query);
+	const [selected, setSelected] = useState(0);
+	const [dismissedFor, setDismissedFor] = useState<string | undefined>(undefined);
+	// A new query starts from the best match; `esc` hides the card until the token changes.
+	useEffect(() => setSelected(0), [query]);
+	const open = matches.length > 0 && dismissedFor !== query;
+	return {
+		open,
+		matches,
+		selected: Math.min(selected, Math.max(matches.length - 1, 0)),
+		select: setSelected,
+		move: (step) => setSelected((current) => (current + step + matches.length) % matches.length),
+		dismiss: () => setDismissedFor(query),
+	};
+}
+
+/** The card above the message box listing the skills an invocation can name. */
+function SkillSuggestions({
+	matches,
+	selected,
+	onHover,
+	onPick,
+}: {
+	matches: SkillInfo[];
+	selected: number;
+	onHover: (index: number) => void;
+	onPick: (skill: SkillInfo) => void;
+}) {
+	const listRef = useRef<HTMLUListElement>(null);
+	useEffect(() => {
+		listRef.current?.querySelector<HTMLElement>(`[data-index="${selected}"]`)?.scrollIntoView({ block: "nearest" });
+	}, [selected]);
+	return (
+		<div
+			data-skill-suggestions
+			className="overflow-hidden rounded-xl border border-line bg-panel shadow-lg shadow-black/5 dark:shadow-black/40"
+		>
+			<ul ref={listRef} role="listbox" aria-label="Skills" className="max-h-60 overflow-y-auto p-1">
+				{matches.map((skill, index) => (
+					<li
+						key={skill.name}
+						data-index={index}
+						role="option"
+						aria-selected={index === selected}
+						onMouseEnter={() => onHover(index)}
+						// Keep focus in the textarea: picking must not blur it.
+						onMouseDown={(event) => {
+							event.preventDefault();
+							onPick(skill);
+						}}
+						className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs ${
+							index === selected ? "bg-raised" : ""
+						}`}
+					>
+						<BookIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
+						<span className="shrink-0 font-mono text-fg">/skill:{skill.name}</span>
+						<span className="min-w-0 flex-1 truncate text-fg-subtle">{skill.description}</span>
+						<span className="hidden shrink-0 text-[11px] text-fg-faint sm:inline">{skill.scope}</span>
+					</li>
+				))}
+			</ul>
+			<div className="border-t border-line px-3 py-1 text-[11px] text-fg-faint">
+				↑↓ to move · tab or ↵ to complete · esc to close
 			</div>
 		</div>
 	);
