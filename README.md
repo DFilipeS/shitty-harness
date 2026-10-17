@@ -193,6 +193,27 @@ the machine, or to a remote sandbox. Switching appends a visible entry to the tr
 effect on the next run, and never moves files. **Local commands run as the server user with no
 sandbox**, so only point a local target at folders where that is fine.
 
+### Skills
+
+Agents support [Agent Skills](https://agentskills.io/specification): a folder with a `SKILL.md`
+(YAML frontmatter with `name` and `description`, then instructions) plus any scripts or reference
+files it needs. The harness finds skills in the workspace (`.agents/skills/`, `.claude/skills/`) and
+in the target's home directory (`~/.agents/skills/`, `~/.claude/skills/`); project skills win over
+user skills of the same name. The model sees each skill's name and description and loads one with
+the `skill` tool when a task matches. A skill with `disable-model-invocation: true` is only
+available to you.
+
+Type `/` at the start of a message to pick a skill: `↑`/`↓` move, `Tab` or `↵` completes
+`/skill:<name> `, `esc` closes. The rest of the message goes to the model with the skill's
+instructions. Both ways show the skill as a collapsed card in the transcript, and skills activated
+before a compaction are kept. **Skills…** in the palette lists the session's skills and explains
+any that were skipped or shadowed.
+
+On a sandbox target, your own skills from this machine are mirrored into the sandbox's
+`~/.agents/skills/` at the start of each run, so their scripts run there too. The harness only
+touches the folders it wrote (listed in `.harness-mirror.json`); a sandbox skill with the same name
+is left alone. See [ADR 0005](docs/adr/0005-host-skills-mirrored-into-sandboxes.md).
+
 ### Sandboxes
 
 A **sandbox** is a remote execution environment managed by a provider; E2B is the first. Run
