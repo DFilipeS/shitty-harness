@@ -149,3 +149,21 @@ _Avoid_: plugin, module
 **Tool**:
 A callable capability offered to a model, such as reading a file or running a shell command.
 _Avoid_: function, action
+
+### Skills
+
+**Skill**:
+A directory of instructions, and optionally scripts and other files, that an agent can load for a specific task. It follows the Agent Skills format.
+_Avoid_: prompt, recipe, plugin
+
+**Skill catalog**:
+The names and descriptions of the skills available to a conversation, shown to the agent before any skill is loaded.
+_Avoid_: skill list
+
+**Activate**:
+To load a skill's instructions into a conversation, by the model or by the user.
+_Avoid_: load, run, trigger
+
+**Invoke**:
+To activate a skill directly from the message box.
+_Avoid_: slash command, call
