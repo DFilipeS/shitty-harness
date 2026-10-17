@@ -86,6 +86,19 @@ export {
 	type TargetChangeData,
 	type TargetResolutionOptions,
 } from "./targets.ts";
+export {
+	createSkillsExtension,
+	discoverSkills,
+	parseInvocation,
+	parseSkill,
+	SkillLibrary,
+	SkillsDoc,
+	SKILL_TOOL_NAME,
+	type Skill,
+	type SkillCatalog,
+	type SkillIssue,
+	type SkillScope,
+} from "./skills/index.ts";
 export { ServiceError } from "./errors.ts";
 export {
 	HarnessService,

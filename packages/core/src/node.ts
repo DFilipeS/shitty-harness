@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
@@ -63,5 +64,6 @@ export async function openHarnessService(options: OpenHarnessServiceOptions): Pr
 		workspacesDir: join(dataDir, "workspaces"),
 		sandboxes,
 		templates,
+		skillsHome: homedir(),
 	});
 }

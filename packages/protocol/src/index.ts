@@ -296,6 +296,34 @@ export type SessionsSetTargetResult = {
 	session: SessionSummary;
 };
 
+/** One skill a session can activate. */
+export type SkillInfo = {
+	name: string;
+	description: string;
+	/** `project` comes from the workspace, `user` from the target's home directory. */
+	scope: "project" | "user";
+	/** The skill's `SKILL.md`, as its target sees it. */
+	path: string;
+	/** False when the skill opted out of model activation; it can still be invoked. */
+	modelInvocable: boolean;
+	/** True when the skill is one of this machine's, mirrored into a sandbox. */
+	mirrored: boolean;
+	/** Problems that did not stop the skill from loading. */
+	warnings: string[];
+};
+
+/** A skill that was skipped or shadowed, and why. */
+export type SkillIssueInfo = {
+	path: string;
+	name?: string;
+	reason: string;
+};
+
+export type SessionsSkillsResult = {
+	skills: SkillInfo[];
+	issues: SkillIssueInfo[];
+};
+
 export type WorkspacesBrowseResult = {
 	path: string;
 	/** Parent directory; absent at the filesystem root. */
@@ -342,6 +370,7 @@ export type ClientCommand =
 			thinkingLevel?: ModelThinkingLevel | null;
 	  }
 	| { id: string; type: "sessions.setTarget"; sessionId: string; target: TargetChoice }
+	| { id: string; type: "sessions.skills"; sessionId: string }
 	| { id: string; type: "workspaces.browse"; path?: string }
 	| { id: string; type: "workspaces.createFolder"; parent: string; name: string }
 	| { id: string; type: "sandboxes.list" }
@@ -396,6 +425,7 @@ export type CommandResult = {
 	"sessions.abort": Record<string, never>;
 	"sessions.configure": SessionsConfigureResult;
 	"sessions.setTarget": SessionsSetTargetResult;
+	"sessions.skills": SessionsSkillsResult;
 	"workspaces.browse": WorkspacesBrowseResult;
 	"workspaces.createFolder": WorkspacesCreateFolderResult;
 	"sandboxes.list": SandboxesListResult;

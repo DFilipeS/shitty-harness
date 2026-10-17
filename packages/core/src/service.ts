@@ -43,6 +43,7 @@ import type {
 	TargetChoice,
 	TargetInfo,
 	TargetStatus,
+	SessionsSkillsResult,
 	TemplateRecipeInput,
 	TemplatesLogsResult,
 	TemplatesState,
@@ -62,6 +63,14 @@ import {
 import { normalizeRecipe } from "./sandboxes/recipe.ts";
 import type { TemplateManager } from "./sandboxes/templates.ts";
 import { SessionIndex, type SessionIndexEntry, type SessionIndexState } from "./session-index.ts";
+import {
+	createSkillsExtension,
+	parseInvocation,
+	recordActivation,
+	SkillLibrary,
+	SkillsDoc,
+	type SkillCatalog,
+} from "./skills/index.ts";
 import {
 	createTargetSection,
 	resolveTarget,
@@ -132,6 +141,8 @@ export type HarnessServiceDependencies = {
 	sandboxes?: SandboxManager;
 	/** Sandbox template recipes, their builds, and their state. */
 	templates?: TemplateManager;
+	/** The host's home directory, for user skills; without one, only project skills load. */
+	skillsHome?: string;
 };
 
 /** The protocol view of a resolved target. */
@@ -185,6 +196,26 @@ function sandboxSettingsInfo(
 	};
 }
 
+/** The protocol view of a skill catalog. */
+function skillsResult(catalog: SkillCatalog): SessionsSkillsResult {
+	return {
+		skills: catalog.skills.map((skill) => ({
+			name: skill.name,
+			description: skill.description,
+			scope: skill.scope,
+			path: skill.path,
+			modelInvocable: skill.modelInvocable,
+			mirrored: skill.mirrored === true,
+			warnings: skill.warnings,
+		})),
+		issues: catalog.issues.map((issue) => ({
+			path: issue.path,
+			...(issue.name === undefined ? {} : { name: issue.name }),
+			reason: issue.reason,
+		})),
+	};
+}
+
 type ComposeEnvironmentOptions = {
 	local: EnvironmentFactory;
 	workspacesDir?: string;
@@ -222,6 +253,7 @@ export class HarnessService {
 	readonly #workspacesDir: string | undefined;
 	readonly #sandboxes: SandboxManager | undefined;
 	readonly #templates: TemplateManager | undefined;
+	readonly #skills: SkillLibrary;
 	/** Live session event streams, one per `subscribeSession` caller. */
 	readonly #streams = new Set<AgentEventStream>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
@@ -237,6 +269,7 @@ export class HarnessService {
 		workspacesDir: string | undefined,
 		sandboxes: SandboxManager | undefined,
 		templates: TemplateManager | undefined,
+		skills: SkillLibrary,
 	) {
 		this.#harness = harness;
 		this.#providers = providers;
@@ -244,6 +277,7 @@ export class HarnessService {
 		this.#workspacesDir = workspacesDir;
 		this.#sandboxes = sandboxes;
 		this.#templates = templates;
+		this.#skills = skills;
 	}
 
 	/**
@@ -277,6 +311,16 @@ export class HarnessService {
 				],
 			}),
 		);
+		const skills = new SkillLibrary({
+			...(dependencies.skillsHome === undefined ? {} : { home: dependencies.skillsHome }),
+			resolveTarget: (read, conversationId, context) =>
+				resolveTarget(read, conversationId, context, {
+					...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+					defaultTarget: providers.getDefaults().target,
+					sandboxDefaults: sandboxDefaults(dependencies.sandboxes),
+				}),
+		});
+		registry.install(createSkillsExtension(skills));
 		const environment =
 			dependencies.environment === undefined
 				? undefined
@@ -320,6 +364,7 @@ export class HarnessService {
 			dependencies.workspacesDir,
 			dependencies.sandboxes,
 			dependencies.templates,
+			skills,
 		);
 		if (dependencies.templates !== undefined) {
 			dependencies.templates.onChanged = () => {
@@ -538,15 +583,32 @@ export class HarnessService {
 		const agent = await conversation.agent(BACKGROUND_CONTEXT);
 		if (agent.model === undefined) throw new ServiceError("no_model", "Select a model before sending a message");
 		const model = this.#providers.models.getModel(agent.model.provider, agent.model.modelId);
-		const env = attachments.length === 0 ? undefined : await this.#buildEnvironment(conversationId);
-		const content = await buildPromptContent(trimmed, attachments, model?.input, (attachment, index) =>
+		// Each prompt starts or extends a run, which rescans the target's skills.
+		this.#skills.invalidate(conversationId);
+		const invocation = parseInvocation(trimmed);
+		const message = invocation?.rest ?? trimmed;
+		const env =
+			attachments.length === 0 && invocation === undefined ? undefined : await this.#buildEnvironment(conversationId);
+		const skill = invocation === undefined ? undefined : await this.#invokeSkill(conversationId, env, invocation.name);
+		let content = await buildPromptContent(message, attachments, model?.input, (attachment, index) =>
 			env === undefined ? Promise.resolve(undefined) : saveAttachment(env, id, attachment, index, BACKGROUND_CONTEXT),
 		);
+		if (skill !== undefined) {
+			const rest = typeof content === "string" ? (content === "" ? [] : [{ type: "text" as const, text: content }]) : content;
+			content = [{ type: "text", text: skill.block }, ...rest];
+			await this.#harness.commit(async (tx) => {
+				recordActivation(await tx.doc(SkillsDoc, conversationId), skill.name, skill.block);
+			}, BACKGROUND_CONTEXT);
+		}
 
 		await this.#updateSession(id, (entry) => {
 			if (entry.title === NEW_SESSION_TITLE) {
 				entry.title = deriveTitle(
-					trimmed === "" ? attachments.map((attachment) => attachment.name).join(", ") : trimmed,
+					message !== ""
+						? message
+						: skill !== undefined
+							? skill.name
+							: attachments.map((attachment) => attachment.name).join(", "),
 				);
 			}
 		});
@@ -555,6 +617,32 @@ export class HarnessService {
 			BACKGROUND_CONTEXT,
 		);
 		return { submissionId: String(submission.id) };
+	}
+
+	/** Resolve a `/skill:name` invocation, reading the skill fresh from the session's target. */
+	async #invokeSkill(
+		conversationId: ConversationId,
+		env: ExecutionEnv | undefined,
+		name: string,
+	): Promise<{ name: string; block: string }> {
+		if (name === "") throw new ServiceError("unknown_skill", "Name a skill after /skill:");
+		const result = await this.#skills.activate(
+			this.#harness,
+			conversationId,
+			env,
+			name,
+			{ modelOnly: false },
+			BACKGROUND_CONTEXT,
+		);
+		if ("available" in result) throw new ServiceError("unknown_skill", `Unknown skill: ${name}`);
+		return { name: result.skill.name, block: result.block };
+	}
+
+	/** The session's skills and the ones left out, for autocomplete and the Skills page. Never opens a sandbox. */
+	async listSkills(id: string): Promise<SessionsSkillsResult> {
+		const conversationId = parseConversationId(id);
+		await this.#requireConversation(conversationId);
+		return skillsResult(await this.#skills.list(this.#harness, conversationId, BACKGROUND_CONTEXT));
 	}
 
 	async abort(id: string): Promise<void> {
@@ -616,6 +704,7 @@ export class HarnessService {
 			await tx.appendEntry(TargetChangeEntry, conversationId, { data: prepared.entry });
 		}, BACKGROUND_CONTEXT);
 		this.#sandboxes?.forget(id);
+		this.#skills.invalidate(conversationId);
 		await this.#emitSessions();
 		return this.#requireSession(id);
 	}

@@ -54,6 +54,7 @@ const COMMAND_TYPES = new Set<string>([
 	"sessions.abort",
 	"sessions.configure",
 	"sessions.setTarget",
+	"sessions.skills",
 	"workspaces.browse",
 	"workspaces.createFolder",
 	"sandboxes.list",
@@ -391,6 +392,10 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				const sessionId = requireString(command.sessionId, "sessionId");
 				const target = requiredTargetChoice(command.target);
 				return { data: { session: await service.setTarget(sessionId, target) } };
+			}
+			case "sessions.skills": {
+				const sessionId = requireString(command.sessionId, "sessionId");
+				return { data: await service.listSkills(sessionId) };
 			}
 			case "workspaces.browse": {
 				const path = command.path === undefined ? undefined : requireString(command.path, "path");
