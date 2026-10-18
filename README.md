@@ -102,6 +102,8 @@ stays visible.
 
 While a run is in flight, the sidebar shows a spinner and "Working…" under that session — including sessions you switched away from.
 
+The agent can stop and ask you with the `ask_user` tool: one or more multiple-choice questions, each with 2–4 options and room to answer in your own words. The run waits, with no timeout and across server restarts, and the sidebar shows "Needs input" under the session. The questions take the message box's place, one at a time: a tab per question jumps between them and marks the answered ones, and picking a single-choice answer moves on to the next unanswered question. Skip question leaves one question to the agent's judgment. Submit, once every question is answered or skipped, sends your answers as the tool's result, and Stop ends the run. With several browsers open, the first answer wins. See `docs/adr/0006-questions-hold-the-run-open.md` for why a question holds the run open.
+
 On a narrow screen the sidebar becomes a drawer behind the menu button in the header. On wider screens the same button (or `⌘B`) collapses the sidebar to give the conversation the full width; the desktop choice is remembered across reloads.
 
 The sidebar also has a light/dark toggle. The first visit follows your system preference; the choice is saved in the browser.
