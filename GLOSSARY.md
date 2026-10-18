@@ -29,8 +29,12 @@ The ordered list of sessions the app knows about. Deleting a session removes it 
 _Avoid_: session list
 
 **Working**:
-A session that has live work, shown with a spinner in the sidebar.
+A session that has live work and no open question, shown with a spinner in the sidebar.
 _Avoid_: busy, running
+
+**Needs input**:
+A session whose run is paused on an open question. The sidebar shows it apart from working sessions.
+_Avoid_: waiting, blocked
 
 ### Transcript
 
@@ -71,6 +75,10 @@ _Avoid_: upload, file
 **Task**:
 A durable unit of work for a conversation, such as generation, a tool call, or compaction.
 _Avoid_: job
+
+**Question**:
+A tool call in which the agent asks the user to choose from options or answer in their own words, and waits for the reply. The reply is the call's result.
+_Avoid_: prompt, form, elicitation
 
 **Compaction**:
 Replacing older entries with a summary so a conversation fits its model's context window.
