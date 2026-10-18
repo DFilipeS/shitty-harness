@@ -6,7 +6,7 @@ import { useHarness } from "../lib/store.tsx";
 import { useTheme } from "../lib/theme.tsx";
 import { formatKeys, useCommandPalette } from "../lib/commands.tsx";
 import { SHORTCUTS } from "../lib/shortcuts.ts";
-import { CommandIcon, MoonIcon, PencilIcon, PlusIcon, SunIcon, TrashIcon } from "./icons.tsx";
+import { CommandIcon, MoonIcon, PencilIcon, PlusIcon, QuestionIcon, SunIcon, TrashIcon } from "./icons.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 
 export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
@@ -154,6 +154,11 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
 													className="h-2.5 w-2.5 shrink-0 rounded-full border-[1.5px] border-line-strong border-t-warn motion-safe:animate-spin"
 												/>
 												Working…
+											</div>
+										) : session.needsInput ? (
+											<div className="flex items-center gap-1.5 text-[11px] text-link">
+												<QuestionIcon className="h-2.5 w-2.5 shrink-0" />
+												Needs input
 											</div>
 										) : (
 											<div className="text-[11px] text-fg-subtle">{relativeTime(session.updatedAt)}</div>

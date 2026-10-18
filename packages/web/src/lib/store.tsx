@@ -12,6 +12,7 @@ import type {
 	ProviderInfo,
 	ProviderRefreshReport,
 	ProviderTemplateInfo,
+	QuestionReply,
 	SandboxChoice,
 	SandboxInfo,
 	SandboxMetricsInfo,
@@ -395,6 +396,8 @@ type HarnessContextValue = {
 	deleteSession(id: string): Promise<void>;
 	sendPrompt(text: string, attachments?: readonly PromptAttachment[]): Promise<void>;
 	abortSession(): Promise<void>;
+	/** Reply to the active session's open question; false when the server refused it. */
+	answerQuestion(callId: string, reply: QuestionReply): Promise<boolean>;
 	finishLive(sessionId: string): void;
 	configureModel(model: ModelRef): Promise<void>;
 	configureThinkingLevel(level: ModelThinkingLevel): Promise<void>;
@@ -649,6 +652,21 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			dispatch({ type: "error/set", error: errorMessage(error) });
 		}
 	}, [client, state.activeSessionId]);
+
+	const answerQuestion = useCallback(
+		async (callId: string, reply: QuestionReply) => {
+			const id = state.activeSessionId;
+			if (id === undefined) return false;
+			try {
+				await client.send({ type: "sessions.answer", sessionId: id, callId, reply });
+				return true;
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+				return false;
+			}
+		},
+		[client, state.activeSessionId],
+	);
 
 	const finishLive = useCallback((sessionId: string) => {
 		dispatch({ type: "session/live-done", id: sessionId });
@@ -1062,6 +1080,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			deleteSession,
 			sendPrompt,
 			abortSession,
+			answerQuestion,
 			finishLive,
 			configureModel,
 			configureThinkingLevel,
@@ -1100,6 +1119,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			deleteSession,
 			sendPrompt,
 			abortSession,
+			answerQuestion,
 			finishLive,
 			configureModel,
 			configureThinkingLevel,

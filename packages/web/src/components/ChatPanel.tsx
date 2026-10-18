@@ -1,12 +1,14 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { useRegisterCommands, type Command } from "../lib/commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
 import { useSkillsPalette } from "../lib/skill-commands.tsx";
 import { useTargetPalette } from "../lib/target-commands.tsx";
+import { findQuestions } from "../lib/questions.ts";
 import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 import { MessageList } from "./MessageList.tsx";
+import { QuestionForm } from "./QuestionForm.tsx";
 import { SessionStats } from "./SessionStats.tsx";
 import {
 	BookIcon,
@@ -23,13 +25,22 @@ import {
 } from "./icons.tsx";
 
 export function ChatPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) {
-	const { activeSessionId, activeSession, sessionsLoaded, createSession } = useHarness();
+	const { activeSessionId, activeSession, sessions, sessionsLoaded, createSession } = useHarness();
+	const questionCallId = sessions.find((session) => session.id === activeSessionId)?.questionCallId;
+	const questions = useMemo(
+		() =>
+			questionCallId === undefined || activeSession === undefined
+				? undefined
+				: findQuestions(activeSession.entries, activeSession.live?.blocks, questionCallId),
+		[questionCallId, activeSession],
+	);
 	const mainRef = useRef<HTMLElement>(null);
 	const composerRef = useRef<HTMLDivElement>(null);
 
 	useChatCommands();
 
-	// The composer floats over the list, so publish its height for the list's bottom padding.
+	// The composer, or the question form in its place, floats over the list, so publish its height for
+	// the list's bottom padding.
 	useLayoutEffect(() => {
 		const main = mainRef.current;
 		const composer = composerRef.current;
@@ -39,7 +50,7 @@ export function ChatPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
 		const observer = new ResizeObserver(update);
 		observer.observe(composer);
 		return () => observer.disconnect();
-	}, [activeSessionId]);
+	}, [activeSessionId, questionCallId]);
 
 	if (activeSessionId === undefined || activeSession === undefined) {
 		return (
@@ -66,7 +77,11 @@ export function ChatPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
 		<main ref={mainRef} className="relative flex min-w-0 flex-1 flex-col">
 			<ChatHeader onToggleSidebar={onToggleSidebar} />
 			<MessageList />
-			<Composer ref={composerRef} />
+			{/* The composer stays mounted under an open question, so a draft survives it. */}
+			<Composer hidden={questionCallId !== undefined} {...(questionCallId === undefined ? { ref: composerRef } : {})} />
+			{questionCallId !== undefined && (
+				<QuestionForm key={questionCallId} ref={composerRef} callId={questionCallId} questions={questions} />
+			)}
 		</main>
 	);
 }

@@ -1,5 +1,5 @@
 import type { AssistantMessage, ImageContent, ToolResultMessage, Usage, UserMessage } from "@earendil-works/pi-ai";
-import type { AgentEvent, EntryRecord, ModelInfo } from "@harness/protocol";
+import type { AgentEvent, EntryRecord, ModelInfo, QuestionReply } from "@harness/protocol";
 
 /** A content block of the assistant message currently being streamed. */
 export type LiveBlock =
@@ -261,6 +261,8 @@ export type ToolResultView = {
 	isError: boolean;
 	/** For `generate_image`: the provider and model that produced the image. */
 	imageModel?: GeneratedImageInfo;
+	/** For `ask_user`: how the user replied. */
+	questionReply?: QuestionReply;
 };
 
 /** The provider and model a generated image came from. */

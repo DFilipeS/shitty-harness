@@ -14,6 +14,7 @@ import {
 	userParts,
 	type ToolResultView,
 } from "../lib/messages.ts";
+import { ASK_USER_TOOL, questionReplyOf } from "../lib/questions.ts";
 import { useHarness } from "../lib/store.tsx";
 import { LiveMessage } from "./LiveMessage.tsx";
 import {
@@ -62,6 +63,7 @@ export function MessageList() {
 					images: toolResultImages(result),
 					isError: result.isError === true,
 					imageModel: generatedImageInfo(result),
+					questionReply: result.toolName === ASK_USER_TOOL ? questionReplyOf(result.details) : undefined,
 				});
 			}
 		}

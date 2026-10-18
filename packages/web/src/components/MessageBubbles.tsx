@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatTokens } from "../lib/format.ts";
 import { toolBlockOpen, toolChoiceAfterToggle, type LiveTool } from "../lib/live-tools.ts";
+import { answerText, ASK_USER_TOOL, parseQuestions } from "../lib/questions.ts";
 import {
 	parseSkillBlock,
 	parseToolArguments,
@@ -12,13 +13,16 @@ import {
 	type ToolResultView,
 	type UserPart,
 } from "../lib/messages.ts";
+import type { Question } from "@harness/protocol";
 import {
 	BookIcon,
 	BrainIcon,
+	CheckIcon,
 	ChevronDownIcon,
 	FileIcon,
 	FilePlusIcon,
 	PencilIcon,
+	QuestionIcon,
 	SpinnerIcon,
 	TerminalIcon,
 	WrenchIcon,
@@ -208,6 +212,10 @@ function BlockView({
 		// A loaded skill reads as the skill itself; running, failed, and "already active" calls stay tool rows.
 		const skill = block.name === "skill" && result?.isError === false ? parseSkillBlock(result.text) : undefined;
 		if (skill !== undefined) return <SkillCard skill={skill} />;
+		if (block.name === ASK_USER_TOOL) {
+			const questions = parseQuestions(parseToolArguments(block.argumentsText));
+			if (questions !== undefined) return <QuestionBlock call={block} questions={questions} result={result} />;
+		}
 		return <ToolCallBlock call={block} result={result} live={liveTools?.[block.id]} />;
 	}
 	return <Markdown text={block.text} />;
@@ -327,6 +335,117 @@ function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolRe
 			{/* Images are the point of the call, so they stay visible below the collapsed row. */}
 			{result !== undefined && <ToolResultImages images={result.images} />}
 		</>
+	);
+}
+
+/**
+ * An `ask_user` call. While it waits, the row points at the form docked below; once answered it reads
+ * as one line per question, and opens to show every option with the chosen ones checked.
+ */
+function QuestionBlock({ call, questions, result }: { call: ToolCall; questions: Question[]; result?: ToolResultView }) {
+	const [open, setOpen] = useState(() => toolOpenChoices.get(call.id) ?? false);
+	const reply = result?.questionReply;
+	const waiting = result === undefined;
+	const cancelled = result?.isError === true && result.text.includes("was aborted");
+	const failed = result?.isError === true && !cancelled;
+	const state = waiting
+		? "waiting"
+		: cancelled
+			? "cancelled"
+			: failed
+				? "failed"
+				: reply?.kind === "skipped"
+					? "skipped"
+					: "answered";
+	const status =
+		state === "waiting" ? "waiting for your answer…" : state === "answered" ? undefined : state;
+	const headers = questions.map((question, index) => question.header || `Question ${index + 1}`);
+
+	return (
+		<details
+			data-tool-call={call.name}
+			data-tool-state={state}
+			open={open}
+			onToggle={(event) => {
+				const next = event.currentTarget.open;
+				setOpen(next);
+				if (next) toolOpenChoices.set(call.id, true);
+				else toolOpenChoices.delete(call.id);
+			}}
+			className={`group rounded-md border bg-panel/50 px-3 py-2 text-xs ${failed ? "border-red-500/30" : "border-line"}`}
+		>
+			<summary className="flex cursor-pointer list-none flex-col gap-1 select-none [&::-webkit-details-marker]:hidden">
+				<span className="flex items-center gap-1.5">
+					<QuestionIcon
+						className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-red-500" : waiting ? "text-link" : "text-fg-subtle"}`}
+					/>
+					<span className="shrink-0 font-mono text-fg">{call.name}</span>
+					<span className="min-w-0 truncate text-fg-subtle">{headers.join(" · ")}</span>
+					{status !== undefined && (
+						<span className={`shrink-0 ${failed ? "text-red-500" : waiting ? "text-link" : "text-fg-faint"}`}>
+							{status}
+						</span>
+					)}
+					<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
+				</span>
+				{reply?.kind === "answered" && (
+					<span className="flex flex-col gap-0.5 pl-5 group-open:hidden">
+						{questions.map((_, index) => (
+							<span key={index} className="flex min-w-0 gap-1.5">
+								<span className="shrink-0 text-fg-faint">{headers[index]}</span>
+								<span className="shrink-0 text-fg-faint">→</span>
+								<span
+									className={`min-w-0 truncate ${reply.answers[index]?.skipped === true ? "text-fg-faint" : "text-fg"}`}
+								>
+									{answerText(reply.answers[index])}
+								</span>
+							</span>
+						))}
+					</span>
+				)}
+			</summary>
+			<div className="mt-1.5 flex max-h-80 flex-col gap-3 overflow-y-auto border-t border-line pt-1.5">
+				{questions.map((question, index) => {
+					const answer = reply?.kind === "answered" ? reply.answers[index] : undefined;
+					return (
+						<div key={index} className="flex flex-col gap-1">
+							<div className="text-fg">
+								<span className="text-fg-faint">{headers[index]}</span> {question.question}
+								{question.multiSelect === true && <span className="text-fg-faint"> (pick any)</span>}
+							</div>
+							<ul className="flex flex-col gap-0.5">
+								{question.options.map((option) => {
+									const chosen = answer?.selected.includes(option.label) === true;
+									return (
+										<li key={option.label} className={`flex gap-1.5 ${chosen ? "text-fg" : "text-fg-subtle"}`}>
+											<span className="mt-px w-3.5 shrink-0">{chosen && <CheckIcon className="h-3.5 w-3.5 text-ok" />}</span>
+											<span>
+												<span className={chosen ? "font-medium" : ""}>{option.label}</span>
+												{option.description !== "" && <span className="text-fg-faint"> — {option.description}</span>}
+											</span>
+										</li>
+									);
+								})}
+								{answer?.skipped === true && <li className="pl-5 text-fg-faint">Skipped</li>}
+								{answer?.other !== undefined && (
+									<li className="flex gap-1.5 text-fg">
+										<span className="mt-px w-3.5 shrink-0">
+											<CheckIcon className="h-3.5 w-3.5 text-ok" />
+										</span>
+										<span className="font-medium">“{answer.other}”</span>
+									</li>
+								)}
+							</ul>
+						</div>
+					);
+				})}
+				{failed && result !== undefined && result.text !== "" && (
+					<pre className="border-t border-line pt-1.5 whitespace-pre-wrap font-mono text-red-700 dark:text-red-300">
+						{result.text}
+					</pre>
+				)}
+			</div>
+		</details>
 	);
 }
 

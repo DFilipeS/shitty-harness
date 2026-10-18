@@ -31,7 +31,7 @@ import {
 const MAX_TEXTAREA_HEIGHT = 160;
 
 /** Floating message composer. ChatPanel positions it and reserves its height in the message list. */
-export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
+export function Composer({ ref, hidden = false }: { ref?: Ref<HTMLDivElement>; hidden?: boolean }) {
 	const { activeSession, activeSessionId, sendPrompt, abortSession, status, models } = useHarness();
 	const [text, setText] = useState("");
 	const [caret, setCaret] = useState(0);
@@ -130,6 +130,7 @@ export function Composer({ ref }: { ref?: Ref<HTMLDivElement> }) {
 	return (
 		<div
 			ref={ref}
+			hidden={hidden}
 			className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4"
 		>
 			<div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-1.5">
