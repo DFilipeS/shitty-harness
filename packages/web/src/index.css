@@ -92,9 +92,12 @@ body {
 	text-size-adjust: 100%;
 }
 
-* {
-	scrollbar-width: thin;
-	scrollbar-color: var(--line-strong) transparent;
+/* In the base layer, so a utility such as `[scrollbar-width:none]` can still override it. */
+@layer base {
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--line-strong) transparent;
+	}
 }
 
 /* Syntax highlighting for markdown code blocks (rehype-highlight classes). */
