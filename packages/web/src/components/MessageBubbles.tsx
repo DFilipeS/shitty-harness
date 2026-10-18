@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { formatTokens } from "../lib/format.ts";
-import type { LiveTool } from "../lib/live-tools.ts";
+import { toolBlockOpen, toolChoiceAfterToggle, type LiveTool } from "../lib/live-tools.ts";
 import {
 	parseSkillBlock,
 	parseToolArguments,
@@ -32,10 +32,11 @@ import { Markdown } from "./Markdown.tsx";
 const thinkingOpenState = new Map<string, boolean>();
 
 /**
- * Open state of tool blocks, keyed by tool call id. The id is stable from the live partial to the
- * committed entry, so a block expanded while the call ran stays open afterwards.
+ * A reader's own choice about a tool block, keyed by tool call id and kept only while it disagrees
+ * with what the block shows on its own. The id is stable from the live partial to the committed
+ * entry, so a choice made while the call ran survives the swap.
  */
-const toolOpenState = new Map<string, boolean>();
+const toolOpenChoices = new Map<string, boolean>();
 
 export function UserBubble({ parts }: { parts: UserPart[] }) {
 	return (
@@ -220,20 +221,14 @@ function ToolIcon({ name, className }: { name: string; className?: string }) {
 
 /** One collapsible row per tool call, holding the arguments, live output, and the result. */
 function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolResultView; live?: LiveTool }) {
-	const [open, setOpen] = useState(() => {
-		const stored = toolOpenState.get(call.id);
-		if (stored !== undefined) return stored;
-		// A running call opens by default and stays open once its result arrives.
-		if (result === undefined) {
-			toolOpenState.set(call.id, true);
-			return true;
-		}
-		return false;
-	});
+	const [choice, setChoice] = useState<boolean | undefined>(() => toolOpenChoices.get(call.id));
+	const running = result === undefined;
+	// A running call opens so its output is readable as it streams, then collapses when the committed
+	// result lands; a reader who toggled the block themselves keeps their choice.
+	const open = toolBlockOpen(choice, running);
 	const args = parseToolArguments(call.argumentsText);
 	const preview = toolCallSummary(args);
 	const failed = result?.isError === true;
-	const running = result === undefined;
 	// The committed result is the tool's own text; while running, show the retained live window.
 	const output = result?.text ?? live?.output ?? "";
 	const contentRef = useRef<HTMLDivElement>(null);
@@ -250,12 +245,15 @@ function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolRe
 		<>
 			<details
 				data-tool-call={call.name}
-				data-tool-state={failed ? "failed" : result === undefined ? "running" : "done"}
+				data-tool-state={failed ? "failed" : running ? "running" : "done"}
 				open={open}
 				onToggle={(event) => {
-					const next = event.currentTarget.open;
-					toolOpenState.set(call.id, next);
-					setOpen(next);
+					// A toggle that only restates the call's own state leaves no choice behind, so the block
+					// still collapses when the call finishes.
+					const next = toolChoiceAfterToggle(event.currentTarget.open, running);
+					setChoice(next);
+					if (next === undefined) toolOpenChoices.delete(call.id);
+					else toolOpenChoices.set(call.id, next);
 				}}
 				className={`group rounded-md border bg-panel/50 px-3 py-2 text-xs ${failed ? "border-red-500/30" : "border-line"}`}
 			>

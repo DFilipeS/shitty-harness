@@ -1,5 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { applyToolOutput, liveToolsFromSnapshot } from "../src/lib/live-tools.ts";
+import {
+	applyToolOutput,
+	liveToolsFromSnapshot,
+	toolBlockOpen,
+	toolChoiceAfterToggle,
+} from "../src/lib/live-tools.ts";
+
+describe("toolBlockOpen", () => {
+	it("opens a running call", () => {
+		expect(toolBlockOpen(undefined, true)).toBe(true);
+	});
+
+	it("collapses a call whose result is committed", () => {
+		expect(toolBlockOpen(undefined, false)).toBe(false);
+	});
+
+	it("keeps a block the reader opened after the call finished", () => {
+		expect(toolBlockOpen(true, false)).toBe(true);
+	});
+
+	it("keeps a block the reader collapsed while the call ran", () => {
+		expect(toolBlockOpen(false, true)).toBe(false);
+	});
+});
+
+describe("toolChoiceAfterToggle", () => {
+	it("records collapsing a running block", () => {
+		expect(toolChoiceAfterToggle(false, true)).toBe(false);
+	});
+
+	it("records opening a finished block", () => {
+		expect(toolChoiceAfterToggle(true, false)).toBe(true);
+	});
+
+	it("records nothing when the reader opens a running block", () => {
+		expect(toolChoiceAfterToggle(true, true)).toBeUndefined();
+	});
+
+	it("records nothing when the reader collapses a finished block", () => {
+		expect(toolChoiceAfterToggle(false, false)).toBeUndefined();
+	});
+});
 
 describe("applyToolOutput", () => {
 	it("replaces the window when the update sets it", () => {
