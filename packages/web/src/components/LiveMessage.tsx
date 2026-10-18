@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LiveTool } from "../lib/live-tools.ts";
-import type { ToolResultView } from "../lib/messages.ts";
+import { activeBlockIndex, type ToolResultView } from "../lib/messages.ts";
 import { useHarness, type LiveMessageState } from "../lib/store.tsx";
 import { AssistantBubble } from "./MessageBubbles.tsx";
 
@@ -114,6 +114,7 @@ export function LiveMessage({
 			messageKey={message.key}
 			blocks={blocks}
 			usage={message.usage}
+			activeIndex={activeBlockIndex(message.blocks, message.finished)}
 			toolResults={toolResults}
 			{...(liveTools === undefined ? {} : { liveTools })}
 			streaming={!done}

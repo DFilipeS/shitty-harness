@@ -19,6 +19,7 @@ import {
 	FileIcon,
 	FilePlusIcon,
 	PencilIcon,
+	SpinnerIcon,
 	TerminalIcon,
 	WrenchIcon,
 } from "./icons.tsx";
@@ -120,6 +121,7 @@ export function AssistantBubble({
 	usage,
 	toolResults,
 	liveTools,
+	activeIndex,
 	streaming = false,
 	error,
 }: {
@@ -130,25 +132,24 @@ export function AssistantBubble({
 	toolResults?: ReadonlyMap<string, ToolResultView>;
 	/** Output of this message's running tool calls, keyed by tool call id. */
 	liveTools?: Readonly<Record<string, LiveTool>>;
+	/** Index of the block a live message is still writing, so it can show as busy. */
+	activeIndex?: number;
 	streaming?: boolean;
 	/** What the model request failed with, when it did. */
 	error?: string;
 }) {
-	const hasVisible = blocks.some((block) => {
-		if (block.type === "text") return block.text !== "";
-		if (block.type === "thinking") return block.thinking !== "";
-		return true;
-	});
+	const hasVisible = blocks.some((block, index) => blockIsVisible(block, index === activeIndex));
 	if (!hasVisible && !streaming && error === undefined) return null;
 	return (
 		<div className="flex flex-col gap-2">
 			{blocks.map((block, index) => {
-				if (block.type === "text" && block.text === "") return null;
-				if (block.type === "thinking" && block.thinking === "") return null;
+				const active = index === activeIndex;
+				if (!blockIsVisible(block, active)) return null;
 				return (
 					<BlockView
 						key={index}
 						block={block}
+						active={active}
 						stateKey={`${messageKey}:${index}`}
 						toolResults={toolResults}
 						{...(liveTools === undefined ? {} : { liveTools })}
@@ -175,19 +176,32 @@ export function AssistantBubble({
 	);
 }
 
+/**
+ * Whether a block has anything to show. Text and thinking appear once they have content, except for
+ * the block still being written: a thinking block shows as soon as it starts, even before its first
+ * characters are revealed.
+ */
+function blockIsVisible(block: LiveBlock, active: boolean): boolean {
+	if (block.type === "text") return block.text !== "";
+	if (block.type === "thinking") return block.thinking !== "" || active;
+	return true;
+}
+
 function BlockView({
 	block,
+	active,
 	stateKey,
 	toolResults,
 	liveTools,
 }: {
 	block: LiveBlock;
+	active: boolean;
 	stateKey: string;
 	toolResults?: ReadonlyMap<string, ToolResultView>;
 	liveTools?: Readonly<Record<string, LiveTool>>;
 }) {
 	if (block.type === "thinking") {
-		return <ThinkingBlock stateKey={stateKey} thinking={block.thinking} />;
+		return <ThinkingBlock stateKey={stateKey} thinking={block.thinking} active={active} />;
 	}
 	if (block.type === "toolCall") {
 		const result = toolResults?.get(block.id);
@@ -219,7 +233,7 @@ function ToolIcon({ name, className }: { name: string; className?: string }) {
 	}
 }
 
-/** One collapsible row per tool call, holding the arguments, live output, and the result. */
+/** One collapsible row per tool call. The row shows a spinner while the call runs. */
 function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolResultView; live?: LiveTool }) {
 	const [choice, setChoice] = useState<boolean | undefined>(() => toolOpenChoices.get(call.id));
 	const running = result === undefined;
@@ -262,7 +276,10 @@ function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolRe
 					<span className="shrink-0 font-mono text-fg">{call.name}</span>
 					{preview !== "" && <span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>}
 					{running && (
-						<span className="shrink-0 text-fg-faint motion-safe:animate-pulse">running…</span>
+						<span className="flex shrink-0 items-center gap-1 text-fg-faint">
+							<SpinnerIcon className="h-3.5 w-3.5 text-fg-subtle" />
+							running…
+						</span>
 					)}
 					{failed && <span className="shrink-0 text-red-500">failed</span>}
 					<span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -375,7 +392,7 @@ function ToolArguments({
 	);
 }
 
-function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: string }) {
+function ThinkingBlock({ stateKey, thinking, active }: { stateKey: string; thinking: string; active: boolean }) {
 	const [open, setOpen] = useState(() => thinkingOpenState.get(stateKey) ?? false);
 	return (
 		<details
@@ -388,8 +405,13 @@ function ThinkingBlock({ stateKey, thinking }: { stateKey: string; thinking: str
 			className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs text-fg-muted"
 		>
 			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
-				<BrainIcon className="h-3.5 w-3.5 shrink-0" />
-				Thinking
+				{/* The spinner replaces the brain while the model is still thinking. */}
+				{active ? (
+					<SpinnerIcon className="h-3.5 w-3.5 shrink-0" />
+				) : (
+					<BrainIcon className="h-3.5 w-3.5 shrink-0" />
+				)}
+				{active ? "Thinking…" : "Thinking"}
 				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
 			</summary>
 			<div className="mt-1.5">

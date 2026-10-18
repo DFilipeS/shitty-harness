@@ -2,6 +2,7 @@ import type { AssistantMessage, ToolResultMessage, UserMessage } from "@earendil
 import type { ModelInfo } from "@harness/protocol";
 import { describe, expect, it } from "vitest";
 import {
+	activeBlockIndex,
 	applyMessageChanges,
 	assistantError,
 	fromAssistantMessage,
@@ -79,6 +80,24 @@ describe("model errors", () => {
 			{ type: "message", message: assistant({ content: [], stopReason: "error", errorMessage: "still suspended" }) },
 		]);
 		expect(updated.error).toBe("still suspended");
+	});
+});
+
+describe("activeBlockIndex", () => {
+	const thinking = { type: "thinking", thinking: "weighing it" } as const;
+	const text = { type: "text", text: "here goes" } as const;
+
+	it("is the last block while the message streams", () => {
+		expect(activeBlockIndex([thinking, text], undefined)).toBe(1);
+		expect(activeBlockIndex([thinking], undefined)).toBe(0);
+	});
+
+	it("is nothing once the message is finished", () => {
+		expect(activeBlockIndex([thinking], true)).toBeUndefined();
+	});
+
+	it("is nothing while a message has no blocks yet", () => {
+		expect(activeBlockIndex([], undefined)).toBeUndefined();
 	});
 });
 

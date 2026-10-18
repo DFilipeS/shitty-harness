@@ -114,6 +114,17 @@ export function applyMessageChanges(live: LiveMessage, usage: Usage, changes: Me
 	return { blocks, usage, ...(error === undefined ? {} : { error }) };
 }
 
+/**
+ * The content block a live message is still writing, or `undefined` once the message is complete.
+ * Blocks arrive in order, so the last one is the block in flight; the client marks it busy.
+ */
+export function activeBlockIndex(
+	blocks: readonly LiveBlock[],
+	finished: boolean | undefined,
+): number | undefined {
+	return finished === true || blocks.length === 0 ? undefined : blocks.length - 1;
+}
+
 export function userMessageOf(entry: EntryRecord): UserMessage | undefined {
 	if (entry.kind !== "pi.user") return undefined;
 	const message = entry.model?.[0];

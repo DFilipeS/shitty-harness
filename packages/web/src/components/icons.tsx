@@ -4,13 +4,21 @@ type IconProps = {
 	className?: string;
 };
 
-function Svg({ children, className }: { children: ReactNode; className?: string }) {
+function Svg({
+	children,
+	className,
+	strokeWidth = 2,
+}: {
+	children: ReactNode;
+	className?: string;
+	strokeWidth?: number;
+}) {
 	return (
 		<svg
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"
-			strokeWidth={2}
+			strokeWidth={strokeWidth}
 			strokeLinecap="round"
 			strokeLinejoin="round"
 			className={className ?? "h-4 w-4"}
@@ -42,6 +50,19 @@ export function MoonIcon({ className }: IconProps) {
 	return (
 		<Svg className={className}>
 			<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+		</Svg>
+	);
+}
+
+/**
+ * A busy indicator: a ring with the leading quarter lit, spun by CSS. Drawn a little heavier than
+ * the outline icons so it still reads as a spinner at row size. Static under reduced motion.
+ */
+export function SpinnerIcon({ className }: IconProps) {
+	return (
+		<Svg className={`motion-safe:animate-spin ${className ?? "h-4 w-4"}`} strokeWidth={3}>
+			<circle cx="12" cy="12" r="9" className="opacity-25" />
+			<path d="M21 12a9 9 0 0 0-9-9" />
 		</Svg>
 	);
 }
