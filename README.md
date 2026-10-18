@@ -173,8 +173,8 @@ While a tool runs, its output streams into the tool's block in the transcript: t
 default, follows the newest output unless you scroll up, and keeps a fixed height with its own
 scrollbar. The committed result replaces the live output when the call finishes, and the block
 collapses with it; toggling a block yourself overrides that, and tool calls from earlier in the
-conversation start collapsed. A spinner in the row marks a call that is running, and a thinking
-block shows one too while the model is still thinking about that block.
+conversation start collapsed. A call that is executing shows a spinner in place of its tool icon,
+and a thinking block does the same in place of its brain while the model is still thinking.
 
 **Model defaults…** picks the image model the tool uses; without one it takes the image sibling of
 the conversation's model, then the first image model that also returns text. Only those are

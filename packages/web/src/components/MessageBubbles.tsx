@@ -233,7 +233,7 @@ function ToolIcon({ name, className }: { name: string; className?: string }) {
 	}
 }
 
-/** One collapsible row per tool call. The row shows a spinner while the call runs. */
+/** One collapsible row per tool call. The icon slot shows a spinner while the call executes. */
 function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolResultView; live?: LiveTool }) {
 	const [choice, setChoice] = useState<boolean | undefined>(() => toolOpenChoices.get(call.id));
 	const running = result === undefined;
@@ -272,15 +272,19 @@ function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolRe
 				className={`group rounded-md border bg-panel/50 px-3 py-2 text-xs ${failed ? "border-red-500/30" : "border-line"}`}
 			>
 				<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
-					<ToolIcon name={call.name} className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-red-500" : "text-fg-subtle"}`} />
+					{/* The icon slot carries the state: a spinner replaces the tool's icon while it executes, so
+					    every tool reads the same way at a glance. */}
+					{running ? (
+						<SpinnerIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
+					) : (
+						<ToolIcon
+							name={call.name}
+							className={`h-3.5 w-3.5 shrink-0 ${failed ? "text-red-500" : "text-fg-subtle"}`}
+						/>
+					)}
 					<span className="shrink-0 font-mono text-fg">{call.name}</span>
 					{preview !== "" && <span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>}
-					{running && (
-						<span className="flex shrink-0 items-center gap-1 text-fg-faint">
-							<SpinnerIcon className="h-3.5 w-3.5 text-fg-subtle" />
-							running…
-						</span>
-					)}
+					{running && <span className="shrink-0 text-fg-faint">running…</span>}
 					{failed && <span className="shrink-0 text-red-500">failed</span>}
 					<span className="ml-auto flex shrink-0 items-center gap-1.5">
 						{result?.imageModel !== undefined && (
