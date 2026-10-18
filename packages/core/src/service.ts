@@ -8,6 +8,7 @@ import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
 import { buildPromptContent, saveAttachment } from "./attachments.ts";
 import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
+import { OpenQuestionsDoc, QuestionsExtension, validateReply, type OpenQuestionsState } from "./questions.ts";
 import {
 	createRegistry,
 	defineExtension,
@@ -34,6 +35,7 @@ import type {
 	ModelThinkingLevel,
 	PromptAttachment,
 	ProviderInfo,
+	QuestionReply,
 	ProviderRefreshReport,
 	SandboxChoice,
 	SandboxMetricsInfo,
@@ -259,7 +261,10 @@ export class HarnessService {
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
 	#indexWatch: DocumentWatch<SessionIndexState> | undefined;
 	#taskGraphWatch: TaskGraphWatch | undefined;
+	#questionsWatch: DocumentWatch<OpenQuestionsState> | undefined;
 	#working = new Set<string>();
+	/** Open questions by session id, mirrored from `OpenQuestionsDoc`. */
+	#questions: OpenQuestionsState["open"] = {};
 	#closed = false;
 
 	private constructor(
@@ -321,6 +326,7 @@ export class HarnessService {
 				}),
 		});
 		registry.install(createSkillsExtension(skills));
+		registry.install(QuestionsExtension);
 		const environment =
 			dependencies.environment === undefined
 				? undefined
@@ -351,9 +357,10 @@ export class HarnessService {
 			},
 			BACKGROUND_CONTEXT,
 		);
-		// Create the index document even before the first conversation exists, so its watch attaches.
+		// Create the session-wide documents even before the first conversation exists, so their watches attach.
 		await harness.commit(async (tx) => {
 			await tx.doc(SessionIndex);
+			await tx.doc(OpenQuestionsDoc);
 		}, BACKGROUND_CONTEXT);
 		harness.resume();
 
@@ -384,6 +391,7 @@ export class HarnessService {
 		}
 		await service.#watchSessionIndex();
 		await service.#watchTaskGraph();
+		await service.#watchQuestions();
 		// Startup uses the cached catalog when it is fresh; the client can force a refresh.
 		void service.#refreshProviders(undefined, false).catch((error: unknown) => {
 			console.warn("[core] model refresh failed:", error);
@@ -472,18 +480,43 @@ export class HarnessService {
 		watch.start(sync);
 	}
 
+	/** Track open questions, so the sidebar can show which sessions need input. */
+	async #watchQuestions(): Promise<void> {
+		const watch = await this.#harness.watchDoc(OpenQuestionsDoc, BACKGROUND_CONTEXT);
+		if (watch === undefined) return;
+		this.#questionsWatch = watch;
+		this.#questions = watch.value?.open ?? {};
+		watch.start(async (value) => {
+			this.#questions = value?.open ?? {};
+			this.#emit({ type: "sessions", sessions: await this.listSessions() });
+		});
+	}
+
+	/**
+	 * The question a session's run waits on. A question left behind by a run that ended without
+	 * closing it, such as an aborted one, does not count: only live work can wait.
+	 */
+	#openQuestion(id: string): { callId: string } | undefined {
+		const open = this.#questions[id];
+		if (open === undefined || open.reply !== null || !this.#working.has(id)) return undefined;
+		return { callId: open.callId };
+	}
+
 	async listSessions(): Promise<SessionSummary[]> {
 		const index = await this.#harness.snapshot(SessionIndex, BACKGROUND_CONTEXT);
 		const entries = [...(index?.sessions ?? [])].sort((a, b) => b.updatedAt - a.updatedAt);
 		return Promise.all(
 			entries.map(async (entry) => {
 				const resolved = await this.#resolveTarget(parseConversationId(entry.id));
+				const question = this.#openQuestion(entry.id);
 				return {
 					id: entry.id,
 					title: entry.title,
 					createdAt: entry.createdAt,
 					updatedAt: entry.updatedAt,
-					working: this.#working.has(entry.id),
+					working: this.#working.has(entry.id) && question === undefined,
+					needsInput: question !== undefined,
+					...(question === undefined ? {} : { questionCallId: question.callId }),
 					target: targetInfo(
 						resolved,
 						resolved.kind === "sandbox" ? this.#sandboxes?.displayName(resolved.provider) : undefined,
@@ -566,6 +599,7 @@ export class HarnessService {
 			const index = await tx.doc(SessionIndex);
 			index.sessions = index.sessions.filter((entry) => entry.id !== id);
 		}, BACKGROUND_CONTEXT);
+		await this.#closeQuestion(id);
 	}
 
 	async prompt(
@@ -648,6 +682,34 @@ export class HarnessService {
 	async abort(id: string): Promise<void> {
 		const conversation = await this.#requireConversation(parseConversationId(id));
 		await conversation.abort(BACKGROUND_CONTEXT);
+		// The aborted call cannot close its own question.
+		await this.#closeQuestion(id);
+	}
+
+	/** Reply to a session's open question. The first reply wins; a later one finds no open question. */
+	async answer(id: string, callId: string, reply: QuestionReply): Promise<void> {
+		await this.#requireConversation(parseConversationId(id));
+		if (this.#openQuestion(id)?.callId !== callId) {
+			throw new ServiceError("not_found", "This question is no longer open");
+		}
+		await this.#harness.commit(async (tx) => {
+			const doc = await tx.doc(OpenQuestionsDoc);
+			const open = doc.open[id];
+			if (open === undefined || open.callId !== callId || open.reply !== null) {
+				throw new ServiceError("not_found", "This question is no longer open");
+			}
+			open.reply = validateReply(open.questions, reply);
+		}, BACKGROUND_CONTEXT);
+	}
+
+	async #closeQuestion(id: string): Promise<void> {
+		if (this.#questions[id] === undefined) return;
+		await this.#harness.commit(async (tx) => {
+			const doc = await tx.doc(OpenQuestionsDoc);
+			if (doc.open[id] === undefined) return;
+			const { [id]: _closed, ...rest } = doc.open;
+			doc.open = rest;
+		}, BACKGROUND_CONTEXT);
 	}
 
 	async configureSession(id: string, change: SessionAgentChange): Promise<AgentState> {
@@ -808,7 +870,7 @@ export class HarnessService {
 			if (target.kind !== "sandbox" || target.sandboxId === undefined) continue;
 			const entry = attached.get(target.sandboxId) ?? { sessions: [], working: false };
 			entry.sessions.push(session.id);
-			entry.working ||= session.working;
+			entry.working ||= session.working || session.needsInput;
 			attached.set(target.sandboxId, entry);
 		}
 		return {
@@ -1113,6 +1175,11 @@ export class HarnessService {
 			await this.#taskGraphWatch?.stop();
 		} catch (error) {
 			console.warn("[core] stopping task graph watch failed:", error);
+		}
+		try {
+			await this.#questionsWatch?.stop();
+		} catch (error) {
+			console.warn("[core] stopping open questions watch failed:", error);
 		}
 		const streams = [...this.#streams];
 		this.#streams.clear();

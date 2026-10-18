@@ -11,6 +11,7 @@ import {
 	type CommandResult,
 	type ModelRef,
 	type PromptAttachment,
+	type QuestionReply,
 	type SandboxChoice,
 	type SandboxSourceChoice,
 	type ServerError,
@@ -52,6 +53,7 @@ const COMMAND_TYPES = new Set<string>([
 	"sessions.detach",
 	"sessions.prompt",
 	"sessions.abort",
+	"sessions.answer",
 	"sessions.configure",
 	"sessions.setTarget",
 	"sessions.skills",
@@ -206,6 +208,30 @@ function optionalAttachments(value: unknown): PromptAttachment[] {
 			data: requireString(item.data, `attachments[${index}].data`),
 		};
 	});
+}
+
+function requireQuestionReply(value: unknown): QuestionReply {
+	if (!isRecord(value) || typeof value.kind !== "string") {
+		throw new ServiceError("invalid", "reply must be an object with a kind");
+	}
+	if (value.kind === "skipped") return { kind: "skipped" };
+	if (value.kind !== "answered") throw new ServiceError("invalid", "reply.kind must be answered or skipped");
+	if (!Array.isArray(value.answers)) throw new ServiceError("invalid", "reply.answers must be an array");
+	return {
+		kind: "answered",
+		answers: value.answers.map((answer, index) => {
+			if (!isRecord(answer) || !Array.isArray(answer.selected)) {
+				throw new ServiceError("invalid", `reply.answers[${index}] must have a selected array`);
+			}
+			const selected = answer.selected.map((label, labelIndex) =>
+				requireString(label, `reply.answers[${index}].selected[${labelIndex}]`),
+			);
+			if (answer.skipped === true) return { selected: [], skipped: true as const };
+			return answer.other === undefined
+				? { selected }
+				: { selected, other: requireString(answer.other, `reply.answers[${index}].other`) };
+		}),
+	};
 }
 
 function optionalTemplateRecipe(value: unknown): TemplateRecipeInput {
@@ -378,6 +404,12 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 			case "sessions.abort": {
 				const sessionId = requireString(command.sessionId, "sessionId");
 				await service.abort(sessionId);
+				return { data: {} };
+			}
+			case "sessions.answer": {
+				const sessionId = requireString(command.sessionId, "sessionId");
+				const callId = requireString(command.callId, "callId");
+				await service.answer(sessionId, callId, requireQuestionReply(command.reply));
 				return { data: {} };
 			}
 			case "sessions.configure": {

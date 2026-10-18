@@ -194,14 +194,46 @@ export type BrowseDirectory = {
 	path: string;
 };
 
+/** One choice a question offers. */
+export type QuestionOption = {
+	label: string;
+	description: string;
+};
+
+/** One question the agent asks with `ask_user`. */
+export type Question = {
+	question: string;
+	/** A very short label, shown as a chip. */
+	header: string;
+	options: QuestionOption[];
+	multiSelect?: boolean;
+};
+
+/**
+ * The answer to one question: the labels of the options picked, and the user's own words if any.
+ * A skipped question has neither.
+ */
+export type QuestionAnswer = {
+	selected: string[];
+	other?: string;
+	skipped?: true;
+};
+
+/** How the user closed a question: answers in question order, or a skip of every question. */
+export type QuestionReply = { kind: "answered"; answers: QuestionAnswer[] } | { kind: "skipped" };
+
 /** One session as shown in the sidebar. */
 export type SessionSummary = {
 	id: string;
 	title: string;
 	createdAt: number;
 	updatedAt: number;
-	/** True while the durable harness has live work for this session. */
+	/** True while the durable harness has live work for this session and no open question. */
 	working: boolean;
+	/** True while the session's run waits on an open question. */
+	needsInput: boolean;
+	/** The tool call of the open question, while there is one. */
+	questionCallId?: string;
 	/** Where this session's tools run. */
 	target: TargetInfo;
 };
@@ -362,6 +394,7 @@ export type ClientCommand =
 			requestId: string;
 		}
 	| { id: string; type: "sessions.abort"; sessionId: string }
+	| { id: string; type: "sessions.answer"; sessionId: string; callId: string; reply: QuestionReply }
 	| {
 			id: string;
 			type: "sessions.configure";
@@ -423,6 +456,7 @@ export type CommandResult = {
 	"sessions.detach": Record<string, never>;
 	"sessions.prompt": { submissionId: string };
 	"sessions.abort": Record<string, never>;
+	"sessions.answer": Record<string, never>;
 	"sessions.configure": SessionsConfigureResult;
 	"sessions.setTarget": SessionsSetTargetResult;
 	"sessions.skills": SessionsSkillsResult;
