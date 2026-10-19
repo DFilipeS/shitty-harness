@@ -1,5 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { focusComposer, formatKeys, useRegisterCommands, type Command } from "../lib/commands.tsx";
+import {
+	focusComposer,
+	formatKeys,
+	useRegisterCommands,
+	type RootCommand,
+} from "../lib/commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
 import { useSkillsPalette } from "../lib/skill-commands.tsx";
 import { useTargetPalette } from "../lib/target-commands.tsx";
@@ -162,7 +167,7 @@ function useChatCommands() {
 	const skillsPalette = useSkillsPalette();
 	const hasSession = () => activeSessionId !== undefined;
 
-	const commands: Command[] = [
+	const commands: RootCommand[] = [
 		{
 			id: "session.rename",
 			title: "Rename current session…",
@@ -266,7 +271,7 @@ function useChatCommands() {
 		{
 			id: "chat.focus",
 			title: "Focus the message input",
-			group: "Chat",
+			group: "App",
 			keywords: ["type", "write", "compose"],
 			icon: <MessageIcon />,
 			when: hasSession,
@@ -275,7 +280,7 @@ function useChatCommands() {
 		{
 			id: "chat.bottom",
 			title: "Scroll to the latest message",
-			group: "Chat",
+			group: "App",
 			keywords: ["end", "down", "bottom"],
 			icon: <ChevronDownIcon />,
 			when: hasSession,

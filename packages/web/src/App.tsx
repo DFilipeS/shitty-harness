@@ -17,7 +17,7 @@ import {
 	TerminalIcon,
 	WandIcon,
 } from "./components/icons.tsx";
-import { CommandPaletteProvider, useRegisterCommands, type Command } from "./lib/commands.tsx";
+import { CommandPaletteProvider, useRegisterCommands, type RootCommand } from "./lib/commands.tsx";
 import { relativeTime } from "./lib/format.ts";
 import { useProviderPalette } from "./lib/provider-commands.tsx";
 import { useSandboxesPalette } from "./lib/sandbox-commands.tsx";
@@ -154,7 +154,7 @@ function useGlobalCommands(toggleSidebar: () => void, togglePanel: () => void) {
 	const sandboxesPalette = useSandboxesPalette();
 	const templatesPalette = useTemplatesPalette();
 
-	const commands: Command[] = [
+	const commands: RootCommand[] = [
 		{
 			id: "session.new",
 			title: "New session",
@@ -254,7 +254,7 @@ function useGlobalCommands(toggleSidebar: () => void, togglePanel: () => void) {
 		{
 			id: "help.shortcuts",
 			title: "Keyboard shortcuts",
-			group: "Help",
+			group: "App",
 			keywords: ["keys", "bindings", "help"],
 			icon: <KeyboardIcon />,
 			run: ({ pushPage }) => pushPage({ kind: "shortcuts", title: "Keyboard shortcuts" }),
