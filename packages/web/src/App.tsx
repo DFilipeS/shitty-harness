@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChatPanel } from "./components/ChatPanel.tsx";
+import { SessionPanel } from "./components/SessionPanel.tsx";
 import { Toast } from "./components/Toast.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 import {
+	InfoIcon,
 	KeyboardIcon,
 	LayersIcon,
 	MenuIcon,
@@ -45,6 +47,7 @@ function isDesktop(): boolean {
 }
 
 const SIDEBAR_STORAGE_KEY = "harness-sidebar";
+const SESSION_PANEL_STORAGE_KEY = "harness-session-panel";
 
 /** The sidebar starts open on desktop and closed on phones; desktop remembers the choice. */
 function initialSidebarOpen(): boolean {
@@ -56,8 +59,18 @@ function initialSidebarOpen(): boolean {
 	}
 }
 
+/** The session panel starts closed everywhere; desktop remembers the choice once toggled. */
+function desktopPanelOpen(): boolean {
+	try {
+		return localStorage.getItem(SESSION_PANEL_STORAGE_KEY) === "open";
+	} catch {
+		return false;
+	}
+}
+
 function AppShell() {
 	const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
+	const [panelOpen, setPanelOpen] = useState(() => (isDesktop() ? desktopPanelOpen() : false));
 
 	const toggleSidebar = useCallback(() => {
 		setSidebarOpen((current) => {
@@ -73,19 +86,37 @@ function AppShell() {
 		});
 	}, []);
 
-	useGlobalCommands(toggleSidebar);
+	const togglePanel = useCallback(() => {
+		setPanelOpen((current) => {
+			const next = !current;
+			if (isDesktop()) {
+				try {
+					localStorage.setItem(SESSION_PANEL_STORAGE_KEY, next ? "open" : "closed");
+				} catch {
+					// Storage can be unavailable; the choice then lasts for this page only.
+				}
+			}
+			return next;
+		});
+	}, []);
 
-	// Crossing the breakpoint resets the sidebar: a drawer on phones, an open column on desktop.
+	useGlobalCommands(toggleSidebar, togglePanel);
+
+	// Crossing the breakpoint resets both columns: drawers on phones, open columns on desktop.
 	useEffect(() => {
 		const query = window.matchMedia(DESKTOP_QUERY);
-		const onChange = (event: MediaQueryListEvent) => setSidebarOpen(event.matches);
+		const onChange = (event: MediaQueryListEvent) => {
+			setSidebarOpen(event.matches);
+			// The panel keeps its remembered choice on desktop and closes on phones.
+			setPanelOpen(event.matches ? desktopPanelOpen() : false);
+		};
 		query.addEventListener("change", onChange);
 		return () => query.removeEventListener("change", onChange);
 	}, []);
 
 	return (
 		<div className="flex h-full overflow-hidden">
-			{/* Selecting a session only closes the drawer on phones; on desktop the column stays. */}
+			{/* Selecting a session only closes the drawers on phones; on desktop the columns stay. */}
 			<Sidebar
 				open={sidebarOpen}
 				onNavigate={() => {
@@ -99,14 +130,22 @@ function AppShell() {
 					aria-hidden="true"
 				/>
 			)}
-			<ChatPanel onToggleSidebar={toggleSidebar} />
+			<ChatPanel onToggleSidebar={toggleSidebar} onToggleSessionPanel={togglePanel} />
+			{panelOpen && (
+				<div
+					className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+					onClick={() => setPanelOpen(false)}
+					aria-hidden="true"
+				/>
+			)}
+			<SessionPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
 			<Toast />
 		</div>
 	);
 }
 
 /** Commands that make sense anywhere in the app, regardless of the open session. */
-function useGlobalCommands(toggleSidebar: () => void) {
+function useGlobalCommands(toggleSidebar: () => void, togglePanel: () => void) {
 	const { sessions, activeSessionId, createSession, selectSession, refreshProviders } = useHarness();
 	const { theme, toggleTheme } = useTheme();
 	const providersPalette = useProviderPalette();
@@ -201,6 +240,15 @@ function useGlobalCommands(toggleSidebar: () => void) {
 			icon: <MenuIcon />,
 			keys: SHORTCUTS.sidebar,
 			run: () => toggleSidebar(),
+		},
+		{
+			id: "session.panel.toggle",
+			title: "Toggle session panel",
+			group: "App",
+			keywords: ["panel", "show", "hide", "drawer", "system prompt", "info"],
+			icon: <InfoIcon />,
+			keys: SHORTCUTS.sessionPanel,
+			run: () => togglePanel(),
 		},
 		{
 			id: "help.shortcuts",

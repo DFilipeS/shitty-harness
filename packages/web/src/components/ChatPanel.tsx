@@ -1,9 +1,10 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { useRegisterCommands, type Command } from "../lib/commands.tsx";
+import { formatKeys, useRegisterCommands, type Command } from "../lib/commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
 import { useSkillsPalette } from "../lib/skill-commands.tsx";
 import { useTargetPalette } from "../lib/target-commands.tsx";
 import { findQuestions } from "../lib/questions.ts";
+import { SHORTCUTS } from "../lib/shortcuts.ts";
 import { useHarness } from "../lib/store.tsx";
 import { Composer } from "./Composer.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
@@ -15,6 +16,7 @@ import {
 	BrainIcon,
 	ChevronDownIcon,
 	FolderIcon,
+	InfoIcon,
 	MenuIcon,
 	MessageIcon,
 	PencilIcon,
@@ -24,7 +26,13 @@ import {
 	TrashIcon,
 } from "./icons.tsx";
 
-export function ChatPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+export function ChatPanel({
+	onToggleSidebar,
+	onToggleSessionPanel,
+}: {
+	onToggleSidebar: () => void;
+	onToggleSessionPanel: () => void;
+}) {
 	const { activeSessionId, activeSession, sessions, sessionsLoaded, createSession } = useHarness();
 	const questionCallId = sessions.find((session) => session.id === activeSessionId)?.questionCallId;
 	const questions = useMemo(
@@ -75,7 +83,7 @@ export function ChatPanel({ onToggleSidebar }: { onToggleSidebar: () => void }) 
 
 	return (
 		<main ref={mainRef} className="relative flex min-w-0 flex-1 flex-col">
-			<ChatHeader onToggleSidebar={onToggleSidebar} />
+			<ChatHeader onToggleSidebar={onToggleSidebar} onToggleSessionPanel={onToggleSessionPanel} />
 			<MessageList />
 			{/* The composer stays mounted under an open question, so a draft survives it. */}
 			<Composer hidden={questionCallId !== undefined} {...(questionCallId === undefined ? { ref: composerRef } : {})} />
@@ -242,7 +250,13 @@ function SidebarToggle({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 	);
 }
 
-function ChatHeader({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+function ChatHeader({
+	onToggleSidebar,
+	onToggleSessionPanel,
+}: {
+	onToggleSidebar: () => void;
+	onToggleSessionPanel: () => void;
+}) {
 	const { sessions, activeSessionId } = useHarness();
 	const session = sessions.find((candidate) => candidate.id === activeSessionId);
 	return (
@@ -252,6 +266,14 @@ function ChatHeader({ onToggleSidebar }: { onToggleSidebar: () => void }) {
 				{session === undefined ? "Session" : <MarkdownInline text={session.title} />}
 			</h1>
 			<SessionStats />
+			<button
+				type="button"
+				onClick={onToggleSessionPanel}
+				title={`Toggle session panel (${formatKeys(SHORTCUTS.sessionPanel)})`}
+				className="-mr-1 rounded-md p-1.5 text-fg-muted hover:bg-raised hover:text-fg pointer-coarse:p-2.5"
+			>
+				<InfoIcon />
+			</button>
 		</header>
 	);
 }

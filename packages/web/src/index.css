@@ -98,6 +98,11 @@ body {
 		scrollbar-width: thin;
 		scrollbar-color: var(--line-strong) transparent;
 	}
+
+	/* `list-none` hides the disclosure triangle; Safari needs the marker gone too. */
+	summary::-webkit-details-marker {
+		display: none;
+	}
 }
 
 /* Syntax highlighting for markdown code blocks (rehype-highlight classes). */

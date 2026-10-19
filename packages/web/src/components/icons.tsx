@@ -335,6 +335,25 @@ export function SlidersIcon({ className }: IconProps) {
 	);
 }
 
+export function CopyIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<rect x="9" y="9" width="11" height="11" rx="2" />
+			<path d="M5 15V5a2 2 0 0 1 2-2h10" />
+		</Svg>
+	);
+}
+
+export function InfoIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<circle cx="12" cy="12" r="9" />
+			<path d="M12 8h.01" />
+			<path d="M12 11v5" />
+		</Svg>
+	);
+}
+
 export function BookIcon({ className }: IconProps) {
 	return (
 		<Svg className={className}>

@@ -20,6 +20,7 @@ import type {
 	SandboxesState,
 	SessionSummary,
 	SessionsSkillsResult,
+	SessionsSystemPromptResult,
 	SnapshotEvent,
 	TargetChoice,
 	TargetStatus,
@@ -406,6 +407,8 @@ type HarnessContextValue = {
 	browseWorkspaces(path?: string): Promise<WorkspacesBrowseResult>;
 	/** A session's skills; undefined when the server could not list them. */
 	listSkills(sessionId: string): Promise<SessionsSkillsResult | undefined>;
+	/** A session's system prompt sections; undefined when the server could not replay them. */
+	systemPrompt(sessionId: string): Promise<SessionsSystemPromptResult | undefined>;
 	createWorkspaceFolder(parent: string, name: string): Promise<{ path: string } | undefined>;
 	refreshSandboxes(): Promise<SandboxesState | undefined>;
 	createSandbox(choice: SandboxChoice): Promise<SandboxInfo | undefined>;
@@ -995,6 +998,19 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		[client],
 	);
 
+	/** The session's system prompt sections; undefined when the server could not replay them. */
+	const systemPrompt = useCallback(
+		async (sessionId: string) => {
+			try {
+				return await client.send({ type: "sessions.systemPrompt", sessionId });
+			} catch (error) {
+				console.warn("[session-panel] loading the system prompt failed:", error);
+				return undefined;
+			}
+		},
+		[client],
+	);
+
 	const browseWorkspaces = useCallback(
 		async (path?: string) =>
 			client.send({ type: "workspaces.browse", ...(path === undefined ? {} : { path }) }),
@@ -1108,6 +1124,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			deleteProviderTemplate,
 			setDefaults,
 			refreshProviders,
+			systemPrompt,
 			clearError: () => dispatch({ type: "error/clear" }),
 			clearNotice,
 		}),
@@ -1147,6 +1164,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			deleteProviderTemplate,
 			setDefaults,
 			refreshProviders,
+			systemPrompt,
 			clearNotice,
 		],
 	);
