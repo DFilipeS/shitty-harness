@@ -16,7 +16,8 @@ import { CommandPalette } from "../components/CommandPalette.tsx";
 export type Command = {
 	id: string;
 	title: string;
-	/** The heading this command sits under in the palette. */
+	/** The heading this command sits under in the palette. Root commands use one of
+	 * `PALETTE_CATEGORIES`; nested pages name their own headings. */
 	group: string;
 	/** Extra words that match the search, e.g. synonyms. */
 	keywords?: string[];
@@ -145,12 +146,16 @@ export type CommandRegistry = Map<string, Registration>;
 
 const RegistryContext = createContext<CommandRegistry | undefined>(undefined);
 
-/** Display order of the palette groups; unknown groups go last. */
-const GROUP_ORDER = ["Session", "Chat", "App", "Help"];
+/** The two headings of the root palette, in display order. Session always leads. */
+export const PALETTE_CATEGORIES = ["Session", "App"] as const;
 
-function groupRank(name: string): number {
-	const index = GROUP_ORDER.indexOf(name);
-	return index === -1 ? GROUP_ORDER.length : index;
+/** A command on the root palette: its heading is one of the two categories. */
+export type RootCommand = Omit<Command, "group"> & { group: (typeof PALETTE_CATEGORIES)[number] };
+
+/** Rank of a heading in the palette; unknown headings go last. */
+export function groupRank(name: string): number {
+	const index = (PALETTE_CATEGORIES as readonly string[]).indexOf(name);
+	return index === -1 ? PALETTE_CATEGORIES.length : index;
 }
 
 /** Flattens the registry into palette order: by registration priority, then by group. */

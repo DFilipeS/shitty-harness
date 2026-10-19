@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import {
 	collectCommands,
 	formatKeys,
+	groupRank,
 	type Command,
 	type CommandContext,
 	type CommandPage,
@@ -72,11 +73,14 @@ function filter(commands: Command[], query: string): Command[] {
 	const available = commands.filter((command) => command.when?.() !== false);
 	const needle = query.trim().toLowerCase();
 	if (needle === "") return available;
-	return available
-		.map((command) => ({ command, rank: score(command, needle) }))
-		.filter((entry): entry is { command: Command; rank: number } => entry.rank !== undefined)
-		.sort((a, b) => a.rank - b.rank)
-		.map((entry) => entry.command);
+	return (
+		available
+			.map((command) => ({ command, rank: score(command, needle) }))
+			.filter((entry): entry is { command: Command; rank: number } => entry.rank !== undefined)
+			// Session leads even in search results; the rank then orders the rows within a group.
+			.sort((a, b) => groupRank(a.command.group) - groupRank(b.command.group) || a.rank - b.rank)
+			.map((entry) => entry.command)
+	);
 }
 
 type Group = { name: string; items: { command: Command; index: number }[] };
