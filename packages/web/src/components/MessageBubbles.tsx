@@ -140,17 +140,24 @@ export function QueuedMessage({
 
 /** A text file sent with a message, collapsed until opened. */
 function AttachedFileCard({ file }: { file: Extract<UserPart, { type: "file" }> }) {
+	const [open, setOpen] = useState(false);
 	return (
-		<details className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs">
+		<details
+			open={open}
+			onToggle={(event) => setOpen(event.currentTarget.open)}
+			className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs"
+		>
 			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
 				<FileIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
 				<span className="min-w-0 truncate font-mono text-fg">{file.name}</span>
 				<span className="shrink-0 text-fg-faint">{file.mimeType}</span>
 				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
 			</summary>
-			<pre className="mt-1.5 max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono text-fg-muted">
-				{file.text}
-			</pre>
+			{open && (
+				<pre className="mt-1.5 max-h-80 overflow-auto border-t border-line pt-1.5 whitespace-pre-wrap font-mono text-fg-muted">
+					{file.text}
+				</pre>
+			)}
 		</details>
 	);
 }
@@ -160,9 +167,12 @@ function AttachedFileCard({ file }: { file: Extract<UserPart, { type: "file" }> 
  * or the model activated it with the `skill` tool.
  */
 function SkillCard({ skill }: { skill: SkillBlock }) {
+	const [open, setOpen] = useState(false);
 	return (
 		<details
 			data-skill-card={skill.name}
+			open={open}
+			onToggle={(event) => setOpen(event.currentTarget.open)}
 			className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs"
 		>
 			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
@@ -172,23 +182,25 @@ function SkillCard({ skill }: { skill: SkillBlock }) {
 				<span className="shrink-0 text-fg-faint">{skill.scope}</span>
 				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
 			</summary>
-			<div className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto border-t border-line pt-1.5">
-				<Markdown text={skill.instructions} />
-				{skill.directory !== undefined && (
-					<div className="truncate font-mono text-[11px] text-fg-faint" title={skill.directory}>
-						{skill.directory}
-					</div>
-				)}
-				{skill.files.length > 0 && (
-					<ul className="font-mono text-[11px] text-fg-subtle">
-						{skill.files.map((file) => (
-							<li key={file} className="truncate">
-								{file}
-							</li>
-						))}
-					</ul>
-				)}
-			</div>
+			{open && (
+				<div className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto border-t border-line pt-1.5">
+					<Markdown text={skill.instructions} />
+					{skill.directory !== undefined && (
+						<div className="truncate font-mono text-[11px] text-fg-faint" title={skill.directory}>
+							{skill.directory}
+						</div>
+					)}
+					{skill.files.length > 0 && (
+						<ul className="font-mono text-[11px] text-fg-subtle">
+							{skill.files.map((file) => (
+								<li key={file} className="truncate">
+									{file}
+								</li>
+							))}
+						</ul>
+					)}
+				</div>
+			)}
 		</details>
 	);
 }
@@ -454,40 +466,44 @@ function ToolCallBlock({
 						<ChevronDownIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle transition-transform group-open:rotate-180" />
 					</span>
 				</summary>
-				<div
-					ref={contentRef}
-					onScroll={(event) => {
-						const element = event.currentTarget;
-						stickToBottom.current =
-							element.scrollHeight - element.scrollTop - element.clientHeight < 24;
-					}}
-					className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto"
-				>
-					<ToolArguments name={call.name} text={call.argumentsText} args={args} />
-					{/* A code mode script's calls read as plain lines: live while the script runs, then from
+				{/* The body mounts only while open: a long transcript keeps hundreds of collapsed rows,
+				    and their outputs need no DOM until someone reads them. */}
+				{open && (
+					<div
+						ref={contentRef}
+						onScroll={(event) => {
+							const element = event.currentTarget;
+							stickToBottom.current =
+								element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+						}}
+						className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto"
+					>
+						<ToolArguments name={call.name} text={call.argumentsText} args={args} />
+						{/* A code mode script's calls read as plain lines: live while the script runs, then from
 					    the committed result, so they stay attached to the block that made them. */}
-					{result !== undefined && result.nestedCalls !== undefined && (
-						<NestedCallLines calls={result.nestedCalls} />
-					)}
-					{running && nested !== undefined && nested.length > 0 && (
-						<NestedCallLines calls={nested} />
-					)}
-					{result?.imageModel !== undefined && (
-						<div className="text-fg-faint">
-							Model: {result.imageModel.providerName} · {result.imageModel.modelName} (
-							{result.imageModel.modelId})
-						</div>
-					)}
-					{output !== "" && (
-						<pre
-							className={`border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${
-								failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
-							}`}
-						>
-							{output}
-						</pre>
-					)}
-				</div>
+						{result !== undefined && result.nestedCalls !== undefined && (
+							<NestedCallLines calls={result.nestedCalls} />
+						)}
+						{running && nested !== undefined && nested.length > 0 && (
+							<NestedCallLines calls={nested} />
+						)}
+						{result?.imageModel !== undefined && (
+							<div className="text-fg-faint">
+								Model: {result.imageModel.providerName} · {result.imageModel.modelName} (
+								{result.imageModel.modelId})
+							</div>
+						)}
+						{output !== "" && (
+							<pre
+								className={`border-t border-line pt-1.5 whitespace-pre-wrap font-mono ${
+									failed ? "text-red-700 dark:text-red-300" : "text-fg-muted"
+								}`}
+							>
+								{output}
+							</pre>
+						)}
+					</div>
+				)}
 			</details>
 			{/* Images are the point of the call, so they stay visible below the collapsed row. */}
 			{result !== undefined && <ToolResultImages images={result.images} />}
@@ -571,56 +587,58 @@ function QuestionBlock({
 					</span>
 				)}
 			</summary>
-			<div className="mt-1.5 flex max-h-80 flex-col gap-3 overflow-y-auto border-t border-line pt-1.5">
-				{questions.map((question, index) => {
-					const answer = reply?.kind === "answered" ? reply.answers[index] : undefined;
-					return (
-						<div key={index} className="flex flex-col gap-1">
-							<div className="text-fg">
-								<span className="text-fg-faint">{headers[index]}</span> {question.question}
-								{question.multiSelect === true && (
-									<span className="text-fg-faint"> (pick any)</span>
-								)}
-							</div>
-							<ul className="flex flex-col gap-0.5">
-								{question.options.map((option) => {
-									const chosen = answer?.selected.includes(option.label) === true;
-									return (
-										<li
-											key={option.label}
-											className={`flex gap-1.5 ${chosen ? "text-fg" : "text-fg-subtle"}`}
-										>
+			{open && (
+				<div className="mt-1.5 flex max-h-80 flex-col gap-3 overflow-y-auto border-t border-line pt-1.5">
+					{questions.map((question, index) => {
+						const answer = reply?.kind === "answered" ? reply.answers[index] : undefined;
+						return (
+							<div key={index} className="flex flex-col gap-1">
+								<div className="text-fg">
+									<span className="text-fg-faint">{headers[index]}</span> {question.question}
+									{question.multiSelect === true && (
+										<span className="text-fg-faint"> (pick any)</span>
+									)}
+								</div>
+								<ul className="flex flex-col gap-0.5">
+									{question.options.map((option) => {
+										const chosen = answer?.selected.includes(option.label) === true;
+										return (
+											<li
+												key={option.label}
+												className={`flex gap-1.5 ${chosen ? "text-fg" : "text-fg-subtle"}`}
+											>
+												<span className="mt-px w-3.5 shrink-0">
+													{chosen && <CheckIcon className="h-3.5 w-3.5 text-ok" />}
+												</span>
+												<span>
+													<span className={chosen ? "font-medium" : ""}>{option.label}</span>
+													{option.description !== "" && (
+														<span className="text-fg-faint"> — {option.description}</span>
+													)}
+												</span>
+											</li>
+										);
+									})}
+									{answer?.skipped === true && <li className="pl-5 text-fg-faint">Skipped</li>}
+									{answer?.other !== undefined && (
+										<li className="flex gap-1.5 text-fg">
 											<span className="mt-px w-3.5 shrink-0">
-												{chosen && <CheckIcon className="h-3.5 w-3.5 text-ok" />}
+												<CheckIcon className="h-3.5 w-3.5 text-ok" />
 											</span>
-											<span>
-												<span className={chosen ? "font-medium" : ""}>{option.label}</span>
-												{option.description !== "" && (
-													<span className="text-fg-faint"> — {option.description}</span>
-												)}
-											</span>
+											<span className="font-medium">“{answer.other}”</span>
 										</li>
-									);
-								})}
-								{answer?.skipped === true && <li className="pl-5 text-fg-faint">Skipped</li>}
-								{answer?.other !== undefined && (
-									<li className="flex gap-1.5 text-fg">
-										<span className="mt-px w-3.5 shrink-0">
-											<CheckIcon className="h-3.5 w-3.5 text-ok" />
-										</span>
-										<span className="font-medium">“{answer.other}”</span>
-									</li>
-								)}
-							</ul>
-						</div>
-					);
-				})}
-				{failed && result !== undefined && result.text !== "" && (
-					<pre className="border-t border-line pt-1.5 whitespace-pre-wrap font-mono text-red-700 dark:text-red-300">
-						{result.text}
-					</pre>
-				)}
-			</div>
+									)}
+								</ul>
+							</div>
+						);
+					})}
+					{failed && result !== undefined && result.text !== "" && (
+						<pre className="border-t border-line pt-1.5 whitespace-pre-wrap font-mono text-red-700 dark:text-red-300">
+							{result.text}
+						</pre>
+					)}
+				</div>
+			)}
 		</details>
 	);
 }
@@ -731,9 +749,11 @@ function ThinkingBlock({
 				{active ? "Thinking…" : "Thinking"}
 				<ChevronDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" />
 			</summary>
-			<div className="mt-1.5">
-				<Markdown text={thinking} variant="thinking" size="xs" />
-			</div>
+			{open && (
+				<div className="mt-1.5">
+					<Markdown text={thinking} variant="thinking" size="xs" />
+				</div>
+			)}
 		</details>
 	);
 }
@@ -840,9 +860,12 @@ export function ToolResultBubble({
 	images: readonly ToolResultImage[];
 	isError: boolean;
 }) {
+	const [open, setOpen] = useState(false);
 	return (
 		<>
 			<details
+				open={open}
+				onToggle={(event) => setOpen(event.currentTarget.open)}
 				className={`rounded-md border px-3 py-2 text-xs ${
 					isError
 						? "border-red-500/30 bg-red-500/10 text-red-700 dark:bg-red-950/20 dark:text-red-300"
@@ -852,7 +875,7 @@ export function ToolResultBubble({
 				<summary className="cursor-pointer select-none">
 					{isError ? "Tool error" : "Tool result"}
 				</summary>
-				{text !== "" && (
+				{open && text !== "" && (
 					<pre className="mt-1.5 max-h-80 overflow-auto whitespace-pre-wrap font-mono">{text}</pre>
 				)}
 			</details>

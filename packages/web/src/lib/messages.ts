@@ -361,8 +361,31 @@ export function codemodeCalls(message: ToolResultMessage): NestedCallView[] | un
 	return views;
 }
 
+/**
+ * Parse results keyed by the raw arguments text. Every render of every tool block parses anew
+ * without this, and a session re-attach re-renders them all: the cache makes the repeat free.
+ */
+const parsedArguments = new Map<string, Record<string, unknown> | undefined>();
+const PARSED_ARGUMENTS_LIMIT = 500;
+
 /** Parses a tool call's arguments; undefined while they stream in or when they are not an object. */
 export function parseToolArguments(text: string): Record<string, unknown> | undefined {
+	if (parsedArguments.has(text)) {
+		const hit = parsedArguments.get(text);
+		parsedArguments.delete(text);
+		parsedArguments.set(text, hit); // Refresh LRU recency.
+		return hit;
+	}
+	const parsed = parseArguments(text);
+	parsedArguments.set(text, parsed);
+	if (parsedArguments.size > PARSED_ARGUMENTS_LIMIT) {
+		const oldest = parsedArguments.keys().next().value;
+		if (oldest !== undefined) parsedArguments.delete(oldest);
+	}
+	return parsed;
+}
+
+function parseArguments(text: string): Record<string, unknown> | undefined {
 	try {
 		const value: unknown = JSON.parse(text);
 		return typeof value === "object" && value !== null && !Array.isArray(value)
