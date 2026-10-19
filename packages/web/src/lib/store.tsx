@@ -27,6 +27,7 @@ import type {
 	SessionSummary,
 	SessionsSkillsResult,
 	SessionsSystemPromptResult,
+	SessionsToolsResult,
 	TargetChoice,
 	TargetStatus,
 	TemplateInfo,
@@ -84,6 +85,10 @@ type HarnessContextValue = {
 	listSkills(sessionId: string): Promise<SessionsSkillsResult | undefined>;
 	/** A session's system prompt sections; undefined when the server could not replay them. */
 	systemPrompt(sessionId: string): Promise<SessionsSystemPromptResult | undefined>;
+	/** A session's tools and what it offers; undefined when the server could not list them. */
+	sessionTools(sessionId: string): Promise<SessionsToolsResult | undefined>;
+	/** Turn the active session's tools off for its next request; null turns every tool back on. */
+	configureTools(remove: string[] | null): Promise<void>;
 	createWorkspaceFolder(parent: string, name: string): Promise<{ path: string } | undefined>;
 	refreshSandboxes(): Promise<SandboxesState | undefined>;
 	createSandbox(choice: SandboxChoice): Promise<SandboxInfo | undefined>;
@@ -760,6 +765,37 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		[client],
 	);
 
+	/** The session's tools and what it offers; undefined when the server could not list them. */
+	const sessionTools = useCallback(
+		async (sessionId: string) => {
+			try {
+				return await client.send({ type: "sessions.tools", sessionId });
+			} catch (error) {
+				console.warn("[session-panel] listing tools failed:", error);
+				return undefined;
+			}
+		},
+		[client],
+	);
+
+	/** Turn the active session's tools off for its next request; null turns every tool back on. */
+	const configureTools = useCallback(
+		async (remove: string[] | null) => {
+			const id = state.activeSessionId;
+			if (id === undefined) return;
+			try {
+				await client.send({
+					type: "sessions.configure",
+					sessionId: id,
+					tools: remove === null ? null : { remove },
+				});
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, state.activeSessionId],
+	);
+
 	const browseWorkspaces = useCallback(
 		async (path?: string) =>
 			client.send({ type: "workspaces.browse", ...(path === undefined ? {} : { path }) }),
@@ -877,6 +913,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			setDefaults,
 			refreshProviders,
 			systemPrompt,
+			sessionTools,
+			configureTools,
 			clearError: () => dispatch({ type: "error/clear" }),
 			clearNotice,
 		}),
@@ -918,6 +956,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			setDefaults,
 			refreshProviders,
 			systemPrompt,
+			sessionTools,
+			configureTools,
 			clearNotice,
 		],
 	);
