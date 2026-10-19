@@ -394,6 +394,45 @@ describe("HarnessService", () => {
 		}
 	});
 
+	it("lists queued messages and removes one from the queue", async () => {
+		const { providers } = createFauxProviders({ tokensPerSecond: 5 });
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			await service.prompt(session.id, "First", "request-queue-1");
+			expect(await waitFor(async () => (await service.listSessions())[0]?.working === true)).toBe(true);
+
+			// A prompt while the run is busy queues behind it, attachments and all.
+			await service.prompt(session.id, "Second", "request-queue-2", [
+				{ name: "shot.png", mimeType: "image/png", data: "aGk=" },
+				{ name: "notes.md", mimeType: "text/markdown", data: "# Notes" },
+			]);
+			const queued = await service.queue(session.id);
+			expect(queued.items).toHaveLength(1);
+			expect(queued.items[0]).toMatchObject({
+				mode: "followUp",
+				text: "Second",
+				attachments: ["notes.md"],
+				images: 1,
+			});
+
+			await expect(service.withdraw(session.id, queued.items[0]!.id)).resolves.toEqual({ outcome: "aborted" });
+			expect((await service.queue(session.id)).items).toEqual([]);
+			// The withdrawn submission still exists, so withdrawing again reports it settled.
+			await expect(service.withdraw(session.id, queued.items[0]!.id)).resolves.toEqual({ outcome: "settled" });
+			await expect(service.withdraw(session.id, "999999")).rejects.toMatchObject({ code: "not_found" });
+			await expect(service.queue("999")).rejects.toMatchObject({ code: "not_found" });
+
+			// The withdrawn message never lands: the transcript keeps only the first prompt.
+			expect(await waitFor(async () => (await service.listSessions())[0]?.working === false)).toBe(true);
+			const { snapshot, unsubscribe } = await service.subscribeSession(session.id, () => {});
+			expect(snapshot.entries.filter((entry) => entry.kind === "pi.user")).toHaveLength(1);
+			unsubscribe();
+		} finally {
+			await service.close();
+		}
+	});
+
 	it("marks a session as working while a run is active", async () => {
 		const { providers } = createFauxProviders({ tokensPerSecond: 10 });
 		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });

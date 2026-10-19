@@ -13,11 +13,13 @@ import {
 } from "./project-instructions.ts";
 import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
+import { queuedMessageInfo } from "./queue.ts";
 import { OpenQuestionsDoc, QuestionsExtension, validateReply, type OpenQuestionsState } from "./questions.ts";
 import {
 	createRegistry,
 	defineExtension,
 	Harness,
+	InboxDoc,
 	watchEvents,
 	type AgentEvent,
 	type AgentEventStream,
@@ -28,6 +30,7 @@ import {
 	type EnvTarget,
 	type SnapshotEvent,
 	type Storage,
+	type SubmissionId,
 	type TaskGraph,
 	type TaskGraphWatch,
 } from "@earendil-works/pi-durable";
@@ -42,12 +45,15 @@ import type {
 	ProviderInfo,
 	QuestionReply,
 	ProviderRefreshReport,
+	QueuedMessageInfo,
 	SandboxChoice,
 	SandboxMetricsInfo,
 	SandboxesState,
 	SandboxSettingsInfo,
 	SessionSummary,
+	SessionsQueueResult,
 	SessionsSystemPromptResult,
+	SessionsWithdrawResult,
 	TargetChoice,
 	TargetInfo,
 	TargetStatus,
@@ -114,6 +120,15 @@ function parseConversationId(value: string): ConversationId {
 		throw new ServiceError("not_found", `Unknown session: ${value}`);
 	}
 	return parsed as ConversationId;
+}
+
+/** Submission IDs are branded numbers; the protocol carries them as strings. */
+function parseSubmissionId(value: string): SubmissionId {
+	const parsed = Number(value);
+	if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+		throw new ServiceError("not_found", `Unknown queued message: ${value}`);
+	}
+	return parsed as SubmissionId;
 }
 
 type SessionAgentChange = {
@@ -709,6 +724,39 @@ export class HarnessService {
 			BACKGROUND_CONTEXT,
 		);
 		return { submissionId: String(submission.id) };
+	}
+
+	/**
+	 * The messages queued behind the session's current run, oldest first, as the queue display
+	 * shows them. Queued writes the harness places for itself (compaction summaries) are not user
+	 * messages and stay out.
+	 */
+	async queue(id: string): Promise<SessionsQueueResult> {
+		const conversationId = parseConversationId(id);
+		await this.#requireConversation(conversationId);
+		const inbox = await this.#harness.snapshot(InboxDoc, conversationId, BACKGROUND_CONTEXT);
+		const items = (inbox?.items ?? [])
+			.map(queuedMessageInfo)
+			.filter((item): item is QueuedMessageInfo => item !== undefined);
+		return { items };
+	}
+
+	/**
+	 * Remove one message from the session's queue. The outcome tells the caller what happened:
+	 * `aborted` left the queue, while `already_placed` and `settled` lost the race with the run.
+	 */
+	async withdraw(id: string, submissionId: string): Promise<SessionsWithdrawResult> {
+		const conversationId = parseConversationId(id);
+		await this.#requireConversation(conversationId);
+		const outcome = await this.#harness.abortSubmission(
+			parseSubmissionId(submissionId),
+			BACKGROUND_CONTEXT,
+			conversationId,
+		);
+		if (outcome === "not_found") {
+			throw new ServiceError("not_found", `Unknown queued message: ${submissionId}`);
+		}
+		return { outcome };
 	}
 
 	/** Resolve a `/skill:name` invocation, reading the skill fresh from the session's target. */
