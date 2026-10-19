@@ -416,6 +416,7 @@ describe("HarnessService", () => {
 			expect(reloaded.map((section) => section.key)).toEqual([
 				"agent",
 				"project-instructions",
+				"codemode",
 				"execution-target",
 			]);
 			const instructions = reloaded.find((section) => section.key === "project-instructions");

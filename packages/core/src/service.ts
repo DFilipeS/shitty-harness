@@ -2,8 +2,10 @@ import { mkdir, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { clampThinkingLevel, type Message } from "@earendil-works/pi-ai";
+import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
+import { createCodemodeExtension } from "@earendil-works/pi-durable/codemode";
 import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
 import { buildPromptContent, saveAttachment } from "./attachments.ts";
 import { createAgentGuidanceSection } from "./agent-guidance.ts";
@@ -307,6 +309,8 @@ export class HarnessService {
 	readonly #templates: TemplateManager | undefined;
 	readonly #skills: SkillLibrary;
 	readonly #projectInstructions: ProjectInstructionsLibrary;
+	/** The QuickJS sandbox code mode scripts run in; closed with the service. */
+	readonly #codemode: CodemodeSandbox;
 	/** Live session event streams, one per `subscribeSession` caller. */
 	readonly #streams = new Set<AgentEventStream>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
@@ -327,6 +331,7 @@ export class HarnessService {
 		templates: TemplateManager | undefined,
 		skills: SkillLibrary,
 		projectInstructions: ProjectInstructionsLibrary,
+		codemode: CodemodeSandbox,
 	) {
 		this.#harness = harness;
 		this.#providers = providers;
@@ -336,6 +341,7 @@ export class HarnessService {
 		this.#templates = templates;
 		this.#skills = skills;
 		this.#projectInstructions = projectInstructions;
+		this.#codemode = codemode;
 	}
 
 	/**
@@ -382,6 +388,15 @@ export class HarnessService {
 			}),
 		);
 		registry.install(CodingTools);
+		// Code mode: the model may write one script that fans out over the tools above, instead of
+		// one round trip per call. Scripts run in a QuickJS sandbox, capped because the default is
+		// unlimited; `models: false` keeps the script globals lean, since scripts already reach the
+		// harness's own image tool. Closing the sandbox on shutdown aborts in-flight scripts, which
+		// resume with the next process's sandbox.
+		const codemodeSandbox = new CodemodeSandbox({
+			memoryLimitBytes: 256 * 1024 * 1024,
+		});
+		registry.install(createCodemodeExtension({ sandbox: codemodeSandbox, models: false }));
 		registry.install(
 			createImageTools({
 				models: providers.models,
@@ -464,6 +479,7 @@ export class HarnessService {
 			dependencies.templates,
 			skills,
 			projectInstructions,
+			codemodeSandbox,
 		);
 		if (dependencies.templates !== undefined) {
 			dependencies.templates.onChanged = () => {
@@ -1374,6 +1390,7 @@ export class HarnessService {
 			}
 		}
 		await this.#harness.close(BACKGROUND_CONTEXT);
+		await this.#codemode.close();
 		await this.#sandboxes?.close();
 	}
 
