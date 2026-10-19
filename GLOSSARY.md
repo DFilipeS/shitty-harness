@@ -49,7 +49,7 @@ A session whose run is paused on an open question. The sessions sidebar shows it
 _Avoid_: waiting, blocked
 
 **Session panel**:
-The right-hand panel with information about the open session.
+The right-hand panel with information about the open session. It has tabs for the system prompt and the session's tools.
 _Avoid_: inspector, info sidebar, details panel
 
 ### Transcript
@@ -179,8 +179,12 @@ A named bundle of tools, prompt sections, hooks, and tasks that a conversation c
 _Avoid_: plugin, module
 
 **Tool**:
-A callable capability offered to a model, such as reading a file or running a shell command.
+A callable capability offered to a model, such as reading a file or running a shell command. A session can turn a tool off; the change applies to its next request.
 _Avoid_: function, action
+
+**Pinned tool**:
+A tool a session cannot turn off, such as the question and skill tools. Pinned tools stay offered to every agent.
+_Avoid_: locked tool, required tool
 
 **Code Mode**:
 The capability that lets the agent write one script whose code calls tools, instead of one tool call at a time.
