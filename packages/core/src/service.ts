@@ -7,6 +7,10 @@ import { CodingTools } from "@earendil-works/pi-durable/tools";
 import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
 import { buildPromptContent, saveAttachment } from "./attachments.ts";
 import { createAgentGuidanceSection } from "./agent-guidance.ts";
+import {
+	createProjectInstructionsSection,
+	ProjectInstructionsLibrary,
+} from "./project-instructions.ts";
 import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
 import { OpenQuestionsDoc, QuestionsExtension, validateReply, type OpenQuestionsState } from "./questions.ts";
@@ -275,6 +279,7 @@ export class HarnessService {
 	readonly #sandboxes: SandboxManager | undefined;
 	readonly #templates: TemplateManager | undefined;
 	readonly #skills: SkillLibrary;
+	readonly #projectInstructions: ProjectInstructionsLibrary;
 	/** Live session event streams, one per `subscribeSession` caller. */
 	readonly #streams = new Set<AgentEventStream>();
 	readonly #listeners = new Set<(event: ServiceEvent) => void>();
@@ -294,6 +299,7 @@ export class HarnessService {
 		sandboxes: SandboxManager | undefined,
 		templates: TemplateManager | undefined,
 		skills: SkillLibrary,
+		projectInstructions: ProjectInstructionsLibrary,
 	) {
 		this.#harness = harness;
 		this.#providers = providers;
@@ -302,6 +308,7 @@ export class HarnessService {
 		this.#sandboxes = sandboxes;
 		this.#templates = templates;
 		this.#skills = skills;
+		this.#projectInstructions = projectInstructions;
 	}
 
 	/**
@@ -324,6 +331,23 @@ export class HarnessService {
 						sandboxDefaults: () => sandboxDefaults(dependencies.sandboxes),
 					}),
 				],
+			}),
+		);
+		const projectInstructions = new ProjectInstructionsLibrary({
+			...(dependencies.skillsHome === undefined ? {} : { home: dependencies.skillsHome }),
+			resolveTarget: (read, conversationId, context) =>
+				resolveTarget(read, conversationId, context, {
+					...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+					defaultTarget: providers.getDefaults().target,
+					sandboxDefaults: sandboxDefaults(dependencies.sandboxes),
+				}),
+		});
+		// Installed after the agent guidance and before the rest, so project instructions read
+		// between the rules and the environment facts.
+		registry.install(
+			defineExtension({
+				name: "project-instructions",
+				sections: [createProjectInstructionsSection(projectInstructions)],
 			}),
 		);
 		registry.install(CodingTools);
@@ -404,6 +428,7 @@ export class HarnessService {
 			dependencies.sandboxes,
 			dependencies.templates,
 			skills,
+			projectInstructions,
 		);
 		if (dependencies.templates !== undefined) {
 			dependencies.templates.onChanged = () => {
@@ -649,8 +674,9 @@ export class HarnessService {
 		const agent = await conversation.agent(BACKGROUND_CONTEXT);
 		if (agent.model === undefined) throw new ServiceError("no_model", "Select a model before sending a message");
 		const model = this.#providers.models.getModel(agent.model.provider, agent.model.modelId);
-		// Each prompt starts or extends a run, which rescans the target's skills.
+		// Each prompt starts or extends a run, which rescans the target's skills and context files.
 		this.#skills.invalidate(conversationId);
+		this.#projectInstructions.invalidate(conversationId);
 		const invocation = parseInvocation(trimmed);
 		const message = invocation?.rest ?? trimmed;
 		const env =
@@ -809,6 +835,7 @@ export class HarnessService {
 		}, BACKGROUND_CONTEXT);
 		this.#sandboxes?.forget(id);
 		this.#skills.invalidate(conversationId);
+		this.#projectInstructions.invalidate(conversationId);
 		await this.#emitSessions();
 		return this.#requireSession(id);
 	}

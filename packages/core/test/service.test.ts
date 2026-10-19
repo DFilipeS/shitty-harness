@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
@@ -370,6 +370,23 @@ describe("HarnessService", () => {
 			expect(guidance).toContain(PRODUCT_NAME);
 			expect(guidance).toContain("local machine");
 			expect(guidance).toContain("ask_user");
+
+			// A target with an AGENTS.md contributes the project-instructions section, after the guidance.
+			const workspace = await mkdtemp(join(tmpdir(), "harness-agents-"));
+			await writeFile(join(workspace, "AGENTS.md"), "# House rules\nBe kind.");
+			await service.setTarget(session.id, { kind: "local", path: workspace });
+			await service.prompt(session.id, "And now?", "request-project-instructions");
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+			const reloaded = (await service.systemPrompt(session.id)).sections;
+			expect(reloaded.map((section) => section.key)).toEqual([
+				"agent",
+				"project-instructions",
+				"execution-target",
+			]);
+			const instructions = reloaded.find((section) => section.key === "project-instructions");
+			expect(instructions?.text).toContain(`<project_instructions path="${join(workspace, "AGENTS.md")}">`);
+			expect(instructions?.text).toContain("Be kind.");
+			await rm(workspace, { recursive: true, force: true });
 
 			await expect(service.systemPrompt("missing")).rejects.toMatchObject({ code: "not_found" });
 		} finally {
