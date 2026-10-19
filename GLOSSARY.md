@@ -14,10 +14,18 @@ _Avoid_: server, engine
 A conversation's resolved model, thinking level, and tools, used for its next request.
 _Avoid_: bot, assistant
 
+**System prompt**:
+The instruction text a model receives with each request, composed of ordered, named prompt sections.
+_Avoid_: instructions, persona, prompt (unqualified)
+
+**Prompt section**:
+One named piece of the system prompt, rendered before each request.
+_Avoid_: block, fragment
+
 ### Sessions
 
 **Session**:
-A titled, durable chat that the sidebar lists and the user can open, rename, or delete. A session is backed by a conversation.
+A titled, durable chat that the sessions sidebar lists and the user can open, rename, or delete. A session is backed by a conversation.
 _Avoid_: chat, thread, conversation
 
 **Conversation**:
@@ -29,12 +37,16 @@ The ordered list of sessions the app knows about. Deleting a session removes it 
 _Avoid_: session list
 
 **Working**:
-A session that has live work and no open question, shown with a spinner in the sidebar.
+A session that has live work and no open question, shown with a spinner in the sessions sidebar.
 _Avoid_: busy, running
 
 **Needs input**:
-A session whose run is paused on an open question. The sidebar shows it apart from working sessions.
+A session whose run is paused on an open question. The sessions sidebar shows it apart from working sessions.
 _Avoid_: waiting, blocked
+
+**Session panel**:
+The right-hand panel with information about the open session.
+_Avoid_: inspector, info sidebar, details panel
 
 ### Transcript
 
