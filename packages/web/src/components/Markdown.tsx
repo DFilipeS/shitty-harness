@@ -1,6 +1,6 @@
-import { memo } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
-import rehypeHighlight from "rehype-highlight";
+import hljs from "highlight.js/lib/common";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
@@ -18,6 +18,139 @@ type MarkdownPalette = {
 	code: string;
 	checkbox: string;
 };
+
+/**
+ * Highlighted HTML for one fenced block, keyed by `language\u0000code`. A re-render (or switching
+ * back to a session that stayed mounted) reads the cache instead of re-running highlight.js.
+ */
+const highlightCache = new Map<string, string | null>();
+const HIGHLIGHT_CACHE_LIMIT = 400;
+
+/** Lazy highlights waiting for an idle slot, at most one entry per key (the newest wins). */
+const highlightQueue = new Map<string, () => void>();
+let pumpScheduled = false;
+
+const requestIdle: (callback: () => void) => number =
+	typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
+		? (callback) => window.requestIdleCallback(() => callback(), { timeout: 200 })
+		: (callback) => window.setTimeout(callback, 32);
+
+/** Highlight one block per idle slot, so the pass never blocks a frame that paint or input needs. */
+function pumpHighlightQueue(): void {
+	pumpScheduled = false;
+	const [entry] = highlightQueue;
+	if (entry === undefined) return;
+	highlightQueue.delete(entry[0]);
+	entry[1]();
+	if (highlightQueue.size > 0) scheduleHighlightPump();
+}
+
+function scheduleHighlightPump(): void {
+	if (pumpScheduled) return;
+	pumpScheduled = true;
+	requestIdle(pumpHighlightQueue);
+}
+
+/** highlight.js HTML for one block, or `null` when it cannot be highlighted. */
+function computeHighlight(language: string, code: string): string | null {
+	if (hljs.getLanguage(language) === undefined) return null;
+	try {
+		return hljs.highlight(code, { language, ignoreIllegals: true }).value;
+	} catch {
+		return null;
+	}
+}
+
+/** The cached HTML for a block, if it was ever highlighted; `undefined` means not yet. */
+function readHighlight(key: string): string | null | undefined {
+	if (!highlightCache.has(key)) return undefined;
+	const hit = highlightCache.get(key) ?? null;
+	highlightCache.delete(key);
+	highlightCache.set(key, hit); // Refresh LRU recency.
+	return hit;
+}
+
+/** The HTML for a block, computing and remembering it on the first ask. */
+function cachedHighlight(key: string, language: string, code: string): string | null {
+	const known = readHighlight(key);
+	if (known !== undefined) return known;
+	const html = computeHighlight(language, code);
+	highlightCache.set(key, html);
+	if (highlightCache.size > HIGHLIGHT_CACHE_LIMIT) {
+		const oldest = highlightCache.keys().next().value;
+		if (oldest !== undefined) highlightCache.delete(oldest);
+	}
+	return html;
+}
+
+/**
+ * A fenced code block with a language tag. The plain text paints first, so opening a session is
+ * not held up by syntax highlighting; the colors follow from an idle-time pass and pop in. The
+ * cache makes the second view of the same block immediate, colors and all. During streaming the
+ * text keeps changing, so a stale queued highlight is skipped by its cancellation flag.
+ */
+function LazyCode({
+	language,
+	code,
+	className,
+}: {
+	language: string;
+	code: string;
+	className: string;
+}) {
+	const key = `${language}\u0000${code}`;
+	// `undefined` = not highlighted yet (plain text), `null` = cannot be, a string = colored in.
+	const [html, setHtml] = useState<string | null | undefined>(() => readHighlight(key));
+	useEffect(() => {
+		const known = readHighlight(key);
+		if (known !== undefined) {
+			setHtml(known);
+			return;
+		}
+		let cancelled = false;
+		highlightQueue.set(key, () => {
+			if (cancelled) return;
+			setHtml(cachedHighlight(key, language, code));
+		});
+		scheduleHighlightPump();
+		return () => {
+			cancelled = true;
+		};
+	}, [key, language, code]);
+	return (
+		<code className={`hljs ${className}`}>
+			{typeof html === "string" ? (
+				<span data-lazy-highlight dangerouslySetInnerHTML={{ __html: html }} />
+			) : (
+				code
+			)}
+		</code>
+	);
+}
+
+/** The `language-…` class of a fenced block, when it carries one. */
+function languageOfClass(className: string | undefined): string | undefined {
+	return /(?:^|\s)language-([^\s]+)/.exec(className ?? "")?.[1];
+}
+
+/** Code blocks pass through as one text child; other children render as best-effort text. */
+function textOf(children: ReactNode): string {
+	return Array.isArray(children)
+		? children.map((child) => textOf(child)).join("")
+		: typeof children === "string" || typeof children === "number"
+			? String(children)
+			: "";
+}
+
+/** The `code` element for one palette: lazy-highlighted fences, plain text for the rest. */
+function codeComponent(paletteCode: string) {
+	return function Code({ className, children }: { className?: string; children?: ReactNode }) {
+		const language = languageOfClass(className);
+		const shared = `rounded px-1 py-0.5 font-mono text-[0.85em] ${paletteCode} ${className ?? ""}`;
+		if (language === undefined) return <code className={shared}>{children}</code>;
+		return <LazyCode language={language} code={textOf(children)} className={shared} />;
+	};
+}
 
 /**
  * Assistant text follows the theme tokens, so it flips with light and dark. The user bubble keeps
@@ -56,10 +189,13 @@ const PALETTES: Record<MarkdownVariant, MarkdownPalette> = {
 /**
  * Markdown for message text. Raw HTML is not enabled, so model output cannot inject markup; links
  * open in a new tab. `remark-breaks` keeps single newlines visible, matching how chat UIs treat
- * model output. `rehype-highlight` adds `hljs-*` classes, styled in `index.css`.
+ * model output. Fenced blocks with a language tag highlight lazily (`hljs-*` classes, styled in
+ * `index.css`): plain text first, colors from an idle-time pass.
  */
 function componentsFor(palette: MarkdownPalette): Components {
+	const code = codeComponent(palette.code);
 	return {
+		code,
 		a: ({ href, children }) => (
 			<a href={href} target="_blank" rel="noreferrer noopener" className={palette.link}>
 				{children}
@@ -108,13 +244,6 @@ function componentsFor(palette: MarkdownPalette): Components {
 				{children}
 			</pre>
 		),
-		code: ({ className, children }) => (
-			<code
-				className={`rounded px-1 py-0.5 font-mono text-[0.85em] ${palette.code} ${className ?? ""}`}
-			>
-				{children}
-			</code>
-		),
 		input: ({ node: _node, checked, ...props }) => (
 			<input
 				{...props}
@@ -145,11 +274,7 @@ export const Markdown = memo(function Markdown({
 		<div
 			className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${PALETTES[variant].text}`}
 		>
-			<ReactMarkdown
-				remarkPlugins={[remarkGfm, remarkBreaks]}
-				rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}
-				components={COMPONENTS[variant]}
-			>
+			<ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={COMPONENTS[variant]}>
 				{text}
 			</ReactMarkdown>
 		</div>
