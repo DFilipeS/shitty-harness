@@ -100,6 +100,10 @@ _Avoid_: job
 A tool call in which the agent asks the user to choose from options or answer in their own words, and waits for the reply. The reply is the call's result.
 _Avoid_: prompt, form, elicitation
 
+**Nested tool call**:
+A tool call made by a running tool call, such as a script's, rather than by the agent's message. It belongs to its caller, which reports it, instead of the transcript.
+_Avoid_: sub-call, inner call
+
 **Compaction**:
 Replacing older entries with a summary so a conversation fits its model's context window.
 _Avoid_: truncation, summarization
@@ -177,6 +181,14 @@ _Avoid_: plugin, module
 **Tool**:
 A callable capability offered to a model, such as reading a file or running a shell command.
 _Avoid_: function, action
+
+**Code Mode**:
+The capability that lets the agent write one script whose code calls tools, instead of one tool call at a time.
+_Avoid_: code execution, REPL
+
+**Script**:
+The JavaScript the agent writes in a Code Mode call. Only the script's output and the calls it made become part of the conversation.
+_Avoid_: program, macro
 
 ### Skills
 
