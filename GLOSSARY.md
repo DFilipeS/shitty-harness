@@ -184,6 +184,10 @@ _Avoid_: prompt, recipe, plugin
 The names and descriptions of the skills available to a conversation, shown to the agent before any skill is loaded.
 _Avoid_: skill list
 
+**Project instructions**:
+The context files a workspace carries — AGENTS.md and its kin — loaded from the workspace's ancestors and the target's global slot, and given to the agent as prompt content.
+_Avoid_: context files, project context, AGENTS file
+
 **Activate**:
 To load a skill's instructions into a conversation, by the model or by the user.
 _Avoid_: load, run, trigger
