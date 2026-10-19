@@ -356,6 +356,18 @@ export type SessionsSkillsResult = {
 	issues: SkillIssueInfo[];
 };
 
+/** One named piece of the system prompt, exactly as the model last received it. */
+export type PromptSectionInfo = {
+	key: string;
+	/** The rendered text, including its `<key>` wrapper. */
+	text: string;
+};
+
+/** The prompt sections in effect for a session's last request, in order. */
+export type SessionsSystemPromptResult = {
+	sections: PromptSectionInfo[];
+};
+
 export type WorkspacesBrowseResult = {
 	path: string;
 	/** Parent directory; absent at the filesystem root. */
@@ -404,6 +416,7 @@ export type ClientCommand =
 	  }
 	| { id: string; type: "sessions.setTarget"; sessionId: string; target: TargetChoice }
 	| { id: string; type: "sessions.skills"; sessionId: string }
+	| { id: string; type: "sessions.systemPrompt"; sessionId: string }
 	| { id: string; type: "workspaces.browse"; path?: string }
 	| { id: string; type: "workspaces.createFolder"; parent: string; name: string }
 	| { id: string; type: "sandboxes.list" }
@@ -460,6 +473,7 @@ export type CommandResult = {
 	"sessions.configure": SessionsConfigureResult;
 	"sessions.setTarget": SessionsSetTargetResult;
 	"sessions.skills": SessionsSkillsResult;
+	"sessions.systemPrompt": SessionsSystemPromptResult;
 	"workspaces.browse": WorkspacesBrowseResult;
 	"workspaces.createFolder": WorkspacesCreateFolderResult;
 	"sandboxes.list": SandboxesListResult;
