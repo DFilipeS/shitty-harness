@@ -83,6 +83,11 @@ export type PromptOptions = {
 	onSubmit(value: string): boolean | void | Promise<boolean | void>;
 };
 
+/** Puts the caret in the composer's message box, which carries `data-composer-input`. */
+export function focusComposer(): void {
+	document.querySelector<HTMLTextAreaElement>("[data-composer-input]")?.focus();
+}
+
 /** What the palette shows when it opens. */
 export type PaletteStart =
 	| { kind: "commands" }
@@ -186,6 +191,13 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
 	const registry = useRef<CommandRegistry>(new Map());
 	const [open, setOpen] = useState(false);
 	const [initial, setInitial] = useState<PaletteStart>({ kind: "commands" });
+	// Every close path funnels through `open`, so one transition returns the caret to the composer.
+	const wasOpen = useRef(false);
+	useEffect(() => {
+		const previouslyOpen = wasOpen.current;
+		wasOpen.current = open;
+		if (previouslyOpen && !open) focusComposer();
+	}, [open]);
 
 	const controls = useMemo<PaletteControls>(
 		() => ({

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { formatKeys, useRegisterCommands, type Command } from "../lib/commands.tsx";
+import { focusComposer, formatKeys, useRegisterCommands, type Command } from "../lib/commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
 import { useSkillsPalette } from "../lib/skill-commands.tsx";
 import { useTargetPalette } from "../lib/target-commands.tsx";
@@ -102,10 +102,6 @@ export function ChatPanel({
 			)}
 		</main>
 	);
-}
-
-function focusComposer() {
-	document.querySelector<HTMLTextAreaElement>("[data-composer-input]")?.focus();
 }
 
 function scrollToLatest() {
