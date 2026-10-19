@@ -12,10 +12,13 @@
 		"build": "npm run build -w @harness/web",
 		"start": "NODE_ENV=production npm run start -w @harness/server",
 		"typecheck": "tsc --noEmit -p packages/protocol && tsc --noEmit -p packages/core && tsc --noEmit -p packages/server && tsc --noEmit -p packages/web",
-		"test": "npm run test --workspaces --if-present"
+		"test": "npm run test --workspaces --if-present",
+		"format": "prettier --write .",
+		"format:check": "prettier --check ."
 	},
 	"devDependencies": {
 		"concurrently": "^10.0.6",
+		"prettier": "^3.9.10",
 		"typescript": "^7.0.2"
 	},
 	"allowScripts": {
