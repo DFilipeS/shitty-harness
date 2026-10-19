@@ -44,38 +44,46 @@ function folderName(path: string): string {
 	return segments[segments.length - 1] ?? path;
 }
 
-/** The folder browser: pick a recent, use the current folder, walk into a child, go up, or create one. */
+/** The recent folders as picker commands: one click points the session at the folder. */
+export function recentFolderCommands(
+	recents: readonly string[],
+	choose: (path: string) => void,
+	currentPath?: string,
+): Command[] {
+	return recents.map((folder) => ({
+		id: `target.recent.${folder}`,
+		title: folderName(folder),
+		group: "Recent",
+		detail: folder,
+		keywords: [folder],
+		icon: <ClockIcon />,
+		current: currentPath === folder,
+		run: () => choose(folder),
+	}));
+}
+
+/** The folder browser: use the current folder, walk into a child, go up, or create a new folder. */
 export function buildFolderPage(
 	listing: FolderListing,
 	browse: (path: string) => CommandPage,
 	choose: (path: string) => void,
 	createFolder: (parent: string, name: string) => Promise<{ path: string } | undefined>,
 ): CommandPage {
+	// Every folder picked here becomes the most recent one.
 	const chooseFolder = (path: string): void => {
 		rememberFolder(path);
 		choose(path);
 	};
-	const commands: Command[] = [];
-	for (const folder of recentFolders()) {
-		if (folder === listing.path) continue;
-		commands.push({
-			id: `folder.recent.${folder}`,
-			title: folderName(folder),
-			group: "Recent",
-			detail: folder,
-			keywords: [folder],
-			icon: <ClockIcon />,
-			run: () => chooseFolder(folder),
-		});
-	}
-	commands.push({
-		id: "folder.choose",
-		title: "Use this folder",
-		group: "Folder",
-		detail: listing.path,
-		icon: <CheckIcon />,
-		run: () => chooseFolder(listing.path),
-	});
+	const commands: Command[] = [
+		{
+			id: "folder.choose",
+			title: "Use this folder",
+			group: "Folder",
+			detail: listing.path,
+			icon: <CheckIcon />,
+			run: () => chooseFolder(listing.path),
+		},
+	];
 	if (listing.parent !== undefined) {
 		const parent = listing.parent;
 		commands.push({
@@ -212,7 +220,7 @@ export function buildNewSandboxPage(options: {
 	};
 }
 
-/** The target picker: the session's scratch directory, a folder, or a sandbox. */
+/** The target picker: the session's scratch directory, a recent folder, a folder browser, or a sandbox. */
 export function useTargetPalette(): { page(): CommandPage; open(): void } {
 	const {
 		activeSessionId,
@@ -362,6 +370,14 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 				current: current?.kind === "local" && !current.scratch,
 				run: ({ pushPage }) => pushPage(browse()),
 			},
+			...recentFolderCommands(
+				recentFolders(),
+				(folder) => {
+					rememberFolder(folder);
+					void setTarget({ kind: "local", path: folder });
+				},
+				current?.kind === "local" && !current.scratch ? current.path : undefined,
+			),
 			...sandboxCommands,
 		],
 	});

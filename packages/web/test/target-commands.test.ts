@@ -3,6 +3,7 @@ import type { CommandContext, CommandPage } from "../src/lib/commands.tsx";
 import {
 	buildFolderPage,
 	buildNewSandboxPage,
+	recentFolderCommands,
 	targetLabel,
 	type NewSandboxChoice,
 } from "../src/lib/target-commands.tsx";
@@ -220,50 +221,6 @@ describe("buildFolderPage", () => {
 		expect(chosen).toBe("/Users/me/project");
 	});
 
-	it("lists recent folders first, minus the one being browsed", () => {
-		localStorage.setItem(
-			"harness-recent-folders",
-			JSON.stringify(["/Users/me/project", "/Users/me", "/opt/tools"]),
-		);
-		const page = buildFolderPage(
-			listing,
-			emptyPage,
-			() => {},
-			async () => undefined,
-		);
-		if (page.kind !== "commands") throw new Error("expected a command page");
-		expect(page.commands.slice(0, 3)).toEqual([
-			expect.objectContaining({
-				id: "folder.recent./Users/me/project",
-				title: "project",
-				group: "Recent",
-				detail: "/Users/me/project",
-			}),
-			expect.objectContaining({ id: "folder.recent./opt/tools", title: "tools" }),
-			expect.objectContaining({ id: "folder.choose" }),
-		]);
-	});
-
-	it("chooses a recent folder and moves it to the front of the recents", () => {
-		localStorage.setItem(
-			"harness-recent-folders",
-			JSON.stringify(["/Users/me/project", "/opt/tools"]),
-		);
-		let chosen: string | undefined;
-		const page = buildFolderPage(
-			listing,
-			emptyPage,
-			(path) => (chosen = path),
-			async () => undefined,
-		);
-		if (page.kind !== "commands") throw new Error("expected a command page");
-		page.commands[0]?.run(context());
-		expect(chosen).toBe("/Users/me/project");
-		expect(localStorage.getItem("harness-recent-folders")).toBe(
-			JSON.stringify(["/Users/me/project", "/opt/tools"]),
-		);
-	});
-
 	it("remembers the folder chosen with Use this folder", () => {
 		const page = buildFolderPage(
 			listing,
@@ -274,5 +231,33 @@ describe("buildFolderPage", () => {
 		if (page.kind !== "commands") throw new Error("expected a command page");
 		page.commands[0]?.run(context());
 		expect(localStorage.getItem("harness-recent-folders")).toBe(JSON.stringify(["/Users/me"]));
+	});
+});
+
+describe("recentFolderCommands", () => {
+	it("offers each recent folder with its name and path", () => {
+		const commands = recentFolderCommands(["/Users/me/project", "/opt/tools"], () => {});
+		expect(commands).toEqual([
+			expect.objectContaining({
+				id: "target.recent./Users/me/project",
+				title: "project",
+				group: "Recent",
+				detail: "/Users/me/project",
+				keywords: ["/Users/me/project"],
+			}),
+			expect.objectContaining({ id: "target.recent./opt/tools", title: "tools" }),
+		]);
+	});
+
+	it("marks the folder that is the current target", () => {
+		const commands = recentFolderCommands(["/a", "/b"], () => {}, "/b");
+		expect(commands[0]?.current).toBe(false);
+		expect(commands[1]?.current).toBe(true);
+	});
+
+	it("chooses the folder when run", () => {
+		const chosen: string[] = [];
+		recentFolderCommands(["/a"], (path) => chosen.push(path))[0]?.run(context());
+		expect(chosen).toEqual(["/a"]);
 	});
 });
