@@ -21,6 +21,7 @@ const RULES = [
 	"Read a file before editing it; make targeted edits rather than rewriting whole files.",
 	"Show file paths clearly when working with files, with line numbers where possible.",
 	"Be concise: summarize what you did and what changed; do not dump file contents you read unless asked.",
+	"Prefer one codemode script over many similar tool calls: batch fan-out reads, retries, and edits there; use direct tool calls for one-off steps.",
 ];
 
 /** The one rule that varies with the target: care on the user's machine, freedom in a sandbox. */
