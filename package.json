@@ -6,6 +6,7 @@
 		"packages/*"
 	],
 	"scripts": {
+		"smoke": "node scripts/smoke.mjs --serve",
 		"dev": "concurrently -n server,web -c blue,green \"npm run dev -w @harness/server\" \"npm run dev -w @harness/web\"",
 		"dev:server": "npm run dev -w @harness/server",
 		"dev:web": "npm run dev -w @harness/web",
