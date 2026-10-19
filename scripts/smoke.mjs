@@ -59,6 +59,19 @@ ws.on("open", async () => {
 				(await call("sessions.list")).sessions.find((candidate) => candidate.id === session.id)?.working === true;
 			const working = await waitFor(isWorking, 5_000);
 			console.log("working while running:", working);
+			if (working) {
+				// A prompt while busy queues; the queue lists it and withdraw takes it back out.
+				await call("sessions.prompt", { sessionId: session.id, text: "Follow-up", requestId: "r2" });
+				const queued = await call("sessions.queue", { sessionId: session.id });
+				console.log("queued while running:", JSON.stringify(queued.items));
+				if (queued.items.length > 0) {
+					const withdrawn = await call("sessions.withdraw", {
+						sessionId: session.id,
+						submissionId: queued.items[0].id,
+					});
+					console.log("withdraw outcome:", withdrawn.outcome);
+				}
+			}
 			await call("sessions.abort", { sessionId: session.id });
 			const idle = await waitFor(async () => !(await isWorking()), 10_000);
 			console.log("working cleared after abort:", idle);

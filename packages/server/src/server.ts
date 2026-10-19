@@ -58,6 +58,8 @@ const COMMAND_TYPES = new Set<string>([
 	"sessions.setTarget",
 	"sessions.skills",
 	"sessions.systemPrompt",
+	"sessions.queue",
+	"sessions.withdraw",
 	"workspaces.browse",
 	"workspaces.createFolder",
 	"sandboxes.list",
@@ -433,6 +435,15 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 			case "sessions.systemPrompt": {
 				const sessionId = requireString(command.sessionId, "sessionId");
 				return { data: await service.systemPrompt(sessionId) };
+			}
+			case "sessions.queue": {
+				const sessionId = requireString(command.sessionId, "sessionId");
+				return { data: await service.queue(sessionId) };
+			}
+			case "sessions.withdraw": {
+				const sessionId = requireString(command.sessionId, "sessionId");
+				const submissionId = requireString(command.submissionId, "submissionId");
+				return { data: await service.withdraw(sessionId, submissionId) };
 			}
 			case "workspaces.browse": {
 				const path = command.path === undefined ? undefined : requireString(command.path, "path");
