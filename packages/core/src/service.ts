@@ -1,7 +1,7 @@
 import { mkdir, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { clampThinkingLevel } from "@earendil-works/pi-ai";
+import { clampThinkingLevel, type Message } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
 import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
@@ -42,6 +42,7 @@ import type {
 	SandboxesState,
 	SandboxSettingsInfo,
 	SessionSummary,
+	SessionsSystemPromptResult,
 	TargetChoice,
 	TargetInfo,
 	TargetStatus,
@@ -199,6 +200,23 @@ function sandboxSettingsInfo(
 }
 
 /** The protocol view of a skill catalog. */
+/**
+ * The prompt sections in effect in a conversation's model messages, in render order: set in
+ * place, `null` deletes, re-adding appends. This mirrors pi-durable's replay of its `pi.system`
+ * entries, so the result is exactly what the model saw on its last request.
+ */
+function replayedSections(messages: readonly Message[]): { key: string; text: string }[] {
+	const shown = new Map<string, string>();
+	for (const message of messages) {
+		if (message.role !== "system" || message.sections === undefined) continue;
+		for (const [key, value] of Object.entries(message.sections)) {
+			if (value === null) shown.delete(key);
+			else shown.set(key, value);
+		}
+	}
+	return [...shown].map(([key, text]) => ({ key, text }));
+}
+
 function skillsResult(catalog: SkillCatalog): SessionsSkillsResult {
 	return {
 		skills: catalog.skills.map((skill) => ({
@@ -677,6 +695,16 @@ export class HarnessService {
 		const conversationId = parseConversationId(id);
 		await this.#requireConversation(conversationId);
 		return skillsResult(await this.#skills.list(this.#harness, conversationId, BACKGROUND_CONTEXT));
+	}
+
+	/**
+	 * The prompt sections in effect for the session's last request, in render order. This is the
+	 * committed view — what the model actually saw — not a preview of the next request.
+	 */
+	async systemPrompt(id: string): Promise<SessionsSystemPromptResult> {
+		const conversation = await this.#requireConversation(parseConversationId(id));
+		const view = await conversation.context(BACKGROUND_CONTEXT);
+		return { sections: replayedSections(view.messages) };
 	}
 
 	async abort(id: string): Promise<void> {

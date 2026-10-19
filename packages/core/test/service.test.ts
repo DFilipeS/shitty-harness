@@ -343,6 +343,33 @@ describe("HarnessService", () => {
 		}
 	});
 
+	it("shows the system prompt sections in effect after a request", async () => {
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			// Before the first request, nothing is in effect yet.
+			expect((await service.systemPrompt(session.id)).sections).toEqual([]);
+
+			await service.prompt(session.id, "Hello", "request-system-prompt");
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+
+			const { sections } = await service.systemPrompt(session.id);
+			expect(sections.length).toBeGreaterThan(0);
+			// Each section carries its key and its wrapped text, verbatim as the model saw it.
+			for (const section of sections) {
+				expect(section.text.startsWith(`<${section.key}>\n`)).toBe(true);
+				expect(section.text.endsWith(`\n</${section.key}>`)).toBe(true);
+			}
+			// The harness's own extensions are part of the prompt.
+			expect(sections.map((section) => section.key)).toContain("execution-target");
+
+			await expect(service.systemPrompt("missing")).rejects.toMatchObject({ code: "not_found" });
+		} finally {
+			await service.close();
+		}
+	});
+
 	it("marks a session as working while a run is active", async () => {
 		const { providers } = createFauxProviders({ tokensPerSecond: 10 });
 		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
