@@ -184,7 +184,13 @@ const TIMEOUT_NOTE =
 	" The `bash` tool has no default timeout: long builds and test runs are expected, so let them finish and pass `timeout` only to bound a command that could hang. Do not background a job and poll it with `sleep`.";
 
 /** The system prompt line that tells the model where its tools run. */
-export function targetPrompt(target: ResolvedTarget, providerName?: string): string {
+export function targetPrompt(
+	target: ResolvedTarget,
+	providerName?: string,
+	options?: { bash?: boolean },
+): string {
+	// The timeout note names the bash tool, so it only belongs where the model can call bash.
+	const timeoutNote = options?.bash === false ? "" : TIMEOUT_NOTE;
 	if (target.kind === "sandbox") {
 		const name = providerName ?? target.provider;
 		const where =
@@ -192,10 +198,10 @@ export function targetPrompt(target: ResolvedTarget, providerName?: string): str
 		const agent = target.forwardAgent
 			? " The host SSH agent is forwarded, so `git` over SSH works."
 			: "";
-		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.${agent}${TIMEOUT_NOTE}`;
+		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.${agent}${timeoutNote}`;
 	}
 	const note = target.scratch ? " (the session's scratch directory)" : "";
-	return `Your tools run on the local machine in \`${target.path}\`${note}. Saved file paths refer to this target.${TIMEOUT_NOTE}`;
+	return `Your tools run on the local machine in \`${target.path}\`${note}. Saved file paths refer to this target.${timeoutNote}`;
 }
 
 export type TargetSectionOptions = {
@@ -222,6 +228,8 @@ export function createTargetSection(options: TargetSectionOptions) {
 		return targetPrompt(
 			target,
 			target.kind === "sandbox" ? options.providerName?.(target.provider) : undefined,
+			// The timeout note names bash, so it only renders where the session offers bash.
+			{ bash: input.agent.tools.some((tool) => tool.name === "bash") },
 		);
 	});
 }

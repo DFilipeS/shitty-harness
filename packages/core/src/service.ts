@@ -5,7 +5,7 @@ import { clampThinkingLevel, type Message } from "@earendil-works/pi-ai";
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
-import { createCodemodeExtension } from "@earendil-works/pi-durable/codemode";
+import { CODEMODE_TOOL_NAME, createCodemodeExtension } from "@earendil-works/pi-durable/codemode";
 import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
 import { buildPromptContent, saveAttachment } from "./attachments.ts";
 import { createAgentGuidanceSection } from "./agent-guidance.ts";
@@ -29,6 +29,7 @@ import {
 	Harness,
 	InboxDoc,
 	watchEvents,
+	wrapSection,
 	type AgentChange,
 	type AgentEvent,
 	type AgentEventStream,
@@ -414,6 +415,23 @@ export class HarnessService {
 			memoryLimitBytes: 256 * 1024 * 1024,
 		});
 		registry.install(createCodemodeExtension({ sandbox: codemodeSandbox, models: false }));
+		// The codemode section lists the tools scripts can call, which reads as an invitation to
+		// write one. Without the codemode tool that advertises a capability the session turned off,
+		// so the section only renders where the tool is offered.
+		registry.install(
+			defineExtension({
+				name: "codemode-section-guard",
+				wraps: [
+					wrapSection("codemode", (wrapped) => ({
+						...wrapped,
+						render: (input, context) =>
+							input.agent.tools.some((tool) => tool.name === CODEMODE_TOOL_NAME)
+								? wrapped.render(input, context)
+								: undefined,
+					})),
+				],
+			}),
+		);
 		registry.install(
 			createImageTools({
 				models: providers.models,

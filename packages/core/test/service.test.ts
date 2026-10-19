@@ -432,6 +432,38 @@ describe("HarnessService", () => {
 		}
 	});
 
+	it("keeps a disabled tool out of the system prompt", async () => {
+		const { providers } = createFauxProviders();
+		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		try {
+			const session = await service.createSession();
+			await service.prompt(session.id, "Hello", "request-with-tools");
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+
+			// Baseline: with every tool on, the prompt names bash and codemode.
+			const before = (await service.systemPrompt(session.id)).sections
+				.map((section) => section.text)
+				.join("\n");
+			expect(before).toContain("bash");
+			expect(before).toContain("codemode");
+
+			await service.configureSession(session.id, {
+				tools: { remove: ["bash", "codemode"] },
+			});
+			await service.prompt(session.id, "Again", "request-without-tools");
+			await waitFor(async () => (await service.listSessions())[0]?.working === false);
+
+			// No section may mention a tool the session turned off.
+			const after = (await service.systemPrompt(session.id)).sections
+				.map((section) => section.text)
+				.join("\n");
+			expect(after).not.toContain("bash");
+			expect(after).not.toContain("codemode");
+		} finally {
+			await service.close();
+		}
+	});
+
 	it("lists queued messages and removes one from the queue", async () => {
 		const { providers } = createFauxProviders({ tokensPerSecond: 5 });
 		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });

@@ -48,6 +48,16 @@ describe("targets", () => {
 		expect(prompt).toContain("Do not background a job");
 	});
 
+	it("drops the bash timeout note where bash is not offered", () => {
+		const prompt = targetPrompt(
+			{ kind: "local", path: "/tmp/workspace", scratch: false },
+			undefined,
+			{ bash: false },
+		);
+		expect(prompt).toContain("local machine");
+		expect(prompt).not.toContain("bash");
+	});
+
 	it("gives a new session a scratch target under the workspaces root", async () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const providers = createFakeProviders();
