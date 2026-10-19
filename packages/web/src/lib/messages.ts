@@ -378,6 +378,17 @@ export function toolCallSummary(args: Record<string, unknown> | undefined): stri
 	if (args === undefined) return "";
 	if (typeof args.command === "string") return args.command;
 	if (typeof args.path === "string") return args.path;
+	if (typeof args.code === "string") return codeSummary(args.code);
 	const first = Object.values(args).find((value) => typeof value === "string");
 	return typeof first === "string" ? first : "";
+}
+
+/** The first line of a script worth reading as its summary, cut for the collapsed row. */
+function codeSummary(code: string): string {
+	for (const line of code.split("\n")) {
+		const trimmed = line.trim();
+		if (trimmed === "" || trimmed.startsWith("// @options:")) continue;
+		return trimmed.length > 80 ? `${trimmed.slice(0, 79)}…` : trimmed;
+	}
+	return "";
 }

@@ -645,6 +645,14 @@ function ToolArguments({
 		// Still streaming, or not an object: show what arrived.
 		return <pre className="whitespace-pre-wrap font-mono text-fg-muted">{text}</pre>;
 	}
+	const code = typeof args.code === "string" ? args.code : undefined;
+	if (name === "codemode" && code !== undefined) {
+		// The script is the point, so it reads as code, not as one escaped JSON string. The fence is
+		// longer than any backtick run inside the script, so the code cannot close it early.
+		const longest = (code.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 2);
+		const fence = "`".repeat(longest + 1);
+		return <Markdown text={`${fence}javascript\n${code}\n${fence}`} size="xs" />;
+	}
 	const command = typeof args.command === "string" ? args.command : undefined;
 	if (name === "bash" && command !== undefined) {
 		return (

@@ -9,6 +9,7 @@ import {
 	fromAssistantMessage,
 	hasHiddenOutput,
 	generatedImageInfo,
+	toolCallSummary,
 	toolResultImages,
 	toolResultText,
 	userParts,
@@ -198,6 +199,25 @@ describe("codemodeCalls", () => {
 				details: { calls: [{ name: "bash", args: "{}", status: "weird" }] },
 			}),
 		).toEqual([]);
+	});
+});
+
+describe("toolCallSummary", () => {
+	it("shows a bash command", () => {
+		expect(toolCallSummary({ command: "npm test" })).toBe("npm test");
+	});
+
+	it("shows a script's first meaningful line, past its options line", () => {
+		const args = {
+			code: '// @options: {"timeout_ms": 60000}\n\nconst paths = ["a", "b"]\nreturn paths.length;',
+		};
+		expect(toolCallSummary(args)).toBe('const paths = ["a", "b"]');
+	});
+
+	it("cuts a long first line for the collapsed row", () => {
+		const args = { code: `await tools.bash({ command: "${"x".repeat(120)}" })` };
+		expect(toolCallSummary(args)).toHaveLength(80);
+		expect(toolCallSummary(args)?.endsWith("…")).toBe(true);
 	});
 });
 
