@@ -22,6 +22,10 @@ _Avoid_: instructions, persona, prompt (unqualified)
 One named piece of the system prompt, rendered before each request.
 _Avoid_: block, fragment
 
+**Agent guidance**:
+The prompt section that tells the agent who it is and how to behave: identity, tool rules, output style, and question policy.
+_Avoid_: preamble, persona, general prompt
+
 ### Sessions
 
 **Session**:

@@ -1,0 +1,3 @@
+# Agent guidance is a code-owned prompt section
+
+The general prompt — identity, tool rules, output style, question policy — is a harness-owned extension section, keyed `agent` and installed first, like `execution-target`. It is versioned with the code and re-rendered before each request, so prompt improvements reach existing sessions on the next deploy. pi-durable's per-conversation `instructions` field was the alternative: it is the natural slot for future user-editable custom instructions, and we deliberately leave it reserved for that rather than spending it on text the product owns. The section must not be keyed `instructions`; that key is reserved for the stored field.
