@@ -67,7 +67,10 @@ describe("E2B template builds", () => {
 		recorder.template = "";
 		recorder.commands = [];
 		const provider = E2BProviderFactory.create({}, { apiKey: "test-key" });
-		await provider.buildTemplate?.({ name: "plain", source: { kind: "default" }, run: [] }, () => {});
+		await provider.buildTemplate?.(
+			{ name: "plain", source: { kind: "default" }, run: [] },
+			() => {},
+		);
 		expect(recorder.template).toBe("base");
 		expect(recorder.commands).toEqual([]);
 	});
@@ -99,27 +102,29 @@ describe("E2B templates over REST", () => {
 	it("lists templates, following the next-token header", async () => {
 		const { server, baseUrl } = await listen((_request, response, url) => {
 			if (url.searchParams.get("nextToken") === "two") {
-				response.writeHead(200, { "content-type": "application/json" }).end(
-					JSON.stringify([{ templateID: "tpl-2", names: ["project/second:default"], buildID: "b2" }]),
-				);
+				response
+					.writeHead(200, { "content-type": "application/json" })
+					.end(
+						JSON.stringify([
+							{ templateID: "tpl-2", names: ["project/second:default"], buildID: "b2" },
+						]),
+					);
 				return;
 			}
-			response
-				.writeHead(200, { "content-type": "application/json", "x-next-token": "two" })
-				.end(
-					JSON.stringify([
-						{
-							templateID: "tpl-1",
-							names: ["project/first:default"],
-							buildID: "b1",
-							buildStatus: "ready",
-							createdAt: "2026-01-01T00:00:00.000Z",
-							updatedAt: "2026-01-02T00:00:00.000Z",
-							spawnCount: 3,
-							public: false,
-						},
-					]),
-				);
+			response.writeHead(200, { "content-type": "application/json", "x-next-token": "two" }).end(
+				JSON.stringify([
+					{
+						templateID: "tpl-1",
+						names: ["project/first:default"],
+						buildID: "b1",
+						buildStatus: "ready",
+						createdAt: "2026-01-01T00:00:00.000Z",
+						updatedAt: "2026-01-02T00:00:00.000Z",
+						spawnCount: 3,
+						public: false,
+					},
+				]),
+			);
 		});
 		process.env.E2B_API_URL = baseUrl;
 		try {
@@ -142,7 +147,11 @@ describe("E2B templates over REST", () => {
 	it("sends the API key and treats a missing template as already gone", async () => {
 		const calls: { method: string; path: string; key: string | undefined }[] = [];
 		const { server, baseUrl } = await listen((request, response, url) => {
-			calls.push({ method: request.method ?? "", path: url.pathname, key: request.headers["x-api-key"] as string | undefined });
+			calls.push({
+				method: request.method ?? "",
+				path: url.pathname,
+				key: request.headers["x-api-key"] as string | undefined,
+			});
 			if (request.method === "DELETE") {
 				response.writeHead(404).end();
 				return;

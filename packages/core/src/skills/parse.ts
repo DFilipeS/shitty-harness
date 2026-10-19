@@ -93,7 +93,8 @@ export function parseSkill(text: string, directoryName: string): ParseSkillResul
 	} else if (name !== directoryName) {
 		warnings.push(`The name "${name}" does not match its folder "${directoryName}"`);
 	}
-	if (name.length > NAME_MAX_LENGTH) warnings.push(`The name is longer than ${NAME_MAX_LENGTH} characters`);
+	if (name.length > NAME_MAX_LENGTH)
+		warnings.push(`The name is longer than ${NAME_MAX_LENGTH} characters`);
 	if (!NAME_PATTERN.test(name)) {
 		warnings.push("The name should use only lowercase letters, digits, and single hyphens");
 	}

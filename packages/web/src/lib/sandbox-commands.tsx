@@ -1,5 +1,18 @@
-import type { ProviderTemplateInfo, SandboxInfo, SandboxesState, SandboxSettingsInfo, TemplateInfo } from "@harness/protocol";
-import { CheckIcon, KeyIcon, RefreshIcon, SlidersIcon, TerminalIcon, TrashIcon } from "../components/icons.tsx";
+import type {
+	ProviderTemplateInfo,
+	SandboxInfo,
+	SandboxesState,
+	SandboxSettingsInfo,
+	TemplateInfo,
+} from "@harness/protocol";
+import {
+	CheckIcon,
+	KeyIcon,
+	RefreshIcon,
+	SlidersIcon,
+	TerminalIcon,
+	TrashIcon,
+} from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
 import { formatBytes } from "./format.ts";
 import { useHarness } from "./store.tsx";
@@ -125,7 +138,9 @@ export function buildSandboxSettingsPage(
 						returnToPage: true,
 						onSubmit: async (value) => {
 							const socket = value.trim();
-							replacePage(page(withChange(current, { sshAgentSocket: socket === "" ? undefined : socket })));
+							replacePage(
+								page(withChange(current, { sshAgentSocket: socket === "" ? undefined : socket })),
+							);
 							const state = await setSettings({ sshAgentSocket: socket === "" ? null : socket });
 							if (state !== undefined) replacePage(page(state.settings));
 						},
@@ -192,7 +207,10 @@ export function useSandboxesPalette(): { page(): CommandPage; open(): void } {
 	});
 
 	const settingsPage = (): CommandPage =>
-		buildSandboxSettingsPage(sandboxSettings, setSandboxSettings, { list: templates, other: templatesOther });
+		buildSandboxSettingsPage(sandboxSettings, setSandboxSettings, {
+			list: templates,
+			other: templatesOther,
+		});
 
 	const metricsPage = (sandbox: SandboxInfo): CommandPage => ({
 		kind: "loading",

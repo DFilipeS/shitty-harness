@@ -55,7 +55,11 @@ export function QuestionForm({
 	};
 
 	/** Change one draft; `advance` moves on to the next pending question once the change answers or skips it. */
-	const update = (index: number, change: (draft: QuestionDraft) => QuestionDraft, advance: boolean) => {
+	const update = (
+		index: number,
+		change: (draft: QuestionDraft) => QuestionDraft,
+		advance: boolean,
+	) => {
 		if (questions === undefined) return;
 		const changed = changeDraft(questions, drafts, index, change);
 		setDrafts(changed);
@@ -108,7 +112,9 @@ export function QuestionForm({
 				)}
 				<div className="flex flex-col overflow-y-auto p-3 sm:p-4">
 					{question === undefined ? (
-						<p className="text-sm text-fg-muted">The agent asked a question this page cannot show. Skip it or stop the run.</p>
+						<p className="text-sm text-fg-muted">
+							The agent asked a question this page cannot show. Skip it or stop the run.
+						</p>
 					) : (
 						<QuestionFields
 							key={current}
@@ -172,7 +178,11 @@ export function QuestionForm({
 							data-question-next
 							onClick={() => next !== undefined && show(next)}
 							disabled={next === undefined}
-							title={next === undefined ? "Answer or skip this question first" : "Go to the next unanswered question"}
+							title={
+								next === undefined
+									? "Answer or skip this question first"
+									: "Go to the next unanswered question"
+							}
 							className="rounded-lg bg-fg px-3 py-1.5 text-xs font-medium text-canvas hover:bg-fg/90 disabled:opacity-30 disabled:hover:bg-fg"
 						>
 							Next
@@ -198,7 +208,9 @@ function QuestionTabs({
 }) {
 	const listRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		listRef.current?.querySelector<HTMLElement>(`[data-index="${current}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+		listRef.current
+			?.querySelector<HTMLElement>(`[data-index="${current}"]`)
+			?.scrollIntoView({ block: "nearest", inline: "nearest" });
 	}, [current]);
 	return (
 		<div
@@ -208,7 +220,8 @@ function QuestionTabs({
 			onKeyDown={(event) => {
 				if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
 				event.preventDefault();
-				const to = (current + (event.key === "ArrowRight" ? 1 : -1) + questions.length) % questions.length;
+				const to =
+					(current + (event.key === "ArrowRight" ? 1 : -1) + questions.length) % questions.length;
 				onSelect(to);
 				listRef.current?.querySelector<HTMLElement>(`[data-index="${to}"]`)?.focus();
 			}}
@@ -239,7 +252,9 @@ function QuestionTabs({
 								–
 							</span>
 						) : (
-							<span className="w-3 shrink-0 text-center text-[11px] text-fg-faint">{index + 1}</span>
+							<span className="w-3 shrink-0 text-center text-[11px] text-fg-faint">
+								{index + 1}
+							</span>
 						)}
 						<span className="max-w-32 truncate">{question.header || `Question ${index + 1}`}</span>
 					</button>
@@ -279,7 +294,9 @@ function QuestionFields({
 				</span>
 			</legend>
 			{draft.skipped && (
-				<p className="text-xs text-fg-subtle">Skipped: the agent will use its own judgment. Pick an answer to undo.</p>
+				<p className="text-xs text-fg-subtle">
+					Skipped: the agent will use its own judgment. Pick an answer to undo.
+				</p>
 			)}
 			<div role={multi ? "group" : "radiogroup"} className="flex flex-col gap-1">
 				{question.options.map((option) => (
@@ -287,10 +304,14 @@ function QuestionFields({
 						key={option.label}
 						multi={multi}
 						checked={draft.selected.includes(option.label)}
-						onToggle={() => onChange((current) => toggleOption(question, current, option.label), !multi)}
+						onToggle={() =>
+							onChange((current) => toggleOption(question, current, option.label), !multi)
+						}
 					>
 						<span className="text-sm text-fg">{option.label}</span>
-						{option.description !== "" && <span className="text-xs text-fg-subtle">{option.description}</span>}
+						{option.description !== "" && (
+							<span className="text-xs text-fg-subtle">{option.description}</span>
+						)}
 					</Choice>
 				))}
 				<Choice
@@ -308,7 +329,9 @@ function QuestionFields({
 							// Typing chooses Other; clearing the text leaves the choice for the user to undo.
 							onChange(
 								(current) => ({
-									...(current.otherChosen || other === "" ? current : toggleOther(question, current)),
+									...(current.otherChosen || other === ""
+										? current
+										: toggleOther(question, current)),
 									other,
 								}),
 								false,
@@ -367,7 +390,12 @@ function Choice({
 					multi ? "rounded" : "rounded-full"
 				} ${checked ? "border-fg bg-fg text-canvas" : "border-line-strong"}`}
 			>
-				{checked && (multi ? <CheckIcon className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-full bg-canvas" />)}
+				{checked &&
+					(multi ? (
+						<CheckIcon className="h-3 w-3" />
+					) : (
+						<span className="h-1.5 w-1.5 rounded-full bg-canvas" />
+					))}
 			</span>
 			<span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
 		</div>

@@ -1,6 +1,11 @@
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
-import { defineDoc, defineExtension, defineTool, type ToolExecutionApi } from "@earendil-works/pi-durable";
+import {
+	defineDoc,
+	defineExtension,
+	defineTool,
+	type ToolExecutionApi,
+} from "@earendil-works/pi-durable";
 import type { Question, QuestionAnswer, QuestionReply } from "@harness/protocol";
 import { ServiceError } from "./errors.ts";
 
@@ -36,17 +41,27 @@ const askUserSchema = Type.Object({
 		Type.Object({
 			question: Type.String({ description: "The full question, ending with a question mark." }),
 			header: Type.String({
-				description: 'A very short label for the question, at most 12 characters, such as "Database" or "Approach".',
+				description:
+					'A very short label for the question, at most 12 characters, such as "Database" or "Approach".',
 			}),
 			options: Type.Array(
 				Type.Object({
 					label: Type.String({ description: "The choice as the user sees it, in 1 to 5 words." }),
-					description: Type.String({ description: "What the choice means or what follows from it." }),
+					description: Type.String({
+						description: "What the choice means or what follows from it.",
+					}),
 				}),
-				{ minItems: 2, maxItems: 4, description: "2 to 4 distinct choices. Do not add an \"Other\" option: the user can always answer in their own words." },
+				{
+					minItems: 2,
+					maxItems: 4,
+					description:
+						'2 to 4 distinct choices. Do not add an "Other" option: the user can always answer in their own words.',
+				},
 			),
 			multiSelect: Type.Optional(
-				Type.Boolean({ description: "Whether the user may pick more than one option. Default false." }),
+				Type.Boolean({
+					description: "Whether the user may pick more than one option. Default false.",
+				}),
 			),
 		}),
 		{ minItems: 1, description: "The questions to ask, all shown at once." },
@@ -64,7 +79,11 @@ async function closeQuestion(api: ToolExecutionApi, key: string, context: Contex
 }
 
 /** Wait until `sessions.answer` stores a reply for this call. Rejects when the call is aborted. */
-async function waitForReply(api: ToolExecutionApi, key: string, context: Context): Promise<QuestionReply> {
+async function waitForReply(
+	api: ToolExecutionApi,
+	key: string,
+	context: Context,
+): Promise<QuestionReply> {
 	const watch = await api.watchDoc(OpenQuestionsDoc, context);
 	if (watch === undefined) throw new Error("The open questions document is missing");
 	const replyOf = (state: Readonly<OpenQuestionsState> | null): QuestionReply | undefined => {
@@ -83,7 +102,9 @@ async function waitForReply(api: ToolExecutionApi, key: string, context: Context
 				const reply = replyOf(state);
 				if (reply !== undefined) resolve(reply);
 			});
-			void watch.closed.then((end) => reject(new Error(`Stopped waiting for an answer: ${end.reason}`)));
+			void watch.closed.then((end) =>
+				reject(new Error(`Stopped waiting for an answer: ${end.reason}`)),
+			);
 		});
 	} finally {
 		await watch.stop();
@@ -97,7 +118,8 @@ export function replyText(questions: readonly Question[], reply: QuestionReply):
 	}
 	const lines = questions.map((question, index) => {
 		const answer = reply.answers[index];
-		if (answer?.skipped === true) return `${index + 1}. ${question.question}\n   (skipped; use your own judgment)`;
+		if (answer?.skipped === true)
+			return `${index + 1}. ${question.question}\n   (skipped; use your own judgment)`;
 		const parts = [...(answer?.selected ?? [])];
 		if (answer?.other !== undefined) parts.push(`(in their own words) ${answer.other}`);
 		return `${index + 1}. ${question.question}\n   ${parts.join("; ")}`;
@@ -112,7 +134,10 @@ export function replyText(questions: readonly Question[], reply: QuestionReply):
 export function validateReply(questions: readonly Question[], reply: QuestionReply): QuestionReply {
 	if (reply.kind === "skipped") return { kind: "skipped" };
 	if (reply.answers.length !== questions.length) {
-		throw new ServiceError("invalid", `Expected ${questions.length} answers, got ${reply.answers.length}`);
+		throw new ServiceError(
+			"invalid",
+			`Expected ${questions.length} answers, got ${reply.answers.length}`,
+		);
 	}
 	const answers = questions.map((question, index): QuestionAnswer => {
 		const answer = reply.answers[index]!;
@@ -120,7 +145,8 @@ export function validateReply(questions: readonly Question[], reply: QuestionRep
 		const labels = new Set(question.options.map((option) => option.label));
 		const selected = [...new Set(answer.selected)];
 		const unknown = selected.find((label) => !labels.has(label));
-		if (unknown !== undefined) throw new ServiceError("invalid", `Not an option of question ${index + 1}: ${unknown}`);
+		if (unknown !== undefined)
+			throw new ServiceError("invalid", `Not an option of question ${index + 1}: ${unknown}`);
 		const other = answer.other?.trim();
 		const count = selected.length + (other === undefined || other === "" ? 0 : 1);
 		if (count === 0) throw new ServiceError("invalid", `Question ${index + 1} has no answer`);
@@ -143,7 +169,7 @@ export const AskUserTool = defineTool({
 	description: [
 		"Ask the user one or more multiple-choice questions and wait for the answers.",
 		"Use it when you need a decision only the user can make, such as a preference, a trade-off, or an ambiguous requirement, and a wrong guess would waste work. Do not use it for facts you can find yourself.",
-		"Each question offers 2 to 4 options; the user can always answer in their own words instead. If you recommend an option, put it first and end its label with \"(Recommended)\".",
+		'Each question offers 2 to 4 options; the user can always answer in their own words instead. If you recommend an option, put it first and end its label with "(Recommended)".',
 		"The user may skip the questions; then continue on your own judgment.",
 	].join(" "),
 	parameters: askUserSchema,
@@ -155,7 +181,10 @@ export const AskUserTool = defineTool({
 		const questions: Question[] = args.questions.map((question) => ({
 			question: question.question,
 			header: question.header,
-			options: question.options.map((option) => ({ label: option.label, description: option.description })),
+			options: question.options.map((option) => ({
+				label: option.label,
+				description: option.description,
+			})),
 			...(question.multiSelect === true ? { multiSelect: true } : {}),
 		}));
 		await api.commit(async (tx) => {

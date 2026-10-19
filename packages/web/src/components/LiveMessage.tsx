@@ -29,7 +29,10 @@ function revealRate(backlog: number, finished: boolean): number {
 }
 
 /** Reveal each text and thinking block up to its own count; other block types pass through whole. */
-function truncateBlocks(blocks: LiveMessageState["blocks"], revealed: readonly number[]): LiveMessageState["blocks"] {
+function truncateBlocks(
+	blocks: LiveMessageState["blocks"],
+	revealed: readonly number[],
+): LiveMessageState["blocks"] {
 	return blocks.map((block, index) => {
 		const limit = revealed[index] ?? 0;
 		if (block.type === "text") return { ...block, text: block.text.slice(0, limit) };
@@ -83,7 +86,10 @@ export function LiveMessage({
 				const value = current[index] ?? 0;
 				const backlog = target - value;
 				if (backlog <= 0) continue;
-				const step = Math.max(1, Math.round(revealRate(backlog, message.finished === true) * elapsed));
+				const step = Math.max(
+					1,
+					Math.round(revealRate(backlog, message.finished === true) * elapsed),
+				);
 				next ??= [...current];
 				next[index] = Math.min(target, value + step);
 			}

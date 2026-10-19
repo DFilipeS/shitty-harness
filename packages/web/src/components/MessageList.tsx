@@ -46,7 +46,8 @@ export function MessageList() {
 	const entries = activeSession?.entries ?? [];
 	const queue = activeSession?.queue ?? [];
 	// The committed entry stays hidden while the live reveal is still catching up to it.
-	const visibleEntries = live?.entryId === undefined ? entries : entries.filter((entry) => entry.id !== live.entryId);
+	const visibleEntries =
+		live?.entryId === undefined ? entries : entries.filter((entry) => entry.id !== live.entryId);
 
 	// Tool results render inside the call block they belong to, so pair them by tool call id and
 	// remember which calls are on screen; a result without a call stays on its own.
@@ -65,7 +66,8 @@ export function MessageList() {
 					images: toolResultImages(result),
 					isError: result.isError === true,
 					imageModel: generatedImageInfo(result),
-					questionReply: result.toolName === ASK_USER_TOOL ? questionReplyOf(result.details) : undefined,
+					questionReply:
+						result.toolName === ASK_USER_TOOL ? questionReplyOf(result.details) : undefined,
 				});
 			}
 		}
@@ -107,10 +109,16 @@ export function MessageList() {
 					/>
 				)}
 				{queue.map((message) => (
-					<QueuedMessage key={message.id} message={message} onRemove={() => void withdrawQueued(message.id)} />
+					<QueuedMessage
+						key={message.id}
+						message={message}
+						onRemove={() => void withdrawQueued(message.id)}
+					/>
 				))}
 				{entries.length === 0 && live === undefined && queue.length === 0 && (
-					<p className="py-10 text-center text-sm text-fg-subtle">Send a message to start the conversation.</p>
+					<p className="py-10 text-center text-sm text-fg-subtle">
+						Send a message to start the conversation.
+					</p>
 				)}
 			</div>
 		</div>
@@ -164,14 +172,16 @@ function EntryView({
 	}
 
 	if (entry.kind === "app.target") {
-		const data = entry.data as {
-			kind?: unknown;
-			path?: unknown;
-			scratch?: unknown;
-			provider?: unknown;
-			providerName?: unknown;
-			sandboxId?: unknown;
-		} | undefined;
+		const data = entry.data as
+			| {
+					kind?: unknown;
+					path?: unknown;
+					scratch?: unknown;
+					provider?: unknown;
+					providerName?: unknown;
+					sandboxId?: unknown;
+			  }
+			| undefined;
 		if (data?.kind === "sandbox") {
 			const provider =
 				typeof data.providerName === "string"
@@ -183,7 +193,9 @@ function EntryView({
 			return (
 				<Divider
 					label={
-						sandboxId === undefined ? "Target: new sandbox" : `Target: ${provider}:${sandboxId.slice(0, 8)}`
+						sandboxId === undefined
+							? "Target: new sandbox"
+							: `Target: ${provider}:${sandboxId.slice(0, 8)}`
 					}
 				/>
 			);

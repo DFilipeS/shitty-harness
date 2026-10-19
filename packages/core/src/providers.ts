@@ -67,7 +67,12 @@ export class ProviderManager implements Providers, SandboxSettingsStore {
 	#queue: Promise<void> = Promise.resolve();
 	readonly #statuses = new Map<string, CatalogRefreshStatus>();
 
-	constructor(configPath: string, modelsPath: string, config: AppConfig, options: ProviderManagerOptions = {}) {
+	constructor(
+		configPath: string,
+		modelsPath: string,
+		config: AppConfig,
+		options: ProviderManagerOptions = {},
+	) {
 		this.#configPath = configPath;
 		this.#config = config;
 		this.models = builtinModels({
@@ -148,12 +153,17 @@ export class ProviderManager implements Providers, SandboxSettingsStore {
 			}
 			if (change.imageModel !== undefined) {
 				if (change.imageModel === null) delete defaults.imageModel;
-				else defaults.imageModel = { provider: change.imageModel.provider, modelId: change.imageModel.modelId };
+				else
+					defaults.imageModel = {
+						provider: change.imageModel.provider,
+						modelId: change.imageModel.modelId,
+					};
 			}
 			if (change.target !== undefined) {
 				if (change.target === null) delete defaults.target;
 				else if (change.target.kind === "sandbox") defaults.target = { kind: "sandbox" };
-				else if (change.target.path === undefined || change.target.path === "") defaults.target = { kind: "local" };
+				else if (change.target.path === undefined || change.target.path === "")
+					defaults.target = { kind: "local" };
 				else defaults.target = { kind: "local", path: change.target.path };
 			}
 			if (
@@ -207,7 +217,8 @@ export class ProviderManager implements Providers, SandboxSettingsStore {
 			if (change.sshAgentSocket !== undefined || change.forwardAgent !== undefined) {
 				const ssh: { agentSocket?: string; forwardAgent?: boolean } = sandboxes.ssh ?? {};
 				if (change.sshAgentSocket !== undefined) {
-					if (change.sshAgentSocket === null || change.sshAgentSocket === "") delete ssh.agentSocket;
+					if (change.sshAgentSocket === null || change.sshAgentSocket === "")
+						delete ssh.agentSocket;
 					else ssh.agentSocket = change.sshAgentSocket;
 				}
 				if (change.forwardAgent !== undefined) {
@@ -219,7 +230,8 @@ export class ProviderManager implements Providers, SandboxSettingsStore {
 			}
 			if (change.apiKey !== undefined) {
 				const providers = sandboxes.providers ?? {};
-				if (change.apiKey.key === null || change.apiKey.key === "") delete providers[change.apiKey.provider];
+				if (change.apiKey.key === null || change.apiKey.key === "")
+					delete providers[change.apiKey.provider];
 				else providers[change.apiKey.provider] = { apiKey: change.apiKey.key };
 				if (Object.keys(providers).length === 0) delete sandboxes.providers;
 				else sandboxes.providers = providers;
@@ -276,7 +288,9 @@ export class ProviderManager implements Providers, SandboxSettingsStore {
 	}
 
 	/** Refresh remote catalogs (all configured providers when `providerId` is omitted). */
-	async refresh(options: { providerId?: string; force?: boolean } = {}): Promise<ProviderRefreshReport[]> {
+	async refresh(
+		options: { providerId?: string; force?: boolean } = {},
+	): Promise<ProviderRefreshReport[]> {
 		const providerIds =
 			options.providerId === undefined
 				? this.models.getProviders().map((provider) => provider.id)

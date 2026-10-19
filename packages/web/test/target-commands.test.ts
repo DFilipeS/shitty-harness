@@ -30,7 +30,9 @@ describe("targetLabel", () => {
 	it("names the scratch directory and shows folder paths", () => {
 		expect(targetLabel(undefined)).toBe("Scratch");
 		expect(targetLabel({ kind: "local", path: "/tmp/scratch", scratch: true })).toBe("Scratch");
-		expect(targetLabel({ kind: "local", path: "/Users/me/project", scratch: false })).toBe("/Users/me/project");
+		expect(targetLabel({ kind: "local", path: "/Users/me/project", scratch: false })).toBe(
+			"/Users/me/project",
+		);
 	});
 
 	it("shows the provider's display name for sandboxes", () => {
@@ -44,7 +46,12 @@ describe("targetLabel", () => {
 			}),
 		).toBe("E2B:abc12345");
 		expect(
-			targetLabel({ kind: "sandbox", provider: "e2b", providerName: "E2B", workspaceDir: "/home/user/workspace" }),
+			targetLabel({
+				kind: "sandbox",
+				provider: "e2b",
+				providerName: "E2B",
+				workspaceDir: "/home/user/workspace",
+			}),
 		).toBe("New sandbox");
 	});
 });
@@ -89,9 +96,10 @@ describe("buildNewSandboxPage", () => {
 
 	it("creates an empty workspace with the chosen template and forwarding", () => {
 		const created: NewSandboxChoice[] = [];
-		command(build({ template: "harness-base", create: (choice) => created.push(choice) }), "sandbox.new.empty")?.run(
-			context(),
-		);
+		command(
+			build({ template: "harness-base", create: (choice) => created.push(choice) }),
+			"sandbox.new.empty",
+		)?.run(context());
 		expect(created).toEqual([
 			{ source: { kind: "empty" }, forwardAgent: true, template: "harness-base" },
 		]);
@@ -117,7 +125,10 @@ describe("buildNewSandboxPage", () => {
 	it("flips the forwarding row in place", () => {
 		let toggled = 0;
 		let replaced: CommandPage | undefined;
-		const forward = command(build({ toggleForwardAgent: () => (toggled += 1) }), "sandbox.new.forward");
+		const forward = command(
+			build({ toggleForwardAgent: () => (toggled += 1) }),
+			"sandbox.new.forward",
+		);
 		expect(forward?.title).toBe("Forward SSH agent: on");
 		forward?.run(context({ replacePage: (page) => (replaced = page) }));
 		expect(toggled).toBe(1);
@@ -136,7 +147,12 @@ describe("buildFolderPage", () => {
 	};
 
 	it("offers the current folder, its parent, its children, and a new folder", () => {
-		const page = buildFolderPage(listing, emptyPage, () => {}, async () => undefined);
+		const page = buildFolderPage(
+			listing,
+			emptyPage,
+			() => {},
+			async () => undefined,
+		);
 		expect(page.kind).toBe("commands");
 		if (page.kind !== "commands") throw new Error("expected a command page");
 		expect(page.commands.map((command) => command.id)).toEqual([
@@ -150,7 +166,12 @@ describe("buildFolderPage", () => {
 
 	it("uses the current folder when chosen", () => {
 		let chosen: string | undefined;
-		const page = buildFolderPage(listing, emptyPage, (path) => (chosen = path), async () => undefined);
+		const page = buildFolderPage(
+			listing,
+			emptyPage,
+			(path) => (chosen = path),
+			async () => undefined,
+		);
 		if (page.kind !== "commands") throw new Error("expected a command page");
 		page.commands[0]?.run(context());
 		expect(chosen).toBe("/Users/me");
@@ -158,7 +179,12 @@ describe("buildFolderPage", () => {
 
 	it("walks into a child directory", () => {
 		let pushed: CommandPage | undefined;
-		const page = buildFolderPage(listing, (path) => ({ kind: "loading", title: path, load: async () => emptyPage() }), () => {}, async () => undefined);
+		const page = buildFolderPage(
+			listing,
+			(path) => ({ kind: "loading", title: path, load: async () => emptyPage() }),
+			() => {},
+			async () => undefined,
+		);
 		if (page.kind !== "commands") throw new Error("expected a command page");
 		page.commands[2]?.run(context({ pushPage: (next) => (pushed = next) }));
 		expect(pushed?.kind).toBe("loading");

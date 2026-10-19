@@ -57,7 +57,10 @@ export function formatRefreshNotice(
 		return {
 			tone: "error",
 			text: failed
-				.map((report) => `${report.name}: refresh failed${report.error === undefined ? "" : ` (${report.error})`}`)
+				.map(
+					(report) =>
+						`${report.name}: refresh failed${report.error === undefined ? "" : ` (${report.error})`}`,
+				)
 				.join(" · "),
 		};
 	}

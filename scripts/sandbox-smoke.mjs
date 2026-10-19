@@ -11,10 +11,14 @@ import { SandboxExecutionEnv } from "../packages/core/src/sandboxes/env.ts";
 import { E2BProviderFactory } from "../packages/core/src/sandboxes/e2b/provider.ts";
 
 function storedApiKey() {
-	if (process.env.E2B_API_KEY !== undefined && process.env.E2B_API_KEY !== "") return process.env.E2B_API_KEY;
+	if (process.env.E2B_API_KEY !== undefined && process.env.E2B_API_KEY !== "")
+		return process.env.E2B_API_KEY;
 	try {
 		const auth = JSON.parse(
-			readFileSync(join(homedir(), ".pi", "agent", "extensions", "remote-sandbox-auth.json"), "utf8"),
+			readFileSync(
+				join(homedir(), ".pi", "agent", "extensions", "remote-sandbox-auth.json"),
+				"utf8",
+			),
 		);
 		return auth?.e2b?.apiKey;
 	} catch {
@@ -96,7 +100,8 @@ try {
 		const listed = await agentCheck(`SSH_AUTH_SOCK=${forwarding.sandboxSocket} ssh-add -l`);
 		console.log("agent inside the sandbox:");
 		console.log(listed.output || "(no output)");
-		if (listed.exitCode !== 0) throw new Error("the forwarded agent did not answer inside the sandbox");
+		if (listed.exitCode !== 0)
+			throw new Error("the forwarded agent did not answer inside the sandbox");
 		await forwarding.close();
 		const after = await agentCheck(`SSH_AUTH_SOCK=${forwarding.sandboxSocket} ssh-add -l`);
 		console.log(`after close: exit ${after.exitCode}`);
@@ -107,7 +112,9 @@ try {
 	await sandbox.pause();
 	console.log("paused");
 	const resumed = await provider.connect(sandbox.id, { workspaceDir });
-	const afterResume = getOrThrow(await new SandboxExecutionEnv(resumed).readTextFile("hello.txt", BACKGROUND_CONTEXT));
+	const afterResume = getOrThrow(
+		await new SandboxExecutionEnv(resumed).readTextFile("hello.txt", BACKGROUND_CONTEXT),
+	);
 	console.log("after resume:", JSON.stringify(afterResume));
 
 	const sandboxes = await provider.list({ labels: { harness: "smoke" } });

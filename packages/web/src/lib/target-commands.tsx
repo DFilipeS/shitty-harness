@@ -1,6 +1,18 @@
 import { useState } from "react";
-import type { ProviderTemplateInfo, SandboxSourceChoice, TargetInfo, TemplateInfo } from "@harness/protocol";
-import { CheckIcon, FilePlusIcon, FolderIcon, KeyIcon, LayersIcon, TerminalIcon } from "../components/icons.tsx";
+import type {
+	ProviderTemplateInfo,
+	SandboxSourceChoice,
+	TargetInfo,
+	TemplateInfo,
+} from "@harness/protocol";
+import {
+	CheckIcon,
+	FilePlusIcon,
+	FolderIcon,
+	KeyIcon,
+	LayersIcon,
+	TerminalIcon,
+} from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
 import { useHarness } from "./store.tsx";
 import { buildTemplatePickerPage } from "./template-commands.tsx";
@@ -201,7 +213,8 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 	const forwardAgent = forwardOverride ?? sandboxSettings?.forwardAgent ?? true;
 	// The new-sandbox template; undefined follows the stored default, null means provider default.
 	const [templateOverride, setTemplateOverride] = useState<string | null | undefined>(undefined);
-	const selectedTemplate = templateOverride === undefined ? sandboxSettings?.template : (templateOverride ?? undefined);
+	const selectedTemplate =
+		templateOverride === undefined ? sandboxSettings?.template : (templateOverride ?? undefined);
 
 	const browse = (path?: string): CommandPage =>
 		folderPage(async () =>
@@ -335,7 +348,8 @@ export function useTargetPalette(): { page(): CommandPage; open(): void } {
 
 /** The default target new sessions start with. */
 export function useDefaultTargetPalette(): { page(): CommandPage; open(): void } {
-	const { defaults, setDefaults, browseWorkspaces, createWorkspaceFolder, sandboxSettings } = useHarness();
+	const { defaults, setDefaults, browseWorkspaces, createWorkspaceFolder, sandboxSettings } =
+		useHarness();
 	const { openPage } = useCommandPalette();
 	const current = defaults.target;
 	const isFolder = current?.kind === "local" && current.path !== undefined && current.path !== "";

@@ -115,7 +115,11 @@ export function parseInvocation(text: string): { name: string; rest: string } | 
 export type SkillLibraryOptions = {
 	/** The host's home directory, for user skills; without one, only project skills load. */
 	home?: string;
-	resolveTarget: (read: DocumentReader, conversationId: ConversationId, context: Context) => Promise<ResolvedTarget>;
+	resolveTarget: (
+		read: DocumentReader,
+		conversationId: ConversationId,
+		context: Context,
+	) => Promise<ResolvedTarget>;
 	/** Overrides the host file access, for tests. */
 	hostFs?: SkillFs;
 };
@@ -172,13 +176,18 @@ export class SkillLibrary {
 		const cached = this.#cache.get(conversationId);
 		if (cached !== undefined && !cached.stale && cached.targetKey === key) return cached.catalog;
 		const catalog = await this.#scan(target, env, context);
-		if (catalog === undefined) return this.#offline(cached?.targetKey === key ? cached.catalog : undefined);
+		if (catalog === undefined)
+			return this.#offline(cached?.targetKey === key ? cached.catalog : undefined);
 		this.#cache.set(conversationId, { catalog, targetKey: key, stale: false });
 		return catalog;
 	}
 
 	/** The skills a client lists without opening a sandbox. */
-	async list(read: DocumentReader, conversationId: ConversationId, context: Context): Promise<SkillCatalog> {
+	async list(
+		read: DocumentReader,
+		conversationId: ConversationId,
+		context: Context,
+	): Promise<SkillCatalog> {
 		return this.catalog(read, conversationId, undefined, context);
 	}
 
@@ -199,14 +208,21 @@ export class SkillLibrary {
 		const skill = usable.find((candidate) => candidate.name === name);
 		if (skill === undefined) return { available: usable.map((candidate) => candidate.name) };
 		const target = await this.#options.resolveTarget(read, conversationId, context);
-		const fs = target.kind === "sandbox" && env !== undefined ? envSkillFs(env, context) : this.#host;
-		const files = (await listSkillFiles(fs, skill.dir, MAX_LISTED_FILES + 2)).map((file) => file.path);
+		const fs =
+			target.kind === "sandbox" && env !== undefined ? envSkillFs(env, context) : this.#host;
+		const files = (await listSkillFiles(fs, skill.dir, MAX_LISTED_FILES + 2)).map(
+			(file) => file.path,
+		);
 		const resources = files.filter((file) => file !== "SKILL.md");
 		const truncated = resources.length > MAX_LISTED_FILES;
 		return { skill, block: skillBlock(skill, resources.slice(0, MAX_LISTED_FILES), truncated) };
 	}
 
-	async #scan(target: ResolvedTarget, env: ExecutionEnv | undefined, context: Context): Promise<SkillCatalog | undefined> {
+	async #scan(
+		target: ResolvedTarget,
+		env: ExecutionEnv | undefined,
+		context: Context,
+	): Promise<SkillCatalog | undefined> {
 		if (target.kind === "local") {
 			return discoverSkills(this.#host, skillRoots(target.path, this.#options.home));
 		}
@@ -216,10 +232,15 @@ export class SkillLibrary {
 		const mirrorDir = join(home, ".agents", "skills");
 		const hostSkills = await this.#hostUserSkills();
 		const mirror = await this.#mirror(env, hostSkills.skills, mirrorDir, context);
-		const found = await discoverSkills(envSkillFs(env, context), skillRoots(target.workspaceDir, home));
+		const found = await discoverSkills(
+			envSkillFs(env, context),
+			skillRoots(target.workspaceDir, home),
+		);
 		const mirrored = new Set(mirror.mirrored);
 		const skills = found.skills.map((skill) =>
-			skill.scope === "user" && mirrored.has(skill.name) && skill.dir === join(mirrorDir, skill.name)
+			skill.scope === "user" &&
+			mirrored.has(skill.name) &&
+			skill.dir === join(mirrorDir, skill.name)
 				? { ...skill, mirrored: true }
 				: skill,
 		);
@@ -229,7 +250,10 @@ export class SkillLibrary {
 	/** Without the sandbox: the last scan, then the host's user skills it may not have mirrored yet. */
 	async #offline(last: SkillCatalog | undefined): Promise<SkillCatalog> {
 		const host = await this.#hostUserSkills();
-		return mergeCatalogs([last ?? EMPTY_CATALOG, { skills: host.skills.map((skill) => ({ ...skill, mirrored: true })), issues: [] }]);
+		return mergeCatalogs([
+			last ?? EMPTY_CATALOG,
+			{ skills: host.skills.map((skill) => ({ ...skill, mirrored: true })), issues: [] },
+		]);
 	}
 
 	async #hostUserSkills(): Promise<SkillCatalog> {
@@ -245,7 +269,12 @@ export class SkillLibrary {
 		return home;
 	}
 
-	async #mirror(env: ExecutionEnv, skills: readonly Skill[], dir: string, context: Context): Promise<MirrorResult> {
+	async #mirror(
+		env: ExecutionEnv,
+		skills: readonly Skill[],
+		dir: string,
+		context: Context,
+	): Promise<MirrorResult> {
 		const running = this.#mirrors.get(env.id);
 		if (running !== undefined) return running;
 		const promise = mirrorSkills(this.#host, skills, env, dir, context).finally(() => {
@@ -269,8 +298,13 @@ function mentions(message: Message, marker: string): boolean {
  * compaction does to a skill activated before it. The added text is the same for every request, so
  * the prompt cache still covers it.
  */
-export function restoreSkills(messages: readonly Message[], active: readonly ActiveSkill[]): readonly Message[] | undefined {
-	const missing = active.filter((entry) => !messages.some((message) => mentions(message, skillMarker(entry.name))));
+export function restoreSkills(
+	messages: readonly Message[],
+	active: readonly ActiveSkill[],
+): readonly Message[] | undefined {
+	const missing = active.filter(
+		(entry) => !messages.some((message) => mentions(message, skillMarker(entry.name))),
+	);
 	if (missing.length === 0) return undefined;
 	const note: TextContent = {
 		type: "text",
@@ -278,7 +312,10 @@ export function restoreSkills(messages: readonly Message[], active: readonly Act
 	};
 	const [first, ...rest] = messages;
 	if (first?.role === "user") {
-		const content = typeof first.content === "string" ? [{ type: "text" as const, text: first.content }] : first.content;
+		const content =
+			typeof first.content === "string"
+				? [{ type: "text" as const, text: first.content }]
+				: first.content;
 		return [{ ...first, content: [note, ...content] }, ...rest];
 	}
 	return [{ role: "user", content: [note], timestamp: first?.timestamp ?? 0 }, ...messages];
@@ -325,17 +362,32 @@ export function createSkillsExtension(library: SkillLibrary) {
 					details: { name: args.name, alreadyActive: true } satisfies SkillToolDetails,
 				};
 			}
-			const result = await library.activate(api, api.conversationId, api.env, args.name, { modelOnly: true }, context);
+			const result = await library.activate(
+				api,
+				api.conversationId,
+				api.env,
+				args.name,
+				{ modelOnly: true },
+				context,
+			);
 			if ("available" in result) {
 				const names = result.available.length === 0 ? "none" : result.available.join(", ");
 				throw new Error(`Unknown skill "${args.name}". Available skills: ${names}.`);
 			}
 			await api.commit(async (tx) => {
-				recordActivation(await tx.doc(SkillsDoc, api.conversationId), result.skill.name, result.block);
+				recordActivation(
+					await tx.doc(SkillsDoc, api.conversationId),
+					result.skill.name,
+					result.block,
+				);
 			}, context);
 			return {
 				output: [{ type: "text", text: result.block }],
-				details: { name: result.skill.name, scope: result.skill.scope, path: result.skill.path } satisfies SkillToolDetails,
+				details: {
+					name: result.skill.name,
+					scope: result.skill.scope,
+					path: result.skill.path,
+				} satisfies SkillToolDetails,
 			};
 		},
 	});
@@ -345,7 +397,8 @@ export function createSkillsExtension(library: SkillLibrary) {
 		tools: [tool],
 		sections: [
 			section("skills", async (input, context) => {
-				if (!input.agent.tools.some((candidate) => candidate.name === SKILL_TOOL_NAME)) return undefined;
+				if (!input.agent.tools.some((candidate) => candidate.name === SKILL_TOOL_NAME))
+					return undefined;
 				const catalog = await library.catalog(input.read, input.conversationId, input.env, context);
 				const offered = catalog.skills.filter((skill) => skill.modelInvocable);
 				if (offered.length === 0) return undefined;

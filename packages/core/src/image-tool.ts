@@ -9,7 +9,12 @@ import {
 	type Models,
 	type Usage,
 } from "@earendil-works/pi-ai";
-import { defineExtension, defineTool, section, type ToolExecutionApi } from "@earendil-works/pi-durable";
+import {
+	defineExtension,
+	defineTool,
+	section,
+	type ToolExecutionApi,
+} from "@earendil-works/pi-durable";
 import { decodeBase64, encodeBase64 } from "./base64.ts";
 import { safeFileName } from "./attachments.ts";
 import type { ModelRef } from "@harness/protocol";
@@ -30,7 +35,9 @@ const EXTENSION_MIME_TYPES: Record<string, string> = {
 };
 
 const generateImageSchema = Type.Object({
-	prompt: Type.String({ description: "What the image should show, or how to change the input image." }),
+	prompt: Type.String({
+		description: "What the image should show, or how to change the input image.",
+	}),
 	image: Type.Optional(
 		Type.String({
 			description:
@@ -83,7 +90,8 @@ function resolveImageModel(
 ): ImageModel<ImageApi> | undefined {
 	if (requested !== undefined) {
 		return available.find(
-			(model) => model.id === requested || model.id.endsWith(`/${requested}`) || model.name === requested,
+			(model) =>
+				model.id === requested || model.id.endsWith(`/${requested}`) || model.name === requested,
 		);
 	}
 	if (preferred !== undefined) {
@@ -167,7 +175,8 @@ async function saveImages(
 	for (const [index, image] of images.entries()) {
 		const extension = MIME_EXTENSIONS[image.mimeType] ?? "png";
 		const base = requested ?? `image-${Date.now()}`;
-		const name = images.length === 1 ? withExtension(base, extension) : `${base}-${index + 1}.${extension}`;
+		const name =
+			images.length === 1 ? withExtension(base, extension) : `${base}-${index + 1}.${extension}`;
 		const target = `${directory}/${name}`;
 		const result = await env.writeFile(target, decodeBase64(image.data), context);
 		if (result.ok) saved.push(target);
@@ -189,7 +198,8 @@ async function inputImage(
 	context: Context,
 ): Promise<{ input: ImagesInputContent } | { error: string }> {
 	const env = api.env;
-	if (env === undefined) return { error: "Cannot read an input image: no execution environment is configured." };
+	if (env === undefined)
+		return { error: "Cannot read an input image: no execution environment is configured." };
 	const file = await env.readBinaryFile(path, context);
 	if (!file.ok) return { error: `Could not read ${path}: ${file.error.message}` };
 	return { input: { type: "image", data: encodeBase64(file.value), mimeType: mimeTypeFor(path) } };
@@ -201,7 +211,9 @@ async function inputImage(
  * returned as a tool result, so it shows up in the conversation. With `image`, an existing file
  * goes in as input, which is how a picture gets edited.
  */
-export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaultImageModel"> = {}) {
+export function createGenerateImageTool(
+	options: Pick<ImageToolsOptions, "defaultImageModel"> = {},
+) {
 	return defineTool({
 		name: "generate_image",
 		description:
@@ -228,7 +240,10 @@ export function createGenerateImageTool(options: Pick<ImageToolsOptions, "defaul
 				agent.model,
 			);
 			if (model === undefined) {
-				return { output: [{ type: "text", text: `Unknown image model: ${args.model}` }], isError: true };
+				return {
+					output: [{ type: "text", text: `Unknown image model: ${args.model}` }],
+					isError: true,
+				};
 			}
 			// For the transcript: which provider and model the picture came from.
 			const details = {
@@ -325,7 +340,9 @@ function imageSection(options: ImageToolsOptions, toolName: string) {
 			const defaultModel =
 				preferred === undefined
 					? undefined
-					: usable.find((model) => model.provider === preferred.provider && model.id === preferred.modelId);
+					: usable.find(
+							(model) => model.provider === preferred.provider && model.id === preferred.modelId,
+						);
 			if (defaultModel !== undefined) lines.push(`The configured default is ${defaultModel.name}.`);
 			return lines.join(" ");
 		},

@@ -76,5 +76,10 @@ function describeContent(content: unknown): Omit<QueuedMessageInfo, "id" | "mode
 	}
 	// The saved-files note names every attachment; without it, the wrappers are the next best source.
 	const attachments = named.length > 0 ? named : tagged;
-	return { text: texts.join("\n").trim(), attachments, images, ...(skill === undefined ? {} : { skill }) };
+	return {
+		text: texts.join("\n").trim(),
+		attachments,
+		images,
+		...(skill === undefined ? {} : { skill }),
+	};
 }

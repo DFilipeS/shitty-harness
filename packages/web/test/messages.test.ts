@@ -64,7 +64,9 @@ function assistant(overrides: Partial<AssistantMessage> = {}): AssistantMessage 
 
 describe("model errors", () => {
 	it("reads the failure a committed assistant message carries", () => {
-		expect(assistantError(assistant({ stopReason: "error", errorMessage: "412 suspended" }))).toBe("412 suspended");
+		expect(assistantError(assistant({ stopReason: "error", errorMessage: "412 suspended" }))).toBe(
+			"412 suspended",
+		);
 		expect(assistantError(assistant({ stopReason: "error" }))).toBe("The model request failed.");
 		expect(assistantError(assistant())).toBeUndefined();
 		expect(assistantError(assistant({ stopReason: "aborted" }))).toBeUndefined();
@@ -77,7 +79,10 @@ describe("model errors", () => {
 		expect(live.error).toBe("suspended");
 
 		const updated = applyMessageChanges(live, live.usage ?? assistant().usage, [
-			{ type: "message", message: assistant({ content: [], stopReason: "error", errorMessage: "still suspended" }) },
+			{
+				type: "message",
+				message: assistant({ content: [], stopReason: "error", errorMessage: "still suspended" }),
+			},
 		]);
 		expect(updated.error).toBe("still suspended");
 	});
@@ -109,7 +114,9 @@ describe("hasHiddenOutput", () => {
 	it("ignores replies with text or a tool call", () => {
 		const text = assistant({ content: [{ type: "text", text: "Here you go." }] });
 		expect(hasHiddenOutput(text, [imageModel()])).toBe(false);
-		const call = assistant({ content: [{ type: "toolCall", id: "call-1", name: "generate_image", arguments: {} }] });
+		const call = assistant({
+			content: [{ type: "toolCall", id: "call-1", name: "generate_image", arguments: {} }],
+		});
 		expect(hasHiddenOutput(call, [imageModel()])).toBe(false);
 	});
 
@@ -171,7 +178,12 @@ describe("userParts", () => {
 
 	it("splits text and images", () => {
 		expect(
-			userParts(user([{ type: "text", text: "Look" }, { type: "image", data: "aGk=", mimeType: "image/png" }])),
+			userParts(
+				user([
+					{ type: "text", text: "Look" },
+					{ type: "image", data: "aGk=", mimeType: "image/png" },
+				]),
+			),
 		).toEqual([
 			{ type: "text", text: "Look" },
 			{ type: "image", data: "aGk=", mimeType: "image/png" },
@@ -242,7 +254,11 @@ describe("generatedImageInfo", () => {
 	});
 
 	it("ignores malformed details", () => {
-		expect(generatedImageInfo({ ...result([]), toolName: "generate_image", details: { provider: 1 } })).toBeUndefined();
-		expect(generatedImageInfo({ ...result([]), toolName: "generate_image", details: "nope" })).toBeUndefined();
+		expect(
+			generatedImageInfo({ ...result([]), toolName: "generate_image", details: { provider: 1 } }),
+		).toBeUndefined();
+		expect(
+			generatedImageInfo({ ...result([]), toolName: "generate_image", details: "nope" }),
+		).toBeUndefined();
 	});
 });

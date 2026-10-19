@@ -85,7 +85,15 @@ const COMMAND_TYPES = new Set<string>([
 	"defaults.set",
 ]);
 
-const THINKING_LEVELS = new Set<string>(["off", "minimal", "low", "medium", "high", "xhigh", "max"]);
+const THINKING_LEVELS = new Set<string>([
+	"off",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max",
+]);
 
 const CONTENT_TYPES: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
@@ -111,7 +119,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isClientCommand(value: unknown): value is ClientCommand {
 	if (!isRecord(value)) return false;
-	return typeof value.id === "string" && typeof value.type === "string" && COMMAND_TYPES.has(value.type);
+	return (
+		typeof value.id === "string" && typeof value.type === "string" && COMMAND_TYPES.has(value.type)
+	);
 }
 
 function requireString(value: unknown, name: string): string {
@@ -156,9 +166,11 @@ function optionalTargetChoice(value: unknown): TargetChoice | null | undefined {
 		throw new ServiceError("invalid", "target must be a local or sandbox target");
 	}
 	if (value.kind === "sandbox") return { kind: "sandbox", ...optionalSandboxChoice(value) };
-	if (value.kind !== "local") throw new ServiceError("invalid", "target.kind must be local or sandbox");
+	if (value.kind !== "local")
+		throw new ServiceError("invalid", "target.kind must be local or sandbox");
 	if (value.path === undefined) return { kind: "local" };
-	if (typeof value.path !== "string") throw new ServiceError("invalid", "target.path must be a string");
+	if (typeof value.path !== "string")
+		throw new ServiceError("invalid", "target.path must be a string");
 	return { kind: "local", path: value.path };
 }
 
@@ -168,7 +180,8 @@ function optionalSandboxSource(value: unknown): SandboxSourceChoice | undefined 
 		throw new ServiceError("invalid", "sandbox.source must be an object");
 	}
 	if (value.kind === "empty") return { kind: "empty" };
-	if (value.kind === "git") return { kind: "git", url: requireString(value.url, "sandbox.source.url") };
+	if (value.kind === "git")
+		return { kind: "git", url: requireString(value.url, "sandbox.source.url") };
 	throw new ServiceError("invalid", "sandbox.source.kind must be empty or git");
 }
 
@@ -176,14 +189,19 @@ function optionalSandboxChoice(value: unknown): SandboxChoice {
 	if (value === undefined) return {};
 	if (!isRecord(value)) throw new ServiceError("invalid", "sandbox must be an object");
 	const choice: SandboxChoice = {};
-	if (value.provider !== undefined) choice.provider = requireString(value.provider, "sandbox.provider");
-	if (value.sandboxId !== undefined) choice.sandboxId = requireString(value.sandboxId, "sandbox.sandboxId");
+	if (value.provider !== undefined)
+		choice.provider = requireString(value.provider, "sandbox.provider");
+	if (value.sandboxId !== undefined)
+		choice.sandboxId = requireString(value.sandboxId, "sandbox.sandboxId");
 	if (value.name !== undefined) choice.name = requireString(value.name, "sandbox.name");
 	if (value.template !== undefined) {
-		choice.template = value.template === null ? null : requireString(value.template, "sandbox.template");
+		choice.template =
+			value.template === null ? null : requireString(value.template, "sandbox.template");
 	}
-	if (value.workspaceDir !== undefined) choice.workspaceDir = requireString(value.workspaceDir, "sandbox.workspaceDir");
-	if (value.forwardAgent !== undefined) choice.forwardAgent = requireBoolean(value.forwardAgent, "sandbox.forwardAgent");
+	if (value.workspaceDir !== undefined)
+		choice.workspaceDir = requireString(value.workspaceDir, "sandbox.workspaceDir");
+	if (value.forwardAgent !== undefined)
+		choice.forwardAgent = requireBoolean(value.forwardAgent, "sandbox.forwardAgent");
 	const source = optionalSandboxSource(value.source);
 	if (source !== undefined) choice.source = source;
 	return choice;
@@ -201,10 +219,14 @@ function optionalAttachments(value: unknown): PromptAttachment[] {
 	if (value === undefined) return [];
 	if (!Array.isArray(value)) throw new ServiceError("invalid", "attachments must be an array");
 	if (value.length > ATTACHMENT_LIMITS.maxPerMessage) {
-		throw new ServiceError("invalid", `attachments must contain at most ${ATTACHMENT_LIMITS.maxPerMessage} files`);
+		throw new ServiceError(
+			"invalid",
+			`attachments must contain at most ${ATTACHMENT_LIMITS.maxPerMessage} files`,
+		);
 	}
 	return value.map((item, index) => {
-		if (!isRecord(item)) throw new ServiceError("invalid", `attachments[${index}] must be an object`);
+		if (!isRecord(item))
+			throw new ServiceError("invalid", `attachments[${index}] must be an object`);
 		return {
 			name: requireString(item.name, `attachments[${index}].name`),
 			mimeType: requireString(item.mimeType, `attachments[${index}].mimeType`),
@@ -218,8 +240,10 @@ function requireQuestionReply(value: unknown): QuestionReply {
 		throw new ServiceError("invalid", "reply must be an object with a kind");
 	}
 	if (value.kind === "skipped") return { kind: "skipped" };
-	if (value.kind !== "answered") throw new ServiceError("invalid", "reply.kind must be answered or skipped");
-	if (!Array.isArray(value.answers)) throw new ServiceError("invalid", "reply.answers must be an array");
+	if (value.kind !== "answered")
+		throw new ServiceError("invalid", "reply.kind must be answered or skipped");
+	if (!Array.isArray(value.answers))
+		throw new ServiceError("invalid", "reply.answers must be an array");
 	return {
 		kind: "answered",
 		answers: value.answers.map((answer, index) => {
@@ -241,10 +265,12 @@ function optionalTemplateRecipe(value: unknown): TemplateRecipeInput {
 	if (value === undefined) return {};
 	if (!isRecord(value)) throw new ServiceError("invalid", "recipe must be an object");
 	const recipe: TemplateRecipeInput = {};
-	if (value.description !== undefined) recipe.description = requireString(value.description, "recipe.description");
+	if (value.description !== undefined)
+		recipe.description = requireString(value.description, "recipe.description");
 	if (value.source !== undefined) recipe.source = optionalTemplateSource(value.source);
 	if (value.run !== undefined) {
-		if (!Array.isArray(value.run)) throw new ServiceError("invalid", "recipe.run must be an array of commands");
+		if (!Array.isArray(value.run))
+			throw new ServiceError("invalid", "recipe.run must be an array of commands");
 		recipe.run = value.run.map((command, index) => requireString(command, `recipe.run[${index}]`));
 	}
 	return recipe;
@@ -279,7 +305,11 @@ async function statSafe(path: string) {
 	}
 }
 
-async function serveStatic(root: string, requestUrl: string, response: ServerResponse): Promise<void> {
+async function serveStatic(
+	root: string,
+	requestUrl: string,
+	response: ServerResponse,
+): Promise<void> {
 	const url = new URL(requestUrl, "http://localhost");
 	let pathname: string;
 	try {
@@ -323,7 +353,9 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 		void (async () => {
 			const url = new URL(request.url ?? "/", "http://localhost");
 			if (url.pathname === "/health") {
-				response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true }));
+				response
+					.writeHead(200, { "content-type": "application/json" })
+					.end(JSON.stringify({ ok: true }));
 				return;
 			}
 			if (webRoot !== undefined) {
@@ -333,7 +365,8 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 			response.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("Not found");
 		})().catch((error: unknown) => {
 			console.error("[server] request failed:", error);
-			if (!response.headersSent) response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+			if (!response.headersSent)
+				response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
 			response.end("Internal server error");
 		});
 	});
@@ -345,11 +378,18 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 		connection.socket.send(JSON.stringify(message));
 	}
 
-	function sendEvents(connection: Connection, sessionId: string, events: readonly AgentEvent[]): void {
+	function sendEvents(
+		connection: Connection,
+		sessionId: string,
+		events: readonly AgentEvent[],
+	): void {
 		for (const event of events) send(connection, { type: "session.event", sessionId, event });
 	}
 
-	async function executeCommand(connection: Connection, command: ClientCommand): Promise<CommandOutcome> {
+	async function executeCommand(
+		connection: Connection,
+		command: ClientCommand,
+	): Promise<CommandOutcome> {
 		switch (command.type) {
 			case "sessions.list": {
 				return { data: { sessions: await service.listSessions() } };
@@ -502,16 +542,31 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 			case "sandboxes.settings": {
 				return {
 					data: await service.setSandboxSettings({
-						...(command.provider === undefined ? {} : { provider: requireString(command.provider, "provider") }),
+						...(command.provider === undefined
+							? {}
+							: { provider: requireString(command.provider, "provider") }),
 						...(command.template === undefined
 							? {}
-							: { template: command.template === null ? null : requireString(command.template, "template") }),
+							: {
+									template:
+										command.template === null ? null : requireString(command.template, "template"),
+								}),
 						...(command.idleTimeoutMs === undefined
 							? {}
-							: { idleTimeoutMs: command.idleTimeoutMs === null ? null : requireNumber(command.idleTimeoutMs, "idleTimeoutMs") }),
+							: {
+									idleTimeoutMs:
+										command.idleTimeoutMs === null
+											? null
+											: requireNumber(command.idleTimeoutMs, "idleTimeoutMs"),
+								}),
 						...(command.autoPause === undefined
 							? {}
-							: { autoPause: command.autoPause === null ? null : requireBoolean(command.autoPause, "autoPause") }),
+							: {
+									autoPause:
+										command.autoPause === null
+											? null
+											: requireBoolean(command.autoPause, "autoPause"),
+								}),
 						...(command.sshAgentSocket === undefined
 							? {}
 							: {
@@ -522,7 +577,12 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 								}),
 						...(command.forwardAgent === undefined
 							? {}
-							: { forwardAgent: command.forwardAgent === null ? null : requireBoolean(command.forwardAgent, "forwardAgent") }),
+							: {
+									forwardAgent:
+										command.forwardAgent === null
+											? null
+											: requireBoolean(command.forwardAgent, "forwardAgent"),
+								}),
 					}),
 				};
 			}
@@ -534,7 +594,8 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 			}
 			case "templates.create": {
 				const name = requireString(command.name, "name");
-				const recipe = command.recipe === undefined ? undefined : optionalTemplateRecipe(command.recipe);
+				const recipe =
+					command.recipe === undefined ? undefined : optionalTemplateRecipe(command.recipe);
 				return { data: await service.createTemplate(name, recipe) };
 			}
 			case "templates.createStarter": {

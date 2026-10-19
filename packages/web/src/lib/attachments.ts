@@ -52,7 +52,9 @@ export async function readAttachment(file: File): Promise<PendingAttachment> {
 	}
 	if (kind === "image") {
 		if (file.size > ATTACHMENT_LIMITS.maxImageBytes) {
-			throw new AttachmentError(`${file.name} is larger than ${formatBytes(ATTACHMENT_LIMITS.maxImageBytes)}.`);
+			throw new AttachmentError(
+				`${file.name} is larger than ${formatBytes(ATTACHMENT_LIMITS.maxImageBytes)}.`,
+			);
 		}
 		const bytes = new Uint8Array(await file.arrayBuffer());
 		return {
@@ -66,7 +68,9 @@ export async function readAttachment(file: File): Promise<PendingAttachment> {
 		};
 	}
 	if (file.size > ATTACHMENT_LIMITS.maxTextBytes) {
-		throw new AttachmentError(`${file.name} is larger than ${formatBytes(ATTACHMENT_LIMITS.maxTextBytes)}.`);
+		throw new AttachmentError(
+			`${file.name} is larger than ${formatBytes(ATTACHMENT_LIMITS.maxTextBytes)}.`,
+		);
 	}
 	const text = await file.text();
 	return {

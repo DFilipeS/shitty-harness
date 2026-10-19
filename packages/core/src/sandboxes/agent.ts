@@ -39,7 +39,8 @@ async function sshConfigAgentSocket(): Promise<string | undefined> {
 export async function resolveHostAgentSocket(configured?: string): Promise<string | undefined> {
 	if (configured !== undefined && configured !== "") return configured;
 	const fromEnv = process.env.SSH_AUTH_SOCK;
-	if (fromEnv !== undefined && fromEnv !== "" && (await agentHasIdentities(fromEnv))) return fromEnv;
+	if (fromEnv !== undefined && fromEnv !== "" && (await agentHasIdentities(fromEnv)))
+		return fromEnv;
 	const fromConfig = await sshConfigAgentSocket();
 	if (fromConfig !== undefined) return fromConfig;
 	return fromEnv === "" ? undefined : fromEnv;

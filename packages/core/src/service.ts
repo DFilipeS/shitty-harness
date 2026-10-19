@@ -14,7 +14,12 @@ import {
 import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
 import { queuedMessageInfo } from "./queue.ts";
-import { OpenQuestionsDoc, QuestionsExtension, validateReply, type OpenQuestionsState } from "./questions.ts";
+import {
+	OpenQuestionsDoc,
+	QuestionsExtension,
+	validateReply,
+	type OpenQuestionsState,
+} from "./questions.ts";
 import {
 	createRegistry,
 	defineExtension,
@@ -66,7 +71,11 @@ import type {
 import type { EnvironmentFactory } from "./environment.ts";
 import { sortModelsForDisplay } from "./model-order.ts";
 import type { Providers } from "./providers.ts";
-import { SandboxManager, type ResolvedSandboxTarget, type SandboxStatus } from "./sandboxes/manager.ts";
+import {
+	SandboxManager,
+	type ResolvedSandboxTarget,
+	type SandboxStatus,
+} from "./sandboxes/manager.ts";
 import type { SandboxSource } from "./sandboxes/provider.ts";
 import { sandboxProviderFactory } from "./sandboxes/registry.ts";
 import {
@@ -273,7 +282,10 @@ function composeEnvironment(options: ComposeEnvironmentOptions): EnvironmentFact
 			sandboxDefaults: options.sandboxDefaults(),
 		});
 		if (resolved.kind === "local") {
-			return options.local({ ...target, ...(resolved.path === "" ? {} : { cwd: resolved.path }) }, context);
+			return options.local(
+				{ ...target, ...(resolved.path === "" ? {} : { cwd: resolved.path }) },
+				context,
+			);
 		}
 		if (options.sandboxes === undefined) {
 			throw new ServiceError("sandbox_unavailable", "Sandboxes are not configured");
@@ -341,7 +353,9 @@ export class HarnessService {
 				name: "agent-guidance",
 				sections: [
 					createAgentGuidanceSection({
-						...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+						...(dependencies.workspacesDir === undefined
+							? {}
+							: { workspacesDir: dependencies.workspacesDir }),
 						defaultTarget: () => providers.getDefaults().target,
 						sandboxDefaults: () => sandboxDefaults(dependencies.sandboxes),
 					}),
@@ -352,7 +366,9 @@ export class HarnessService {
 			...(dependencies.skillsHome === undefined ? {} : { home: dependencies.skillsHome }),
 			resolveTarget: (read, conversationId, context) =>
 				resolveTarget(read, conversationId, context, {
-					...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+					...(dependencies.workspacesDir === undefined
+						? {}
+						: { workspacesDir: dependencies.workspacesDir }),
 					defaultTarget: providers.getDefaults().target,
 					sandboxDefaults: sandboxDefaults(dependencies.sandboxes),
 				}),
@@ -391,7 +407,9 @@ export class HarnessService {
 			...(dependencies.skillsHome === undefined ? {} : { home: dependencies.skillsHome }),
 			resolveTarget: (read, conversationId, context) =>
 				resolveTarget(read, conversationId, context, {
-					...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+					...(dependencies.workspacesDir === undefined
+						? {}
+						: { workspacesDir: dependencies.workspacesDir }),
 					defaultTarget: providers.getDefaults().target,
 					sandboxDefaults: sandboxDefaults(dependencies.sandboxes),
 				}),
@@ -403,7 +421,9 @@ export class HarnessService {
 				? undefined
 				: composeEnvironment({
 						local: dependencies.environment,
-						...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+						...(dependencies.workspacesDir === undefined
+							? {}
+							: { workspacesDir: dependencies.workspacesDir }),
 						providers,
 						...(dependencies.sandboxes === undefined ? {} : { sandboxes: dependencies.sandboxes }),
 						sandboxDefaults: () => sandboxDefaults(dependencies.sandboxes),
@@ -591,7 +611,9 @@ export class HarnessService {
 					...(question === undefined ? {} : { questionCallId: question.callId }),
 					target: targetInfo(
 						resolved,
-						resolved.kind === "sandbox" ? this.#sandboxes?.displayName(resolved.provider) : undefined,
+						resolved.kind === "sandbox"
+							? this.#sandboxes?.displayName(resolved.provider)
+							: undefined,
 					),
 				};
 			}),
@@ -687,7 +709,8 @@ export class HarnessService {
 		const conversationId = parseConversationId(id);
 		const conversation = await this.#requireConversation(conversationId);
 		const agent = await conversation.agent(BACKGROUND_CONTEXT);
-		if (agent.model === undefined) throw new ServiceError("no_model", "Select a model before sending a message");
+		if (agent.model === undefined)
+			throw new ServiceError("no_model", "Select a model before sending a message");
 		const model = this.#providers.models.getModel(agent.model.provider, agent.model.modelId);
 		// Each prompt starts or extends a run, which rescans the target's skills and context files.
 		this.#skills.invalidate(conversationId);
@@ -695,13 +718,29 @@ export class HarnessService {
 		const invocation = parseInvocation(trimmed);
 		const message = invocation?.rest ?? trimmed;
 		const env =
-			attachments.length === 0 && invocation === undefined ? undefined : await this.#buildEnvironment(conversationId);
-		const skill = invocation === undefined ? undefined : await this.#invokeSkill(conversationId, env, invocation.name);
-		let content = await buildPromptContent(message, attachments, model?.input, (attachment, index) =>
-			env === undefined ? Promise.resolve(undefined) : saveAttachment(env, id, attachment, index, BACKGROUND_CONTEXT),
+			attachments.length === 0 && invocation === undefined
+				? undefined
+				: await this.#buildEnvironment(conversationId);
+		const skill =
+			invocation === undefined
+				? undefined
+				: await this.#invokeSkill(conversationId, env, invocation.name);
+		let content = await buildPromptContent(
+			message,
+			attachments,
+			model?.input,
+			(attachment, index) =>
+				env === undefined
+					? Promise.resolve(undefined)
+					: saveAttachment(env, id, attachment, index, BACKGROUND_CONTEXT),
 		);
 		if (skill !== undefined) {
-			const rest = typeof content === "string" ? (content === "" ? [] : [{ type: "text" as const, text: content }]) : content;
+			const rest =
+				typeof content === "string"
+					? content === ""
+						? []
+						: [{ type: "text" as const, text: content }]
+					: content;
 			content = [{ type: "text", text: skill.block }, ...rest];
 			await this.#harness.commit(async (tx) => {
 				recordActivation(await tx.doc(SkillsDoc, conversationId), skill.name, skill.block);
@@ -848,10 +887,14 @@ export class HarnessService {
 		if (change.model !== undefined && change.model !== null) {
 			const resolved = this.#providers.models.getModel(change.model.provider, change.model.modelId);
 			if (resolved === undefined) {
-				throw new ServiceError("unknown_model", `Unknown model: ${change.model.provider}/${change.model.modelId}`);
+				throw new ServiceError(
+					"unknown_model",
+					`Unknown model: ${change.model.provider}/${change.model.modelId}`,
+				);
 			}
 		}
-		if (Object.keys(agentChange).length > 0) await conversation.configure(agentChange, BACKGROUND_CONTEXT);
+		if (Object.keys(agentChange).length > 0)
+			await conversation.configure(agentChange, BACKGROUND_CONTEXT);
 
 		const agent = await conversation.agent(BACKGROUND_CONTEXT);
 		return { model: agent.model, thinkingLevel: agent.thinkingLevel };
@@ -867,7 +910,10 @@ export class HarnessService {
 		if (this.#working.has(id)) {
 			throw new ServiceError("busy", "Wait for the run to finish before changing the target");
 		}
-		const prepared = choice.kind === "local" ? await this.#localTarget(conversationId, choice.path) : this.#sandboxTarget(choice);
+		const prepared =
+			choice.kind === "local"
+				? await this.#localTarget(conversationId, choice.path)
+				: this.#sandboxTarget(choice);
 		await this.#harness.commit(async (tx) => {
 			const doc = await tx.doc(SessionTargetDoc, conversationId);
 			if (prepared.target.kind === "local") {
@@ -910,7 +956,10 @@ export class HarnessService {
 		};
 	}
 
-	#sandboxTarget(choice: SandboxChoice): { target: ResolvedSandboxTarget; entry: TargetChangeData } {
+	#sandboxTarget(choice: SandboxChoice): {
+		target: ResolvedSandboxTarget;
+		entry: TargetChangeData;
+	} {
 		const manager = this.#requireSandboxes();
 		if (!manager.configured()) {
 			throw new ServiceError("sandbox_unavailable", "Configure a sandbox provider first");
@@ -938,7 +987,9 @@ export class HarnessService {
 		}
 		const name = choice.name?.trim();
 		const template =
-			choice.template === null ? manager.defaultTemplate() : (choice.template?.trim() ?? manager.defaultTemplate());
+			choice.template === null
+				? manager.defaultTemplate()
+				: (choice.template?.trim() ?? manager.defaultTemplate());
 		const source = this.#sandboxSource(choice.source);
 		const forwardAgent = choice.forwardAgent ?? manager.settings.ssh.forwardAgent;
 		const target: ResolvedSandboxTarget = {
@@ -977,10 +1028,13 @@ export class HarnessService {
 		const manager = this.#sandboxes;
 		const settings = manager?.settings ?? DEFAULT_SANDBOX_SETTINGS;
 		const configured = manager?.configured() ?? false;
-		const sandboxes = configured && manager !== undefined ? await manager.list().catch((error: unknown) => {
-			console.warn("[core] listing sandboxes failed:", error);
-			return [];
-		}) : [];
+		const sandboxes =
+			configured && manager !== undefined
+				? await manager.list().catch((error: unknown) => {
+						console.warn("[core] listing sandboxes failed:", error);
+						return [];
+					})
+				: [];
 		const attached = new Map<string, { sessions: string[]; working: boolean }>();
 		for (const session of await this.listSessions()) {
 			const target = session.target;
@@ -1008,7 +1062,8 @@ export class HarnessService {
 
 	async createSandbox(choice: SandboxChoice): Promise<SandboxesState> {
 		const manager = this.#requireSandboxes();
-		if (!manager.configured()) throw new ServiceError("sandbox_unavailable", "Configure a sandbox provider first");
+		if (!manager.configured())
+			throw new ServiceError("sandbox_unavailable", "Configure a sandbox provider first");
 		const source = this.#sandboxSource(choice.source);
 		const name = choice.name?.trim();
 		const template = choice.template?.trim();
@@ -1041,7 +1096,10 @@ export class HarnessService {
 		return await this.#listAndEmitSandboxes();
 	}
 
-	async sandboxMetrics(provider: string, sandboxId: string): Promise<SandboxMetricsInfo | undefined> {
+	async sandboxMetrics(
+		provider: string,
+		sandboxId: string,
+	): Promise<SandboxMetricsInfo | undefined> {
 		return this.#requireSandboxes().metrics(provider, sandboxId);
 	}
 
@@ -1081,7 +1139,10 @@ export class HarnessService {
 		return await this.#templateState();
 	}
 
-	async createTemplate(name: string, recipe: TemplateRecipeInput | undefined): Promise<TemplatesState> {
+	async createTemplate(
+		name: string,
+		recipe: TemplateRecipeInput | undefined,
+	): Promise<TemplatesState> {
 		await this.#requireTemplates().create(name, normalizeRecipe(recipe ?? {}));
 		return await this.#listAndEmitTemplates();
 	}
@@ -1160,7 +1221,8 @@ export class HarnessService {
 			const entryPath = join(directory, entry.name);
 			const isDirectory =
 				entry.isDirectory() ||
-				(entry.isSymbolicLink() && (await stat(entryPath).catch(() => undefined))?.isDirectory() === true);
+				(entry.isSymbolicLink() &&
+					(await stat(entryPath).catch(() => undefined))?.isDirectory() === true);
 			if (isDirectory) directories.push({ name: entry.name, path: entryPath });
 		}
 		directories.sort((a, b) => a.name.localeCompare(b.name));
@@ -1179,7 +1241,8 @@ export class HarnessService {
 			await mkdir(path);
 		} catch (error) {
 			const code = (error as NodeJS.ErrnoException).code;
-			if (code === "EEXIST") throw new ServiceError("invalid", `A file or folder named ${clean} already exists`);
+			if (code === "EEXIST")
+				throw new ServiceError("invalid", `A file or folder named ${clean} already exists`);
 			if (code === "ENOENT") throw new ServiceError("not_found", `Not a directory: ${parent}`);
 			throw error;
 		}
@@ -1233,7 +1296,10 @@ export class HarnessService {
 		if (change.model !== undefined && change.model !== null) {
 			const resolved = this.#providers.models.getModel(change.model.provider, change.model.modelId);
 			if (resolved === undefined) {
-				throw new ServiceError("unknown_model", `Unknown model: ${change.model.provider}/${change.model.modelId}`);
+				throw new ServiceError(
+					"unknown_model",
+					`Unknown model: ${change.model.provider}/${change.model.modelId}`,
+				);
 			}
 		}
 		if (change.imageModel !== undefined && change.imageModel !== null) {

@@ -22,8 +22,10 @@ import {
 	openRouterResponseCost,
 } from "../src/image-tool.ts";
 
-const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-const OTHER_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const PNG =
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const OTHER_PNG =
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 const IMAGE_MODEL: ImageModel<ImageApi> = {
 	type: "image",
@@ -37,7 +39,11 @@ const IMAGE_MODEL: ImageModel<ImageApi> = {
 	cost: { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 0.375 },
 };
 
-const OTHER_MODEL: ImageModel<ImageApi> = { ...IMAGE_MODEL, id: "openrouter/other-image", name: "Other Image" };
+const OTHER_MODEL: ImageModel<ImageApi> = {
+	...IMAGE_MODEL,
+	id: "openrouter/other-image",
+	name: "Other Image",
+};
 /** A dedicated image endpoint model: image output only, not reachable through chat completions. */
 const IMAGE_ONLY_MODEL: ImageModel<ImageApi> = {
 	...IMAGE_MODEL,
@@ -75,8 +81,11 @@ function fakeApi(options: ApiOptions = {}): ToolExecutionApi {
 		models: {
 			getAvailableOfType: async () => options.available ?? [IMAGE_MODEL],
 			getProvider: (id: string) => ({ id, name: id === "openrouter" ? "OpenRouter" : id }),
-			generateImages: async (model: ImageModel<ImageApi>, context: ImagesContext, requestOptions?: ImagesOptions) =>
-				(options.generate ?? (() => generated()))(model, context, requestOptions),
+			generateImages: async (
+				model: ImageModel<ImageApi>,
+				context: ImagesContext,
+				requestOptions?: ImagesOptions,
+			) => (options.generate ?? (() => generated()))(model, context, requestOptions),
 			getAuth: async () => ({ auth: { apiKey: "test-key" } }),
 		},
 		agent: async () => ({ model: options.current }),
@@ -113,7 +122,8 @@ const ESTIMATE: Usage = {
 
 /** A chat completion response whose usage carries the real charge, as OpenRouter returns it. */
 function pricedResponse(cost: number): typeof fetch {
-	return async () => new Response(JSON.stringify({ id: "gen-1", usage: { cost } }), { status: 200 });
+	return async () =>
+		new Response(JSON.stringify({ id: "gen-1", usage: { cost } }), { status: 200 });
 }
 
 describe("openRouterResponseCost", () => {
@@ -130,9 +140,14 @@ describe("openRouterResponseCost", () => {
 });
 
 describe("image section", () => {
-	const render = (available: readonly ImageModel<ImageApi>[], defaultImageModel?: () => { provider: string; modelId: string } | undefined) =>
-		createImageTools({ models: fakeModels(available), ...(defaultImageModel === undefined ? {} : { defaultImageModel }) })
-			.sections?.[0]?.render;
+	const render = (
+		available: readonly ImageModel<ImageApi>[],
+		defaultImageModel?: () => { provider: string; modelId: string } | undefined,
+	) =>
+		createImageTools({
+			models: fakeModels(available),
+			...(defaultImageModel === undefined ? {} : { defaultImageModel }),
+		}).sections?.[0]?.render;
 	const offered = { agent: { tools: [{ name: "generate_image" }] } } as never;
 
 	it("points image requests at the tool and names the models", async () => {
@@ -144,10 +159,10 @@ describe("image section", () => {
 	});
 
 	it("names the configured default", async () => {
-		const text = await render([IMAGE_MODEL], () => ({ provider: "openrouter", modelId: IMAGE_MODEL.id }))?.(
-			offered,
-			BACKGROUND_CONTEXT,
-		);
+		const text = await render([IMAGE_MODEL], () => ({
+			provider: "openrouter",
+			modelId: IMAGE_MODEL.id,
+		}))?.(offered, BACKGROUND_CONTEXT);
 		expect(text).toContain(`The configured default is ${IMAGE_MODEL.name}`);
 	});
 
@@ -198,7 +213,9 @@ describe("generate_image", () => {
 				fakeApi({
 					generate: async (_model, _context, options) => {
 						// The real provider sends its request through the fetch the tool injected.
-						await options?.fetch?.("https://openrouter.ai/api/v1/chat/completions", { method: "POST" });
+						await options?.fetch?.("https://openrouter.ai/api/v1/chat/completions", {
+							method: "POST",
+						});
 						return generated({ usage: ESTIMATE, responseId: "gen-1" });
 					},
 				}),
@@ -214,13 +231,18 @@ describe("generate_image", () => {
 	});
 
 	it("keeps pi-ai's estimate when the response has no cost", async () => {
-		vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ id: "gen-1" }), { status: 200 }));
+		vi.stubGlobal(
+			"fetch",
+			async () => new Response(JSON.stringify({ id: "gen-1" }), { status: 200 }),
+		);
 		try {
 			const result = await GenerateImageTool.execute(
 				{ prompt: "a red apple" },
 				fakeApi({
 					generate: async (_model, _context, options) => {
-						await options?.fetch?.("https://openrouter.ai/api/v1/chat/completions", { method: "POST" });
+						await options?.fetch?.("https://openrouter.ai/api/v1/chat/completions", {
+							method: "POST",
+						});
 						return generated({ usage: ESTIMATE, responseId: "gen-1" });
 					},
 				}),
@@ -239,7 +261,8 @@ describe("generate_image", () => {
 				generate: async () =>
 					generated({
 						stopReason: "error",
-						errorMessage: "This request requires at least $1.00 in balance for image or video output",
+						errorMessage:
+							"This request requires at least $1.00 in balance for image or video output",
 						output: [],
 					}),
 			}),
@@ -251,7 +274,11 @@ describe("generate_image", () => {
 	});
 
 	it("reports a missing image model", async () => {
-		const result = await GenerateImageTool.execute({ prompt: "x" }, fakeApi({ available: [] }), BACKGROUND_CONTEXT);
+		const result = await GenerateImageTool.execute(
+			{ prompt: "x" },
+			fakeApi({ available: [] }),
+			BACKGROUND_CONTEXT,
+		);
 		expect(result.isError).toBe(true);
 		expect(JSON.stringify(result.output)).toContain("No image model is available");
 	});
@@ -399,8 +426,12 @@ describe("generate_image", () => {
 				BACKGROUND_CONTEXT,
 			);
 			expect(imageParts(result)).toHaveLength(2);
-			expect((await readFile(join(workspace, ".harness/images/1/apples-1.png"))).toString("base64")).toBe(PNG);
-			expect((await readFile(join(workspace, ".harness/images/1/apples-2.jpg"))).toString("base64")).toBe(OTHER_PNG);
+			expect(
+				(await readFile(join(workspace, ".harness/images/1/apples-1.png"))).toString("base64"),
+			).toBe(PNG);
+			expect(
+				(await readFile(join(workspace, ".harness/images/1/apples-2.jpg"))).toString("base64"),
+			).toBe(OTHER_PNG);
 		} finally {
 			await rm(workspace, { recursive: true, force: true });
 		}
@@ -416,7 +447,9 @@ describe("generate_image", () => {
 				BACKGROUND_CONTEXT,
 			);
 			expect(result.isError).toBeUndefined();
-			expect((await readFile(join(workspace, ".harness/images/1/escape.png"))).toString("base64")).toBe(PNG);
+			expect(
+				(await readFile(join(workspace, ".harness/images/1/escape.png"))).toString("base64"),
+			).toBe(PNG);
 			await expect(readFile(join(workspace, "escape.png"))).rejects.toThrow();
 		} finally {
 			await rm(workspace, { recursive: true, force: true });

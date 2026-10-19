@@ -1,6 +1,10 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { ModelsStore, ModelsStoreEntry, ModelsStoreOperationOptions } from "@earendil-works/pi-ai";
+import type {
+	ModelsStore,
+	ModelsStoreEntry,
+	ModelsStoreOperationOptions,
+} from "@earendil-works/pi-ai";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -47,11 +51,18 @@ export class FileModelsStore implements ModelsStore {
 		return run;
 	}
 
-	async read(providerId: string, _options?: ModelsStoreOperationOptions): Promise<ModelsStoreEntry | undefined> {
+	async read(
+		providerId: string,
+		_options?: ModelsStoreOperationOptions,
+	): Promise<ModelsStoreEntry | undefined> {
 		return (await this.#load())[providerId];
 	}
 
-	async write(providerId: string, entry: ModelsStoreEntry, _options?: ModelsStoreOperationOptions): Promise<void> {
+	async write(
+		providerId: string,
+		entry: ModelsStoreEntry,
+		_options?: ModelsStoreOperationOptions,
+	): Promise<void> {
 		const entries = await this.#load();
 		entries[providerId] = entry;
 		await this.#persist(entries);

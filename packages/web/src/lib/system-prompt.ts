@@ -14,10 +14,12 @@ export function sectionBody(section: PromptSectionInfo): string {
 
 /** One preview line for a collapsed card. */
 export function sectionPreview(section: PromptSectionInfo): string {
-	return sectionBody(section)
-		.split("\n")
-		.map((line) => line.trim())
-		.find((line) => line !== "") ?? "";
+	return (
+		sectionBody(section)
+			.split("\n")
+			.map((line) => line.trim())
+			.find((line) => line !== "") ?? ""
+	);
 }
 
 /** The full system prompt as one text: the sections in order, joined the way pi-ai joins them. */

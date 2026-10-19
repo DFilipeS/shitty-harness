@@ -59,7 +59,8 @@ function toFileError(error: unknown, path: string): FileError {
 }
 
 function toExecutionError(error: unknown, context: Context): ExecutionError {
-	if (isAborted(context)) return new ExecutionError("aborted", "Aborted", error instanceof Error ? error : undefined);
+	if (isAborted(context))
+		return new ExecutionError("aborted", "Aborted", error instanceof Error ? error : undefined);
 	if (error instanceof SandboxError) {
 		const code =
 			error.code === "timeout"
@@ -102,14 +103,20 @@ class SandboxBinaryReader implements BinaryReader {
 	async info(context: Context): Promise<Result<FileInfo, FileError>> {
 		const abortedResult = aborted(this.#info.path, context);
 		if (abortedResult !== undefined) return abortedResult;
-		if (this.#closed) return err(new FileError("invalid", "Binary reader is closed", this.#info.path));
+		if (this.#closed)
+			return err(new FileError("invalid", "Binary reader is closed", this.#info.path));
 		return ok(this.#info);
 	}
 
-	async read(offset: number, length: number, context: Context): Promise<Result<Uint8Array, FileError>> {
+	async read(
+		offset: number,
+		length: number,
+		context: Context,
+	): Promise<Result<Uint8Array, FileError>> {
 		const abortedResult = aborted(this.#info.path, context);
 		if (abortedResult !== undefined) return abortedResult;
-		if (this.#closed) return err(new FileError("invalid", "Binary reader is closed", this.#info.path));
+		if (this.#closed)
+			return err(new FileError("invalid", "Binary reader is closed", this.#info.path));
 		if (!Number.isInteger(offset) || !Number.isInteger(length) || offset < 0 || length < 0) {
 			return err(new FileError("invalid", "Invalid read range", this.#info.path));
 		}
@@ -124,7 +131,8 @@ class SandboxBinaryReader implements BinaryReader {
 	): Promise<Result<import("@earendil-works/pi-durable/env").LineScan, FileError>> {
 		const abortedResult = aborted(this.#info.path, context);
 		if (abortedResult !== undefined) return abortedResult;
-		if (this.#closed) return err(new FileError("invalid", "Binary reader is closed", this.#info.path));
+		if (this.#closed)
+			return err(new FileError("invalid", "Binary reader is closed", this.#info.path));
 		let scanner: LineScanner;
 		try {
 			scanner = new LineScanner(options.startLine, options.endLine);
@@ -155,7 +163,8 @@ class SandboxTextLineReader implements TextLineReader {
 	async readLine(context: Context): Promise<Result<TextLine | undefined, FileError>> {
 		const abortedResult = aborted(this.#path, context);
 		if (abortedResult !== undefined) return abortedResult;
-		if (this.#closed) return err(new FileError("invalid", "Text line reader is closed", this.#path));
+		if (this.#closed)
+			return err(new FileError("invalid", "Text line reader is closed", this.#path));
 		const line = this.#lines[this.#index];
 		if (line === undefined) return ok(undefined);
 		this.#index += 1;
@@ -259,8 +268,10 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `File not found: ${path}`, resolved));
-			if (info.kind === "directory") return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `File not found: ${path}`, resolved));
+			if (info.kind === "directory")
+				return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
 			return ok(decoder.decode(await this.handle.readFile(resolved)));
 		} catch (error) {
 			return err(toFileError(error, resolved));
@@ -289,14 +300,19 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		}
 	}
 
-	async openTextLineReader(path: string, context: Context): Promise<Result<TextLineReader, FileError>> {
+	async openTextLineReader(
+		path: string,
+		context: Context,
+	): Promise<Result<TextLineReader, FileError>> {
 		const resolved = this.#absolute(path);
 		const abortedResult = aborted(resolved, context);
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `File not found: ${path}`, resolved));
-			if (info.kind === "directory") return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `File not found: ${path}`, resolved));
+			if (info.kind === "directory")
+				return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
 			const text = decoder.decode(await this.handle.readFile(resolved));
 			const lines: TextLine[] = [];
 			let start = 0;
@@ -321,8 +337,10 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `File not found: ${path}`, resolved));
-			if (info.kind === "directory") return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `File not found: ${path}`, resolved));
+			if (info.kind === "directory")
+				return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
 			return ok(await this.handle.readFile(resolved));
 		} catch (error) {
 			return err(toFileError(error, resolved));
@@ -339,8 +357,10 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `File not found: ${path}`, resolved));
-			if (info.kind === "directory") return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `File not found: ${path}`, resolved));
+			if (info.kind === "directory")
+				return err(new FileError("is_directory", `Is a directory: ${path}`, resolved));
 			if (options?.noFollow === true && info.kind === "symlink") {
 				return err(new FileError("invalid", `Symbolic link refused: ${path}`, resolved));
 			}
@@ -349,7 +369,13 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 			if (afterReadAbort !== undefined) return afterReadAbort;
 			return ok(
 				new SandboxBinaryReader(
-					{ name: posix.basename(resolved), path: resolved, kind: "file", size: bytes.length, mtimeMs: info.mtimeMs },
+					{
+						name: posix.basename(resolved),
+						path: resolved,
+						kind: "file",
+						size: bytes.length,
+						mtimeMs: info.mtimeMs,
+					},
 					bytes,
 				),
 			);
@@ -358,7 +384,11 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		}
 	}
 
-	async writeFile(path: string, content: string | Uint8Array, context: Context): Promise<Result<void, FileError>> {
+	async writeFile(
+		path: string,
+		content: string | Uint8Array,
+		context: Context,
+	): Promise<Result<void, FileError>> {
 		const resolved = this.#absolute(path);
 		const abortedResult = aborted(resolved, context);
 		if (abortedResult !== undefined) return abortedResult;
@@ -370,10 +400,19 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		}
 	}
 
-	async appendFile(path: string, content: string | Uint8Array, context: Context): Promise<Result<void, FileError>> {
+	async appendFile(
+		path: string,
+		content: string | Uint8Array,
+		context: Context,
+	): Promise<Result<void, FileError>> {
 		const existing = await this.readBinaryFile(path, context);
-		const prefix = existing.ok ? existing.value : existing.error.code === "not_found" ? new Uint8Array() : undefined;
-		if (prefix === undefined) return err(existing.ok ? new FileError("unknown", "Unreachable") : existing.error);
+		const prefix = existing.ok
+			? existing.value
+			: existing.error.code === "not_found"
+				? new Uint8Array()
+				: undefined;
+		if (prefix === undefined)
+			return err(existing.ok ? new FileError("unknown", "Unreachable") : existing.error);
 		const suffix = typeof content === "string" ? encoder.encode(content) : content;
 		const combined = new Uint8Array(prefix.length + suffix.length);
 		combined.set(prefix, 0);
@@ -381,12 +420,22 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		return this.writeFile(path, combined, context);
 	}
 
-	async truncateFile(path: string, size: number, context: Context): Promise<Result<void, FileError>> {
+	async truncateFile(
+		path: string,
+		size: number,
+		context: Context,
+	): Promise<Result<void, FileError>> {
 		const resolved = this.#absolute(path);
-		if (!Number.isInteger(size) || size < 0) return err(new FileError("invalid", "Invalid size", resolved));
+		if (!Number.isInteger(size) || size < 0)
+			return err(new FileError("invalid", "Invalid size", resolved));
 		const existing = await this.readBinaryFile(path, context);
-		const bytes = existing.ok ? existing.value : existing.error.code === "not_found" ? new Uint8Array() : undefined;
-		if (bytes === undefined) return err(existing.ok ? new FileError("unknown", "Unreachable") : existing.error);
+		const bytes = existing.ok
+			? existing.value
+			: existing.error.code === "not_found"
+				? new Uint8Array()
+				: undefined;
+		if (bytes === undefined)
+			return err(existing.ok ? new FileError("unknown", "Unreachable") : existing.error);
 		const next = new Uint8Array(size);
 		next.set(bytes.subarray(0, size), 0);
 		return this.writeFile(path, next, context);
@@ -419,7 +468,8 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `File not found: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `File not found: ${path}`, resolved));
 			return ok(toFileInfo(info));
 		} catch (error) {
 			return err(toFileError(error, resolved));
@@ -432,7 +482,8 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `Directory not found: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `Directory not found: ${path}`, resolved));
 			if (info.kind !== "directory") {
 				return err(new FileError("not_directory", `Not a directory: ${path}`, resolved));
 			}
@@ -448,12 +499,18 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `Directory not found: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `Directory not found: ${path}`, resolved));
 			if (info.kind !== "directory") {
 				return err(new FileError("not_directory", `Not a directory: ${path}`, resolved));
 			}
 			const entries = await this.handle.listDir(resolved);
-			return ok(new SandboxDirReader(this.handle, entries.map((entry) => entry.path)));
+			return ok(
+				new SandboxDirReader(
+					this.handle,
+					entries.map((entry) => entry.path),
+				),
+			);
 		} catch (error) {
 			return err(toFileError(error, resolved));
 		}
@@ -546,7 +603,8 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		if (abortedResult !== undefined) return abortedResult;
 		try {
 			const info = await this.handle.stat(resolved);
-			if (info === undefined) return err(new FileError("not_found", `File not found: ${path}`, resolved));
+			if (info === undefined)
+				return err(new FileError("not_found", `File not found: ${path}`, resolved));
 			const result = await this.#runText(`realpath -- ${shellQuote(resolved)}`, context);
 			const canonical = result.stdout.trim();
 			if (result.code !== 0 || canonical === "") {
@@ -604,7 +662,10 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 		}
 	}
 
-	async createTempDir(prefix: string | undefined, context: Context): Promise<Result<string, FileError>> {
+	async createTempDir(
+		prefix: string | undefined,
+		context: Context,
+	): Promise<Result<string, FileError>> {
 		return this.#createTemp(`mktemp -d`, prefix ?? "tmp", context);
 	}
 
@@ -628,7 +689,9 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 			const result = await this.#runText(`${command} ${shellQuote(template)}`, context);
 			const path = result.stdout.trim();
 			if (result.code !== 0 || path === "") {
-				return err(new FileError("unknown", `Could not create a temporary path: ${result.stderr.trim()}`));
+				return err(
+					new FileError("unknown", `Could not create a temporary path: ${result.stderr.trim()}`),
+				);
 			}
 			return ok(path);
 		} catch (error) {
@@ -661,7 +724,8 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 	#startKeepAlive(): (() => void) | undefined {
 		const handle = this.handle;
 		const lifetimeMs = handle.lifetimeMs;
-		if (handle.keepAlive === undefined || lifetimeMs === undefined || lifetimeMs <= 0) return undefined;
+		if (handle.keepAlive === undefined || lifetimeMs === undefined || lifetimeMs <= 0)
+			return undefined;
 		const renew = (): void => {
 			const pending = handle.keepAlive?.();
 			if (pending === undefined) return;
@@ -687,7 +751,9 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 			return err(new ExecutionError("spawn_error", "Empty argv"));
 		}
 		const script =
-			argv === undefined ? (command as string) : `exec ${argv.map((argument) => shellQuote(argument)).join(" ")}`;
+			argv === undefined
+				? (command as string)
+				: `exec ${argv.map((argument) => shellQuote(argument)).join(" ")}`;
 		const controller = new AbortController();
 		this.#active.add(controller);
 		const signals = [controller.signal];
@@ -703,7 +769,9 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 			const result = await this.handle.exec(script, {
 				cwd: options?.cwd === undefined ? this.cwd : this.#absolute(options.cwd),
 				...(Object.keys(env).length === 0 ? {} : { env }),
-				...(options?.timeout === undefined || options.timeout <= 0 ? {} : { timeoutMs: options.timeout * 1000 }),
+				...(options?.timeout === undefined || options.timeout <= 0
+					? {}
+					: { timeoutMs: options.timeout * 1000 }),
 				signal,
 				onStdout: (text) => {
 					full += text;
@@ -718,8 +786,12 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 			if (argv !== undefined && result.exitCode === 127) {
 				return err(new ExecutionError("spawn_error", `Command not found: ${argv[0] ?? ""}`));
 			}
-			const spillPath = options?.spill === undefined ? undefined : await this.#spill(full, options.spill, context);
-			return ok({ exitCode: result.exitCode ?? 0, ...(spillPath === undefined ? {} : { spillPath }) });
+			const spillPath =
+				options?.spill === undefined ? undefined : await this.#spill(full, options.spill, context);
+			return ok({
+				exitCode: result.exitCode ?? 0,
+				...(spillPath === undefined ? {} : { spillPath }),
+			});
 		} catch (error) {
 			return err(toExecutionError(error, context));
 		} finally {
@@ -729,7 +801,11 @@ export class SandboxExecutionEnv implements ExecutionEnv {
 	}
 
 	/** Write the complete output to a temporary file once it crosses the spill thresholds. */
-	async #spill(full: string, spill: ShellSpillOptions, context: Context): Promise<string | undefined> {
+	async #spill(
+		full: string,
+		spill: ShellSpillOptions,
+		context: Context,
+	): Promise<string | undefined> {
 		const bytes = encoder.encode(full).length;
 		const lines = full.split("\n").length - 1;
 		if (bytes <= spill.afterBytes && lines <= spill.afterLines) return undefined;

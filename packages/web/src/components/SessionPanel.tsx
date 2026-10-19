@@ -127,7 +127,11 @@ function CopyPromptButton({ sections }: { sections: readonly PromptSectionInfo[]
 			title="Copy the full system prompt"
 			className="rounded-md p-1.5 text-fg-muted hover:bg-raised hover:text-fg pointer-coarse:p-2.5"
 		>
-			{copied ? <CheckIcon className="h-3.5 w-3.5 text-ok" /> : <CopyIcon className="h-3.5 w-3.5" />}
+			{copied ? (
+				<CheckIcon className="h-3.5 w-3.5 text-ok" />
+			) : (
+				<CopyIcon className="h-3.5 w-3.5" />
+			)}
 		</button>
 	);
 }

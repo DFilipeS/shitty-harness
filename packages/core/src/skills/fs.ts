@@ -29,8 +29,15 @@ export const hostSkillFs: SkillFs = {
 			const entries = await readdir(path, { withFileTypes: true });
 			return Promise.all(
 				entries.map(async (entry): Promise<SkillDirEntry> => {
-					const kind = entry.isSymbolicLink() ? "symlink" : entry.isDirectory() ? "directory" : "file";
-					const size = kind === "file" ? ((await stat(join(path, entry.name)).catch(() => undefined))?.size ?? 0) : 0;
+					const kind = entry.isSymbolicLink()
+						? "symlink"
+						: entry.isDirectory()
+							? "directory"
+							: "file";
+					const size =
+						kind === "file"
+							? ((await stat(join(path, entry.name)).catch(() => undefined))?.size ?? 0)
+							: 0;
 					return { name: entry.name, kind, size };
 				}),
 			);

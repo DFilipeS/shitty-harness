@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+	createContext,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type ReactNode,
+} from "react";
 import { CommandPalette } from "../components/CommandPalette.tsx";
 
 /**
@@ -257,7 +265,8 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
  */
 export function useRegisterCommands(owner: string, commands: Command[], priority = 0): void {
 	const registry = useContext(RegistryContext);
-	if (registry === undefined) throw new Error("useRegisterCommands must be used inside CommandPaletteProvider");
+	if (registry === undefined)
+		throw new Error("useRegisterCommands must be used inside CommandPaletteProvider");
 	useEffect(() => {
 		registry.set(owner, { priority, commands });
 		return () => {
@@ -268,6 +277,7 @@ export function useRegisterCommands(owner: string, commands: Command[], priority
 
 export function useCommandPalette(): PaletteControls {
 	const controls = useContext(PaletteContext);
-	if (controls === undefined) throw new Error("useCommandPalette must be used inside CommandPaletteProvider");
+	if (controls === undefined)
+		throw new Error("useCommandPalette must be used inside CommandPaletteProvider");
 	return controls;
 }

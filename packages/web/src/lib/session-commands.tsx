@@ -59,7 +59,12 @@ export function buildModelPage(
 				group: model.providerName,
 				badges: modelBadges(model),
 				detail: `${Math.round(model.contextWindow / 1000)}k context`,
-				keywords: [model.provider, model.providerName, model.id, ...(model.reasoning ? ["reasoning"] : [])],
+				keywords: [
+					model.provider,
+					model.providerName,
+					model.id,
+					...(model.reasoning ? ["reasoning"] : []),
+				],
 				current: current?.provider === model.provider && current.modelId === model.id,
 				run: () => void select({ provider: model.provider, modelId: model.id }),
 			})),
@@ -191,7 +196,9 @@ export function useThinkingPalette(): {
 	const { models, activeSession, configureThinkingLevel } = useHarness();
 	const { openPage } = useCommandPalette();
 	const current = activeSession?.agent.model;
-	const info = models.find((model) => model.provider === current?.provider && model.id === current.modelId);
+	const info = models.find(
+		(model) => model.provider === current?.provider && model.id === current.modelId,
+	);
 	const levels = info?.thinkingLevels ?? [];
 	const level = activeSession?.agent.thinkingLevel;
 	return {
@@ -217,7 +224,8 @@ export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 	const levels = resolved?.thinkingLevels ?? [];
 	const defaultImageModel = defaults.imageModel;
 	const imageInfo = imageModels.find(
-		(model) => model.provider === defaultImageModel?.provider && model.id === defaultImageModel.modelId,
+		(model) =>
+			model.provider === defaultImageModel?.provider && model.id === defaultImageModel.modelId,
 	);
 
 	const page = (): CommandPage => ({
@@ -254,7 +262,7 @@ export function useDefaultsPalette(): { page(): CommandPage; open(): void } {
 				detail:
 					defaults.target?.kind === "sandbox"
 						? "New sandbox"
-						: defaults.target?.path ?? "Scratch directory",
+						: (defaults.target?.path ?? "Scratch directory"),
 				icon: <FolderIcon />,
 				run: ({ pushPage }) => pushPage(targetPalette.page()),
 			},

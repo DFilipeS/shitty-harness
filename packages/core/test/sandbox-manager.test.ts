@@ -45,7 +45,13 @@ describe("SandboxManager", () => {
 			// After forget, the target connects to the sandbox that already exists.
 			manager.forget("7");
 			const connected = await manager.environment(
-				{ kind: "sandbox", provider: "fake", sandboxId: env.sandboxId, workspaceDir: root, forwardAgent: false },
+				{
+					kind: "sandbox",
+					provider: "fake",
+					sandboxId: env.sandboxId,
+					workspaceDir: root,
+					forwardAgent: false,
+				},
 				"7",
 				BACKGROUND_CONTEXT,
 			);
@@ -60,13 +66,21 @@ describe("SandboxManager", () => {
 		const root = await mkdtemp(join(tmpdir(), "harness-sandbox-manager-"));
 		const provider = new FakeSandboxProvider();
 		registerFakeSandboxProvider(provider);
-		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore({ idleTimeoutMs: 30_000 }) });
+		const manager = new SandboxManager({
+			store: new FakeSandboxSettingsStore({ idleTimeoutMs: 30_000 }),
+		});
 		try {
 			const created = await manager.create({ workspaceDir: root });
 			await manager.setSettings({ idleTimeoutMs: 60_000 });
 			manager.forget("1");
 			const env = await manager.environment(
-				{ kind: "sandbox", provider: "fake", sandboxId: created.id, workspaceDir: root, forwardAgent: false },
+				{
+					kind: "sandbox",
+					provider: "fake",
+					sandboxId: created.id,
+					workspaceDir: root,
+					forwardAgent: false,
+				},
 				"1",
 				BACKGROUND_CONTEXT,
 			);
@@ -107,7 +121,13 @@ describe("SandboxManager", () => {
 		try {
 			await expect(
 				manager.environment(
-					{ kind: "sandbox", provider: "fake", sandboxId: "missing", workspaceDir: root, forwardAgent: false },
+					{
+						kind: "sandbox",
+						provider: "fake",
+						sandboxId: "missing",
+						workspaceDir: root,
+						forwardAgent: false,
+					},
 					"9",
 					BACKGROUND_CONTEXT,
 				),
@@ -182,7 +202,13 @@ describe("SandboxManager", () => {
 			expect(store.getSandboxSettings().autoPause).toBe(false);
 			expect(handle.forwarding?.closed).toBe(false);
 			const again = await manager.environment(
-				{ kind: "sandbox", provider: "fake", sandboxId: env.sandboxId, workspaceDir: root, forwardAgent: true },
+				{
+					kind: "sandbox",
+					provider: "fake",
+					sandboxId: env.sandboxId,
+					workspaceDir: root,
+					forwardAgent: true,
+				},
 				"13",
 				BACKGROUND_CONTEXT,
 			);

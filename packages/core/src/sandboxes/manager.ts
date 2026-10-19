@@ -125,7 +125,10 @@ export class SandboxManager {
 	): Promise<SandboxExecutionEnv> {
 		const cached = this.#environments.get(conversationId);
 		if (cached !== undefined) return cached.promise;
-		const entry: EnvironmentEntry = { promise: undefined as never, sandboxId: target.sandboxId ?? "" };
+		const entry: EnvironmentEntry = {
+			promise: undefined as never,
+			sandboxId: target.sandboxId ?? "",
+		};
 		entry.promise = this.#open(target, conversationId, context).then((env) => {
 			entry.sandboxId = env.sandboxId;
 			this.#handles.set(env.sandboxId, env.handle);
@@ -135,7 +138,8 @@ export class SandboxManager {
 		try {
 			return await entry.promise;
 		} catch (error) {
-			if (this.#environments.get(conversationId) === entry) this.#environments.delete(conversationId);
+			if (this.#environments.get(conversationId) === entry)
+				this.#environments.delete(conversationId);
 			throw error;
 		}
 	}
@@ -165,7 +169,10 @@ export class SandboxManager {
 				handle = await provider.create({
 					...(target.template === undefined ? {} : { template: target.template }),
 					workspaceDir: target.workspaceDir,
-					labels: { ...SANDBOX_LABELS, ...(target.name === undefined ? {} : { name: target.name }) },
+					labels: {
+						...SANDBOX_LABELS,
+						...(target.name === undefined ? {} : { name: target.name }),
+					},
 					idleTimeoutMs: this.settings.idleTimeoutMs,
 					autoPause: this.settings.autoPause,
 				});
@@ -177,13 +184,18 @@ export class SandboxManager {
 			created = true;
 		}
 
-		if (target.forwardAgent) this.onStatus?.({ conversationId, phase: "starting", message: "Forwarding the SSH agent" });
+		if (target.forwardAgent)
+			this.onStatus?.({ conversationId, phase: "starting", message: "Forwarding the SSH agent" });
 		const agentSocket = await this.#startForwarding(handle, target.forwardAgent);
 
 		if (created) {
 			try {
 				if (target.source !== undefined && target.source.kind === "git") {
-					await cloneIntoWorkspace(handle, target.source.url, agentSocket === undefined ? {} : { env: { SSH_AUTH_SOCK: agentSocket } });
+					await cloneIntoWorkspace(
+						handle,
+						target.source.url,
+						agentSocket === undefined ? {} : { env: { SSH_AUTH_SOCK: agentSocket } },
+					);
 				}
 				const identity = await hostGitIdentity();
 				await applyGitIdentity(handle, identity).catch((error: unknown) => {
@@ -297,9 +309,16 @@ export class SandboxManager {
 			autoPause: settings.autoPause,
 		});
 		this.#handles.set(handle.id, handle);
-		const agentSocket = await this.#startForwarding(handle, choice.forwardAgent ?? settings.ssh.forwardAgent);
+		const agentSocket = await this.#startForwarding(
+			handle,
+			choice.forwardAgent ?? settings.ssh.forwardAgent,
+		);
 		if (choice.source !== undefined && choice.source.kind === "git") {
-			await cloneIntoWorkspace(handle, choice.source.url, agentSocket === undefined ? {} : { env: { SSH_AUTH_SOCK: agentSocket } });
+			await cloneIntoWorkspace(
+				handle,
+				choice.source.url,
+				agentSocket === undefined ? {} : { env: { SSH_AUTH_SOCK: agentSocket } },
+			);
 		}
 		const identity = await hostGitIdentity();
 		await applyGitIdentity(handle, identity).catch((error: unknown) => {
@@ -329,7 +348,9 @@ export class SandboxManager {
 	async resume(providerName: string, sandboxId: string): Promise<void> {
 		// Connecting resumes a paused sandbox; the cached handle keeps working afterwards.
 		const provider = this.#provider(providerName);
-		const handle = await provider.connect(sandboxId, { idleTimeoutMs: this.settings.idleTimeoutMs });
+		const handle = await provider.connect(sandboxId, {
+			idleTimeoutMs: this.settings.idleTimeoutMs,
+		});
 		this.#handles.set(handle.id, handle);
 		if (this.#forwardEnabled.has(sandboxId)) await this.#startForwarding(handle, true);
 	}
@@ -373,7 +394,9 @@ export class SandboxManager {
 	async #handle(providerName: string, sandboxId: string): Promise<SandboxHandle> {
 		const cached = this.#handles.get(sandboxId);
 		if (cached !== undefined) return cached;
-		const handle = await this.#provider(providerName).connect(sandboxId, { idleTimeoutMs: this.settings.idleTimeoutMs });
+		const handle = await this.#provider(providerName).connect(sandboxId, {
+			idleTimeoutMs: this.settings.idleTimeoutMs,
+		});
 		this.#handles.set(sandboxId, handle);
 		return handle;
 	}

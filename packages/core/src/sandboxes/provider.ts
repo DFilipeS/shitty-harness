@@ -84,9 +84,7 @@ export interface AgentForwarding {
 
 /** Where a template build starts. */
 export type TemplateBuildSource =
-	| { kind: "default" }
-	| { kind: "template"; name: string }
-	| { kind: "image"; image: string };
+	{ kind: "default" } | { kind: "template"; name: string } | { kind: "image"; image: string };
 
 export type TemplateBuildSpec = {
 	/** Provider template name; the recipe's directory name. */
@@ -171,7 +169,10 @@ export interface SandboxProvider {
 	kill(id: string): Promise<void>;
 
 	/** Optional. Build a template; resolves when the build finishes, streaming log lines as it runs. */
-	buildTemplate?(spec: TemplateBuildSpec, onLog: (line: string) => void): Promise<TemplateBuildResult>;
+	buildTemplate?(
+		spec: TemplateBuildSpec,
+		onLog: (line: string) => void,
+	): Promise<TemplateBuildResult>;
 	/** Optional. Templates the provider knows about. */
 	listTemplates?(): Promise<ProviderTemplate[]>;
 	/** Optional. Delete a template by its provider id. */
@@ -179,13 +180,7 @@ export interface SandboxProvider {
 }
 
 export type SandboxErrorCode =
-	| "auth"
-	| "not_found"
-	| "timeout"
-	| "aborted"
-	| "unavailable"
-	| "invalid"
-	| "unknown";
+	"auth" | "not_found" | "timeout" | "aborted" | "unavailable" | "invalid" | "unknown";
 
 /** Every failure an adapter reports; the harness maps it to a `FileError` or `ExecutionError`. */
 export class SandboxError extends Error {

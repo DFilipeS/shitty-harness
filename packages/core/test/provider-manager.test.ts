@@ -35,7 +35,10 @@ describe("ProviderManager", () => {
 		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
 		const configPath = join(dir, "config.json");
 		const modelsPath = join(dir, "models.json");
-		const config: AppConfig = { ...emptyConfig(), providers: { openrouter: { apiKey: "test-key" } } };
+		const config: AppConfig = {
+			...emptyConfig(),
+			providers: { openrouter: { apiKey: "test-key" } },
+		};
 		// pi-ai's OpenRouter personalizer uses the global fetch, not the injected one, so keep it off
 		// the network; a 401 leaves the catalog unpersonalized, as an unknown key should.
 		vi.stubGlobal("fetch", async () => new Response("unauthorized", { status: 401 }));
@@ -74,7 +77,9 @@ describe("ProviderManager", () => {
 				localGeneratedAt: 0,
 			});
 			const secondReports = await second.refresh({ force: false });
-			expect(secondReports.find((report) => report.providerId === "openrouter")?.outcome).toBe("throttled");
+			expect(secondReports.find((report) => report.providerId === "openrouter")?.outcome).toBe(
+				"throttled",
+			);
 			expect(offlineCalls.filter((url) => url.includes("openrouter"))).toHaveLength(0);
 			expect((await second.listModels()).some((model) => model.id === ARGON_ID)).toBe(true);
 		} finally {
@@ -93,13 +98,17 @@ describe("ProviderManager", () => {
 			imageModel: { provider: "openrouter", modelId: "google/gemini-3-pro-image" },
 		} as const;
 		try {
-			const manager = new ProviderManager(configPath, modelsPath, emptyConfig(), { localGeneratedAt: 0 });
+			const manager = new ProviderManager(configPath, modelsPath, emptyConfig(), {
+				localGeneratedAt: 0,
+			});
 			await manager.setDefaults(expected);
 			expect(manager.getDefaults()).toEqual(expected);
 			expect(JSON.parse(await readFile(configPath, "utf8")).defaults).toEqual(expected);
 
 			// A new manager reads them back from disk.
-			const second = new ProviderManager(configPath, modelsPath, await loadConfig(configPath), { localGeneratedAt: 0 });
+			const second = new ProviderManager(configPath, modelsPath, await loadConfig(configPath), {
+				localGeneratedAt: 0,
+			});
 			expect(second.getDefaults()).toEqual(expected);
 
 			await second.setDefaults({ model: null, thinkingLevel: null, imageModel: null });
@@ -116,7 +125,10 @@ describe("ProviderManager", () => {
 		try {
 			await writeFile(
 				configPath,
-				JSON.stringify({ providers: {}, defaults: { model: { provider: 7 }, thinkingLevel: "turbo" } }),
+				JSON.stringify({
+					providers: {},
+					defaults: { model: { provider: 7 }, thinkingLevel: "turbo" },
+				}),
 			);
 			expect((await loadConfig(configPath)).defaults).toBeUndefined();
 
@@ -124,7 +136,10 @@ describe("ProviderManager", () => {
 				configPath,
 				JSON.stringify({
 					providers: {},
-					defaults: { model: { provider: "openrouter", modelId: "google/gemini-4-argon" }, thinkingLevel: "turbo" },
+					defaults: {
+						model: { provider: "openrouter", modelId: "google/gemini-4-argon" },
+						thinkingLevel: "turbo",
+					},
 				}),
 			);
 			expect((await loadConfig(configPath)).defaults).toEqual({
@@ -139,7 +154,10 @@ describe("ProviderManager", () => {
 		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
 		const configPath = join(dir, "config.json");
 		const modelsPath = join(dir, "models.json");
-		const config: AppConfig = { ...emptyConfig(), providers: { fireworks: { apiKey: "test-key" } } };
+		const config: AppConfig = {
+			...emptyConfig(),
+			providers: { fireworks: { apiKey: "test-key" } },
+		};
 		const usable = {
 			...ARGON,
 			type: "image",
@@ -172,7 +190,10 @@ describe("ProviderManager", () => {
 		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
 		const configPath = join(dir, "config.json");
 		const modelsPath = join(dir, "models.json");
-		const config: AppConfig = { ...emptyConfig(), providers: { fireworks: { apiKey: "test-key" } } };
+		const config: AppConfig = {
+			...emptyConfig(),
+			providers: { fireworks: { apiKey: "test-key" } },
+		};
 		const siblingId = "fake/image-model";
 		const chat = { ...ARGON, id: siblingId, provider: "fireworks" } as AnyModel;
 		const image = {
@@ -203,7 +224,10 @@ describe("ProviderManager", () => {
 		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
 		const configPath = join(dir, "config.json");
 		const modelsPath = join(dir, "models.json");
-		const config: AppConfig = { ...emptyConfig(), providers: { openrouter: { apiKey: "test-key" } } };
+		const config: AppConfig = {
+			...emptyConfig(),
+			providers: { openrouter: { apiKey: "test-key" } },
+		};
 		const catalogFetch: typeof fetch = async (input) => {
 			const url = String(input);
 			if (url.includes("/api/models/providers/openrouter")) return catalogResponse([ARGON]);
@@ -233,11 +257,16 @@ describe("ProviderManager", () => {
 			);
 		});
 		try {
-			const manager = new ProviderManager(configPath, modelsPath, config, { fetch: catalogFetch, localGeneratedAt: 0 });
+			const manager = new ProviderManager(configPath, modelsPath, config, {
+				fetch: catalogFetch,
+				localGeneratedAt: 0,
+			});
 			await manager.refresh({ force: true });
 
 			// Only the account's model survives, at the account's limits and prices.
-			const models = (await manager.listModels()).filter((model) => model.provider === "openrouter");
+			const models = (await manager.listModels()).filter(
+				(model) => model.provider === "openrouter",
+			);
 			expect(models.map((model) => model.id)).toEqual([ARGON_ID]);
 			expect(models[0]?.contextWindow).toBe(4096);
 			expect(models[0]?.maxTokens).toBe(512);
@@ -254,9 +283,11 @@ describe("ProviderManager", () => {
 				localGeneratedAt: 0,
 			});
 			await second.refresh({ force: false });
-			expect((await second.listModels()).filter((model) => model.provider === "openrouter").map((model) => model.id)).toEqual([
-				ARGON_ID,
-			]);
+			expect(
+				(await second.listModels())
+					.filter((model) => model.provider === "openrouter")
+					.map((model) => model.id),
+			).toEqual([ARGON_ID]);
 		} finally {
 			vi.unstubAllGlobals();
 			await rm(dir, { recursive: true, force: true });
@@ -267,13 +298,18 @@ describe("ProviderManager", () => {
 		const dir = await mkdtemp(join(tmpdir(), "harness-models-"));
 		try {
 			const calls: string[] = [];
-			const manager = new ProviderManager(join(dir, "config.json"), join(dir, "models.json"), emptyConfig(), {
-				fetch: async (input) => {
-					calls.push(String(input));
-					return catalogResponse([]);
+			const manager = new ProviderManager(
+				join(dir, "config.json"),
+				join(dir, "models.json"),
+				emptyConfig(),
+				{
+					fetch: async (input) => {
+						calls.push(String(input));
+						return catalogResponse([]);
+					},
+					localGeneratedAt: 0,
 				},
-				localGeneratedAt: 0,
-			});
+			);
 			expect(await manager.refresh({ force: true })).toEqual([]);
 			expect(calls).toEqual([]);
 		} finally {

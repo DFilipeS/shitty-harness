@@ -46,16 +46,19 @@ export async function cloneIntoWorkspace(
 	options: CloneOptions = {},
 ): Promise<void> {
 	const stderr: string[] = [];
-	const result = await handle.exec(`git clone -- ${shellQuote(url)} ${shellQuote(handle.workspaceDir)}`, {
-		env: {
-			GIT_TERMINAL_PROMPT: "0",
-			GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
-			...options.env,
+	const result = await handle.exec(
+		`git clone -- ${shellQuote(url)} ${shellQuote(handle.workspaceDir)}`,
+		{
+			env: {
+				GIT_TERMINAL_PROMPT: "0",
+				GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
+				...options.env,
+			},
+			onStderr: (text) => {
+				stderr.push(text);
+			},
 		},
-		onStderr: (text) => {
-			stderr.push(text);
-		},
-	});
+	);
 	if (result.exitCode === 0) return;
 	const detail = stderr.join("").trim().split("\n").slice(-3).join("\n");
 	throw new SandboxError("unknown", `git clone failed${detail === "" ? "" : `: ${detail}`}`);

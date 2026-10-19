@@ -68,7 +68,10 @@ try {
 	});
 
 	const bodyText = async () => {
-		const result = await send("Runtime.evaluate", { expression: "document.body.innerText", returnByValue: true });
+		const result = await send("Runtime.evaluate", {
+			expression: "document.body.innerText",
+			returnByValue: true,
+		});
 		return result.result.value;
 	};
 
@@ -113,7 +116,9 @@ try {
 		}
 		console.log("rendered text length every 100ms:");
 		console.log(samples.join(" "));
-		const increments = samples.map((value, index) => (index === 0 ? value : value - samples[index - 1]));
+		const increments = samples.map((value, index) =>
+			index === 0 ? value : value - samples[index - 1],
+		);
 		console.log("increments:", increments.join(" "));
 		console.log("--- after run ---");
 	}

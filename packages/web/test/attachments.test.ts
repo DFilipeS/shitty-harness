@@ -25,7 +25,11 @@ describe("readAttachment", () => {
 
 	it("reads a text file", async () => {
 		const pending = await readAttachment(file("notes.md", "text/markdown", "# Notes"));
-		expect(pending.attachment).toEqual({ name: "notes.md", mimeType: "text/markdown", data: "# Notes" });
+		expect(pending.attachment).toEqual({
+			name: "notes.md",
+			mimeType: "text/markdown",
+			data: "# Notes",
+		});
 		expect(pending.size).toBe(7);
 	});
 
@@ -40,9 +44,9 @@ describe("readAttachment", () => {
 	});
 
 	it("rejects unsupported files", async () => {
-		await expect(readAttachment(file("archive.zip", "application/zip", "zip"))).rejects.toBeInstanceOf(
-			AttachmentError,
-		);
+		await expect(
+			readAttachment(file("archive.zip", "application/zip", "zip")),
+		).rejects.toBeInstanceOf(AttachmentError);
 	});
 
 	it("rejects an image over the size cap", async () => {

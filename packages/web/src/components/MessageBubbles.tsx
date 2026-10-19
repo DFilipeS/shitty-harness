@@ -86,7 +86,9 @@ export function QueuedMessage({
 			<div className="flex min-w-0 max-w-[85%] flex-col gap-1.5 rounded-2xl rounded-br-sm border border-dashed border-line-strong bg-user-bubble/60 px-3.5 py-2">
 				<div className="flex items-center gap-1.5 text-[11px] text-fg-faint">
 					<ClockIcon className="h-3.5 w-3.5 shrink-0" />
-					<span>{message.mode === "steer" ? "Queued · joins at the next step" : "Queued · runs next"}</span>
+					<span>
+						{message.mode === "steer" ? "Queued · joins at the next step" : "Queued · runs next"}
+					</span>
 				</div>
 				{message.skill !== undefined && (
 					<div className="flex items-center gap-1.5 rounded-md border border-line bg-panel/50 px-2 py-1 text-xs">
@@ -153,7 +155,10 @@ function AttachedFileCard({ file }: { file: Extract<UserPart, { type: "file" }> 
  */
 function SkillCard({ skill }: { skill: SkillBlock }) {
 	return (
-		<details data-skill-card={skill.name} className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs">
+		<details
+			data-skill-card={skill.name}
+			className="group rounded-md border border-line bg-panel/50 px-3 py-2 text-xs"
+		>
 			<summary className="flex cursor-pointer list-none items-center gap-1.5 select-none [&::-webkit-details-marker]:hidden">
 				<BookIcon className="h-3.5 w-3.5 shrink-0 text-link" />
 				<span className="shrink-0 text-fg-subtle">skill</span>
@@ -273,11 +278,15 @@ function BlockView({
 	if (block.type === "toolCall") {
 		const result = toolResults?.get(block.id);
 		// A loaded skill reads as the skill itself; running, failed, and "already active" calls stay tool rows.
-		const skill = block.name === "skill" && result?.isError === false ? parseSkillBlock(result.text) : undefined;
+		const skill =
+			block.name === "skill" && result?.isError === false
+				? parseSkillBlock(result.text)
+				: undefined;
 		if (skill !== undefined) return <SkillCard skill={skill} />;
 		if (block.name === ASK_USER_TOOL) {
 			const questions = parseQuestions(parseToolArguments(block.argumentsText));
-			if (questions !== undefined) return <QuestionBlock call={block} questions={questions} result={result} />;
+			if (questions !== undefined)
+				return <QuestionBlock call={block} questions={questions} result={result} />;
 		}
 		return <ToolCallBlock call={block} result={result} live={liveTools?.[block.id]} />;
 	}
@@ -305,7 +314,15 @@ function ToolIcon({ name, className }: { name: string; className?: string }) {
 }
 
 /** One collapsible row per tool call. The icon slot shows a spinner while the call executes. */
-function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolResultView; live?: LiveTool }) {
+function ToolCallBlock({
+	call,
+	result,
+	live,
+}: {
+	call: ToolCall;
+	result?: ToolResultView;
+	live?: LiveTool;
+}) {
 	const [choice, setChoice] = useState<boolean | undefined>(() => toolOpenChoices.get(call.id));
 	const running = result === undefined;
 	// A running call opens so its output is readable as it streams, then collapses when the committed
@@ -354,7 +371,9 @@ function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolRe
 						/>
 					)}
 					<span className="shrink-0 font-mono text-fg">{call.name}</span>
-					{preview !== "" && <span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>}
+					{preview !== "" && (
+						<span className="min-w-0 truncate font-mono text-fg-subtle">{preview}</span>
+					)}
 					{running && <span className="shrink-0 text-fg-faint">running…</span>}
 					{failed && <span className="shrink-0 text-red-500">failed</span>}
 					<span className="ml-auto flex shrink-0 items-center gap-1.5">
@@ -373,7 +392,8 @@ function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolRe
 					ref={contentRef}
 					onScroll={(event) => {
 						const element = event.currentTarget;
-						stickToBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+						stickToBottom.current =
+							element.scrollHeight - element.scrollTop - element.clientHeight < 24;
 					}}
 					className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto"
 				>
@@ -405,7 +425,15 @@ function ToolCallBlock({ call, result, live }: { call: ToolCall; result?: ToolRe
  * An `ask_user` call. While it waits, the row points at the form docked below; once answered it reads
  * as one line per question, and opens to show every option with the chosen ones checked.
  */
-function QuestionBlock({ call, questions, result }: { call: ToolCall; questions: Question[]; result?: ToolResultView }) {
+function QuestionBlock({
+	call,
+	questions,
+	result,
+}: {
+	call: ToolCall;
+	questions: Question[];
+	result?: ToolResultView;
+}) {
 	const [open, setOpen] = useState(() => toolOpenChoices.get(call.id) ?? false);
 	const reply = result?.questionReply;
 	const waiting = result === undefined;
@@ -445,7 +473,9 @@ function QuestionBlock({ call, questions, result }: { call: ToolCall; questions:
 					<span className="shrink-0 font-mono text-fg">{call.name}</span>
 					<span className="min-w-0 truncate text-fg-subtle">{headers.join(" · ")}</span>
 					{status !== undefined && (
-						<span className={`shrink-0 ${failed ? "text-red-500" : waiting ? "text-link" : "text-fg-faint"}`}>
+						<span
+							className={`shrink-0 ${failed ? "text-red-500" : waiting ? "text-link" : "text-fg-faint"}`}
+						>
 							{status}
 						</span>
 					)}
@@ -474,17 +504,26 @@ function QuestionBlock({ call, questions, result }: { call: ToolCall; questions:
 						<div key={index} className="flex flex-col gap-1">
 							<div className="text-fg">
 								<span className="text-fg-faint">{headers[index]}</span> {question.question}
-								{question.multiSelect === true && <span className="text-fg-faint"> (pick any)</span>}
+								{question.multiSelect === true && (
+									<span className="text-fg-faint"> (pick any)</span>
+								)}
 							</div>
 							<ul className="flex flex-col gap-0.5">
 								{question.options.map((option) => {
 									const chosen = answer?.selected.includes(option.label) === true;
 									return (
-										<li key={option.label} className={`flex gap-1.5 ${chosen ? "text-fg" : "text-fg-subtle"}`}>
-											<span className="mt-px w-3.5 shrink-0">{chosen && <CheckIcon className="h-3.5 w-3.5 text-ok" />}</span>
+										<li
+											key={option.label}
+											className={`flex gap-1.5 ${chosen ? "text-fg" : "text-fg-subtle"}`}
+										>
+											<span className="mt-px w-3.5 shrink-0">
+												{chosen && <CheckIcon className="h-3.5 w-3.5 text-ok" />}
+											</span>
 											<span>
 												<span className={chosen ? "font-medium" : ""}>{option.label}</span>
-												{option.description !== "" && <span className="text-fg-faint"> — {option.description}</span>}
+												{option.description !== "" && (
+													<span className="text-fg-faint"> — {option.description}</span>
+												)}
 											</span>
 										</li>
 									);
@@ -546,7 +585,9 @@ function ToolArguments({
 	const edits = Array.isArray(args.edits) ? args.edits : undefined;
 	if (path === undefined && content === undefined && edits === undefined) {
 		return (
-			<pre className="whitespace-pre-wrap font-mono text-fg-muted">{JSON.stringify(args, null, 2)}</pre>
+			<pre className="whitespace-pre-wrap font-mono text-fg-muted">
+				{JSON.stringify(args, null, 2)}
+			</pre>
 		);
 	}
 	return (
@@ -578,7 +619,15 @@ function ToolArguments({
 	);
 }
 
-function ThinkingBlock({ stateKey, thinking, active }: { stateKey: string; thinking: string; active: boolean }) {
+function ThinkingBlock({
+	stateKey,
+	thinking,
+	active,
+}: {
+	stateKey: string;
+	thinking: string;
+	active: boolean;
+}) {
 	const [open, setOpen] = useState(() => thinkingOpenState.get(stateKey) ?? false);
 	return (
 		<details
@@ -689,7 +738,10 @@ function ToolResultImages({ images }: { images: readonly ToolResultImage[] }) {
  */
 export function HiddenOutputNotice() {
 	return (
-		<div data-hidden-output className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
+		<div
+			data-hidden-output
+			className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"
+		>
 			Nothing to show for this reply: the model produced an image of its own, which a chat message
 			cannot store. Ask it to use the <span className="font-mono">generate_image</span> tool, or
 			switch to a text model.
@@ -715,8 +767,12 @@ export function ToolResultBubble({
 						: "border-line bg-panel/50 text-fg-muted"
 				}`}
 			>
-				<summary className="cursor-pointer select-none">{isError ? "Tool error" : "Tool result"}</summary>
-				{text !== "" && <pre className="mt-1.5 max-h-80 overflow-auto whitespace-pre-wrap font-mono">{text}</pre>}
+				<summary className="cursor-pointer select-none">
+					{isError ? "Tool error" : "Tool result"}
+				</summary>
+				{text !== "" && (
+					<pre className="mt-1.5 max-h-80 overflow-auto whitespace-pre-wrap font-mono">{text}</pre>
+				)}
 			</details>
 			<ToolResultImages images={images} />
 		</>

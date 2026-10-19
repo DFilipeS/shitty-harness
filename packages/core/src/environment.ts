@@ -13,7 +13,11 @@ export type EnvironmentFactory = NonNullable<HarnessOptions["env"]>;
  * every request, but a session that never touches files should create nothing, so `resolve` runs
  * on the first method call. `id` and `cwd` are known up front.
  */
-export function lazyEnvironment(id: string, cwd: string, resolve: () => Promise<ExecutionEnv>): ExecutionEnv {
+export function lazyEnvironment(
+	id: string,
+	cwd: string,
+	resolve: () => Promise<ExecutionEnv>,
+): ExecutionEnv {
 	let pending: Promise<ExecutionEnv> | undefined;
 	const environment = () => (pending ??= resolve());
 	return new Proxy({ id, cwd } as ExecutionEnv, {

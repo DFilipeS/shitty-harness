@@ -47,7 +47,10 @@ export type RemoteCatalogOptions = {
 	 * Rewrites the whole catalog for the account, e.g. OpenRouter's `/models/user`. When set, the
 	 * stored or fetched catalog replaces the baseline, so models the account cannot use disappear.
 	 */
-	personalize?: (catalog: readonly AnyModel[], context: RefreshModelsContext) => Promise<readonly AnyModel[]>;
+	personalize?: (
+		catalog: readonly AnyModel[],
+		context: RefreshModelsContext,
+	) => Promise<readonly AnyModel[]>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -78,7 +81,10 @@ function parseCatalog(providerId: string, value: unknown): AnyModel[] {
 	return models;
 }
 
-async function readCatalog(providerId: string, response: Response): Promise<Omit<ModelsStoreEntry, "checkedAt">> {
+async function readCatalog(
+	providerId: string,
+	response: Response,
+): Promise<Omit<ModelsStoreEntry, "checkedAt">> {
 	const lastModified = Date.parse(response.headers.get("last-modified") ?? "");
 	return {
 		models: parseCatalog(providerId, await response.json()),
@@ -89,10 +95,16 @@ async function readCatalog(providerId: string, response: Response): Promise<Omit
 
 /** A remote catalog only applies when it changed after the bundled data was generated. */
 function isNewer(lastModified: number | undefined, localGeneratedAt: number | undefined): boolean {
-	return localGeneratedAt === undefined || (lastModified !== undefined && lastModified > localGeneratedAt);
+	return (
+		localGeneratedAt === undefined ||
+		(lastModified !== undefined && lastModified > localGeneratedAt)
+	);
 }
 
-function freshModels(entry: ModelsStoreEntry | undefined, localGeneratedAt: number | undefined): AnyModel[] {
+function freshModels(
+	entry: ModelsStoreEntry | undefined,
+	localGeneratedAt: number | undefined,
+): AnyModel[] {
 	if (entry === undefined || !isNewer(entry.lastModified, localGeneratedAt)) return [];
 	return [...entry.models];
 }
@@ -111,24 +123,39 @@ function mergeCatalog(baseline: readonly AnyModel[], overlay: readonly AnyModel[
 
 async function requestCatalog(
 	providerId: string,
-	options: { baseUrl: string; userAgent: string; fetch: typeof fetch; signal: AbortSignal; validator?: string },
+	options: {
+		baseUrl: string;
+		userAgent: string;
+		fetch: typeof fetch;
+		signal: AbortSignal;
+		validator?: string;
+	},
 ): Promise<Response> {
 	const url = new URL(`/api/models/providers/${encodeURIComponent(providerId)}`, options.baseUrl);
 	url.searchParams.set("types", CATALOG_MODEL_TYPES.join(","));
-	const headers: Record<string, string> = { accept: "application/json", "user-agent": options.userAgent };
+	const headers: Record<string, string> = {
+		accept: "application/json",
+		"user-agent": options.userAgent,
+	};
 	if (options.validator !== undefined) headers["if-none-match"] = options.validator;
 	return fetchWithRetry(options.fetch, url, { headers, signal: options.signal });
 }
 
 /** Retry transient catalog failures; each attempt gets its own short timeout. */
-async function fetchWithRetry(request: typeof fetch, url: URL, init: RequestInit): Promise<Response> {
+async function fetchWithRetry(
+	request: typeof fetch,
+	url: URL,
+	init: RequestInit,
+): Promise<Response> {
 	const parent = init.signal;
 	for (let attempt = 1; ; attempt += 1) {
 		const timeout = AbortSignal.timeout(CATALOG_ATTEMPT_TIMEOUT_MS);
-		const signal = parent === undefined || parent === null ? timeout : AbortSignal.any([parent, timeout]);
+		const signal =
+			parent === undefined || parent === null ? timeout : AbortSignal.any([parent, timeout]);
 		try {
 			const response = await request(url, { ...init, signal });
-			if (!RETRYABLE_STATUS.has(response.status) || attempt >= CATALOG_MAX_ATTEMPTS) return response;
+			if (!RETRYABLE_STATUS.has(response.status) || attempt >= CATALOG_MAX_ATTEMPTS)
+				return response;
 			await response.body?.cancel().catch(() => undefined);
 		} catch (error) {
 			if (attempt >= CATALOG_MAX_ATTEMPTS || parent?.aborted === true) throw error;
@@ -145,7 +172,10 @@ async function fetchWithRetry(request: typeof fetch, url: URL, init: RequestInit
  * account, and the result replaces the baseline: a model the account cannot use disappears
  * instead of falling back to its bundled entry.
  */
-export function withRemoteCatalog(provider: Provider, options: RemoteCatalogOptions = {}): Provider {
+export function withRemoteCatalog(
+	provider: Provider,
+	options: RemoteCatalogOptions = {},
+): Provider {
 	const request = options.fetch ?? fetch;
 	const baseUrl = options.baseUrl ?? DEFAULT_CATALOG_BASE_URL;
 	const throttleMs = options.throttleMs ?? CATALOG_THROTTLE_MS;
@@ -170,7 +200,9 @@ export function withRemoteCatalog(provider: Provider, options: RemoteCatalogOpti
 	return {
 		...provider,
 		getModels: () =>
-			catalogFor(provider.getModels()).filter((model): model is Model<Api> => isModelType(model, "chat")),
+			catalogFor(provider.getModels()).filter((model): model is Model<Api> =>
+				isModelType(model, "chat"),
+			),
 		getAllModels: () => catalogFor(provider.getAllModels?.() ?? provider.getModels()),
 		refreshModels: async (context: RefreshModelsContext) => {
 			const stored = context.stored;

@@ -65,8 +65,14 @@ const resolveLocal = async () => local;
 const conversationId = "c1" as unknown as ConversationId;
 /** The section only reads `read`, `conversationId`, and `env`; the rest is a cast stub. */
 const input = (fs: SkillFs) =>
-	({ read: {} as DocumentReader, conversationId, agent: undefined, env: undefined, shown: {}, fs }) as unknown as
-		PromptInput & { fs: SkillFs };
+	({
+		read: {} as DocumentReader,
+		conversationId,
+		agent: undefined,
+		env: undefined,
+		shown: {},
+		fs,
+	}) as unknown as PromptInput & { fs: SkillFs };
 
 describe("project instructions", () => {
 	it("takes one file per directory, first candidate wins", async () => {
@@ -128,7 +134,9 @@ describe("project instructions", () => {
 			new ProjectInstructionsLibrary({ resolveTarget: resolveLocal, hostFs: fs }),
 		);
 		const text = await section.render(input(fs), {} as Context);
-		expect(text).toContain('<project_instructions path="/AGENTS.md">\nroot rules\n</project_instructions>');
+		expect(text).toContain(
+			'<project_instructions path="/AGENTS.md">\nroot rules\n</project_instructions>',
+		);
 		expect(text).toContain('<project_instructions path="/home/dev/proj/app/AGENTS.md">');
 		expect(text).toContain("[Truncated:");
 	});
@@ -147,7 +155,7 @@ describe("project instructions", () => {
 				...fakeFs({ "/home/dev/.agents/irrelevant": "no" }),
 				async list(dir) {
 					if (dir === "/home/dev/.agents") return [{ name: "AGENTS.md", kind: "symlink", size: 0 }];
-				return [];
+					return [];
 				},
 				async readText(path) {
 					return path === "/home/dev/.agents/AGENTS.md" ? "global via link" : undefined;

@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { getOrThrow } from "@earendil-works/pi-durable/env";
-import { createEnvConformance, type EnvConformanceAssertions } from "@earendil-works/pi-durable/testing";
+import {
+	createEnvConformance,
+	type EnvConformanceAssertions,
+} from "@earendil-works/pi-durable/testing";
 import { describe, expect, it, vi } from "vitest";
 import { SandboxExecutionEnv } from "../src/sandboxes/env.ts";
 import { FakeSandboxProvider } from "./helpers/fake-sandbox.ts";
@@ -112,7 +115,15 @@ describe("SandboxExecutionEnv", () => {
 			getOrThrow(await env.writeFile("here.txt", "x", BACKGROUND_CONTEXT));
 			let stdout = "";
 			const result = getOrThrow(
-				await env.exec("cat here.txt", { onOutput: (text, _context, info) => { if (info.stream === "stdout") stdout += text; } }, BACKGROUND_CONTEXT),
+				await env.exec(
+					"cat here.txt",
+					{
+						onOutput: (text, _context, info) => {
+							if (info.stream === "stdout") stdout += text;
+						},
+					},
+					BACKGROUND_CONTEXT,
+				),
 			);
 			expect(result.exitCode).toBe(0);
 			expect(stdout).toBe("x");

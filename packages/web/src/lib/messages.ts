@@ -1,4 +1,10 @@
-import type { AssistantMessage, ImageContent, ToolResultMessage, Usage, UserMessage } from "@earendil-works/pi-ai";
+import type {
+	AssistantMessage,
+	ImageContent,
+	ToolResultMessage,
+	Usage,
+	UserMessage,
+} from "@earendil-works/pi-ai";
 import type { AgentEvent, EntryRecord, ModelInfo, QuestionReply } from "@harness/protocol";
 
 /** A content block of the assistant message currently being streamed. */
@@ -25,7 +31,12 @@ export function toLiveBlock(block: AssistantBlock): LiveBlock {
 		case "thinking":
 			return { type: "thinking", thinking: block.thinking };
 		case "toolCall":
-			return { type: "toolCall", id: block.id, name: block.name, argumentsText: JSON.stringify(block.arguments) };
+			return {
+				type: "toolCall",
+				id: block.id,
+				name: block.name,
+				argumentsText: JSON.stringify(block.arguments),
+			};
 	}
 }
 
@@ -51,7 +62,11 @@ function setBlock(blocks: LiveBlock[], index: number, block: LiveBlock): LiveBlo
 	return next;
 }
 
-function updateBlock(blocks: LiveBlock[], index: number, change: (block: LiveBlock) => LiveBlock): LiveBlock[] {
+function updateBlock(
+	blocks: LiveBlock[],
+	index: number,
+	change: (block: LiveBlock) => LiveBlock,
+): LiveBlock[] {
 	const existing = blocks[index];
 	if (existing === undefined) return blocks;
 	const next = [...blocks];
@@ -60,7 +75,11 @@ function updateBlock(blocks: LiveBlock[], index: number, change: (block: LiveBlo
 }
 
 /** Apply one `message_update` batch to the live message. */
-export function applyMessageChanges(live: LiveMessage, usage: Usage, changes: MessageChanges): LiveMessage {
+export function applyMessageChanges(
+	live: LiveMessage,
+	usage: Usage,
+	changes: MessageChanges,
+): LiveMessage {
 	let blocks = live.blocks;
 	let error = live.error;
 	for (const change of changes) {
@@ -71,12 +90,17 @@ export function applyMessageChanges(live: LiveMessage, usage: Usage, changes: Me
 				break;
 			case "text_start": {
 				const block = change.block;
-				if (block.type === "text") blocks = setBlock(blocks, change.contentIndex, { type: "text", text: block.text });
+				if (block.type === "text")
+					blocks = setBlock(blocks, change.contentIndex, { type: "text", text: block.text });
 				break;
 			}
 			case "thinking_start": {
 				const block = change.block;
-				if (block.type === "thinking") blocks = setBlock(blocks, change.contentIndex, { type: "thinking", thinking: block.thinking });
+				if (block.type === "thinking")
+					blocks = setBlock(blocks, change.contentIndex, {
+						type: "thinking",
+						thinking: block.thinking,
+					});
 				break;
 			}
 			case "toolcall_start": {
@@ -103,7 +127,9 @@ export function applyMessageChanges(live: LiveMessage, usage: Usage, changes: Me
 				break;
 			case "toolcall_delta":
 				blocks = updateBlock(blocks, change.contentIndex, (block) =>
-					block.type === "toolCall" ? { ...block, argumentsText: block.argumentsText + change.delta } : block,
+					block.type === "toolCall"
+						? { ...block, argumentsText: block.argumentsText + change.delta }
+						: block,
 				);
 				break;
 			case "block":
@@ -173,7 +199,9 @@ export function parseSkillBlock(text: string): SkillBlock | undefined {
 	const instructions = split === -1 ? content : content.slice(0, split);
 	const footer = split === -1 ? "" : content.slice(split + SKILL_DIRECTORY_MARKER.length);
 	const directory = footer.split("\n", 1)[0];
-	const files = [...footer.matchAll(/^<file>(.*)<\/file>$/gm)].map((file) => unescapeText(file[1] ?? ""));
+	const files = [...footer.matchAll(/^<file>(.*)<\/file>$/gm)].map((file) =>
+		unescapeText(file[1] ?? ""),
+	);
 	return {
 		name: unescapeAttribute(name),
 		scope,
@@ -188,7 +216,8 @@ function unescapeText(value: string): string {
 }
 
 /** The `<attached-file>` block the harness writes around an attached text file. */
-const ATTACHED_FILE_PATTERN = /^<attached-file name="([^"]*)" mime="([^"]*)">\n([\s\S]*)\n<\/attached-file>$/;
+const ATTACHED_FILE_PATTERN =
+	/^<attached-file name="([^"]*)" mime="([^"]*)">\n([\s\S]*)\n<\/attached-file>$/;
 
 /** The user message as display parts: plain text, images, and attached text files. */
 export function userParts(message: UserMessage): UserPart[] {
@@ -233,7 +262,8 @@ export function toolResultText(message: ToolResultMessage): string {
  * no reasoning or text accounts for are the tell.
  */
 export function hasHiddenOutput(message: AssistantMessage, models: readonly ModelInfo[]): boolean {
-	if (message.content.some((block) => block.type === "text" || block.type === "toolCall")) return false;
+	if (message.content.some((block) => block.type === "text" || block.type === "toolCall"))
+		return false;
 	const model = models.find(
 		(candidate) => candidate.provider === message.provider && candidate.id === message.model,
 	);
@@ -308,5 +338,3 @@ export function toolCallSummary(args: Record<string, unknown> | undefined): stri
 	const first = Object.values(args).find((value) => typeof value === "string");
 	return typeof first === "string" ? first : "";
 }
-
-

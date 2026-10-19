@@ -42,7 +42,15 @@ export function emptyConfig(): AppConfig {
 	return { providers: {} };
 }
 
-const THINKING_LEVELS: readonly ModelThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+const THINKING_LEVELS: readonly ModelThinkingLevel[] = [
+	"off",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max",
+];
 
 function parseModelRef(value: unknown): { provider: string; modelId: string } | undefined {
 	return isRecord(value) && typeof value.provider === "string" && typeof value.modelId === "string"
@@ -72,7 +80,9 @@ function parseDefaultTarget(value: unknown): DefaultTargetConfig | undefined {
 	if (value.kind === "sandbox") return { kind: "sandbox" };
 	if (value.kind !== "local") return undefined;
 	if (value.path === undefined) return { kind: "local" };
-	return typeof value.path === "string" && value.path !== "" ? { kind: "local", path: value.path } : undefined;
+	return typeof value.path === "string" && value.path !== ""
+		? { kind: "local", path: value.path }
+		: undefined;
 }
 
 function parseSandboxConfig(value: unknown): SandboxConfig | undefined {
@@ -80,7 +90,11 @@ function parseSandboxConfig(value: unknown): SandboxConfig | undefined {
 	const config: SandboxConfig = {};
 	if (typeof value.provider === "string" && value.provider !== "") config.provider = value.provider;
 	if (typeof value.template === "string" && value.template !== "") config.template = value.template;
-	if (typeof value.idleTimeoutMs === "number" && Number.isFinite(value.idleTimeoutMs) && value.idleTimeoutMs >= 0) {
+	if (
+		typeof value.idleTimeoutMs === "number" &&
+		Number.isFinite(value.idleTimeoutMs) &&
+		value.idleTimeoutMs >= 0
+	) {
 		config.idleTimeoutMs = value.idleTimeoutMs;
 	}
 	if (typeof value.autoPause === "boolean") config.autoPause = value.autoPause;
@@ -96,7 +110,8 @@ function parseSandboxConfig(value: unknown): SandboxConfig | undefined {
 		const providers: Record<string, { apiKey?: string }> = {};
 		for (const [id, entry] of Object.entries(value.providers)) {
 			if (!isRecord(entry)) continue;
-			if (typeof entry.apiKey === "string" && entry.apiKey !== "") providers[id] = { apiKey: entry.apiKey };
+			if (typeof entry.apiKey === "string" && entry.apiKey !== "")
+				providers[id] = { apiKey: entry.apiKey };
 		}
 		if (Object.keys(providers).length > 0) config.providers = providers;
 	}

@@ -53,7 +53,9 @@ export function Composer({ ref, hidden = false }: { ref?: Ref<HTMLDivElement>; h
 	const invoked = invokedSkill(text);
 	// Only a loaded list can say a skill is unknown; the server rejects it either way.
 	const unknownSkill =
-		invoked !== undefined && skills !== undefined && !skills.some((skill) => skill.name === invoked) ? invoked : undefined;
+		invoked !== undefined && skills !== undefined && !skills.some((skill) => skill.name === invoked)
+			? invoked
+			: undefined;
 	const canSend =
 		(text.trim() !== "" || attachments.length > 0) &&
 		model !== undefined &&
@@ -84,7 +86,9 @@ export function Composer({ ref, hidden = false }: { ref?: Ref<HTMLDivElement>; h
 		let total = attachments.reduce((sum, pending) => sum + pending.size, 0);
 		for (const file of files) {
 			if (count >= ATTACHMENT_LIMITS.maxPerMessage) {
-				problems.push(`A message can carry at most ${ATTACHMENT_LIMITS.maxPerMessage} attachments.`);
+				problems.push(
+					`A message can carry at most ${ATTACHMENT_LIMITS.maxPerMessage} attachments.`,
+				);
 				break;
 			}
 			try {
@@ -149,7 +153,8 @@ export function Composer({ ref, hidden = false }: { ref?: Ref<HTMLDivElement>; h
 						setDragging(true);
 					}}
 					onDragLeave={(event) => {
-						if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+						if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+							setDragging(false);
 					}}
 					onDrop={(event) => {
 						event.preventDefault();
@@ -268,10 +273,14 @@ export function Composer({ ref, hidden = false }: { ref?: Ref<HTMLDivElement>; h
 								This model cannot read images. Remove them or switch to a vision model.
 							</span>
 						)}
-						{attachError !== undefined && <span className="text-[11px] text-red-500">{attachError}</span>}
+						{attachError !== undefined && (
+							<span className="text-[11px] text-red-500">{attachError}</span>
+						)}
 						{unknownSkill !== undefined && (
 							<span className="text-[11px] text-warn">
-								{unknownSkill === "" ? "Name a skill after /skill:" : `Unknown skill: ${unknownSkill}`}
+								{unknownSkill === ""
+									? "Name a skill after /skill:"
+									: `Unknown skill: ${unknownSkill}`}
 							</span>
 						)}
 						{runActive && (
@@ -299,7 +308,9 @@ export function Composer({ ref, hidden = false }: { ref?: Ref<HTMLDivElement>; h
  */
 function useSessionSkills(sessionId: string | undefined, wanted: boolean): SkillInfo[] | undefined {
 	const { listSkills } = useHarness();
-	const [loaded, setLoaded] = useState<{ sessionId: string; skills: SkillInfo[] } | undefined>(undefined);
+	const [loaded, setLoaded] = useState<{ sessionId: string; skills: SkillInfo[] } | undefined>(
+		undefined,
+	);
 	useEffect(() => {
 		if (!wanted || sessionId === undefined) return;
 		let cancelled = false;
@@ -323,7 +334,11 @@ type SkillCompletion = {
 };
 
 /** Which skills the card offers for the leading token, which one is highlighted, and whether `esc` hid it. */
-function useSkillCompletion(text: string, caret: number, skills: SkillInfo[] | undefined): SkillCompletion {
+function useSkillCompletion(
+	text: string,
+	caret: number,
+	skills: SkillInfo[] | undefined,
+): SkillCompletion {
 	const query = skillQuery(text, caret);
 	const matches = query === undefined || skills === undefined ? [] : matchSkills(skills, query);
 	const [selected, setSelected] = useState(0);
@@ -355,7 +370,9 @@ function SkillSuggestions({
 }) {
 	const listRef = useRef<HTMLUListElement>(null);
 	useEffect(() => {
-		listRef.current?.querySelector<HTMLElement>(`[data-index="${selected}"]`)?.scrollIntoView({ block: "nearest" });
+		listRef.current
+			?.querySelector<HTMLElement>(`[data-index="${selected}"]`)
+			?.scrollIntoView({ block: "nearest" });
 	}, [selected]);
 	return (
 		<div
@@ -382,7 +399,9 @@ function SkillSuggestions({
 						<BookIcon className="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
 						<span className="shrink-0 font-mono text-fg">/skill:{skill.name}</span>
 						<span className="min-w-0 flex-1 truncate text-fg-subtle">{skill.description}</span>
-						<span className="hidden shrink-0 text-[11px] text-fg-faint sm:inline">{skill.scope}</span>
+						<span className="hidden shrink-0 text-[11px] text-fg-faint sm:inline">
+							{skill.scope}
+						</span>
 					</li>
 				))}
 			</ul>
@@ -394,7 +413,13 @@ function SkillSuggestions({
 }
 
 /** One file waiting to be sent: a thumbnail for images, a name and size for text files. */
-function AttachmentChip({ pending, onRemove }: { pending: PendingAttachment; onRemove: () => void }) {
+function AttachmentChip({
+	pending,
+	onRemove,
+}: {
+	pending: PendingAttachment;
+	onRemove: () => void;
+}) {
 	const { attachment, size } = pending;
 	return (
 		<div className="flex items-center gap-1.5 rounded-lg border border-line bg-raised py-1 pr-1 pl-1.5 text-[11px]">
@@ -428,7 +453,9 @@ function ModelChip() {
 	const modelPalette = useModelPalette();
 	const providersPalette = useProviderPalette();
 	const current = activeSession?.agent.model;
-	const info = models.find((model) => model.provider === current?.provider && model.id === current.modelId);
+	const info = models.find(
+		(model) => model.provider === current?.provider && model.id === current.modelId,
+	);
 	const configured = models.length > 0;
 	return (
 		<button
@@ -441,7 +468,9 @@ function ModelChip() {
 			}`}
 		>
 			<CpuIcon className="h-3.5 w-3.5 shrink-0" />
-			<span className="max-w-44 truncate">{info?.name ?? current?.modelId ?? "Choose a model"}</span>
+			<span className="max-w-44 truncate">
+				{info?.name ?? current?.modelId ?? "Choose a model"}
+			</span>
 		</button>
 	);
 }
@@ -510,7 +539,9 @@ function TargetChip() {
 			disabled={runActive}
 			title={title}
 			className={`flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] hover:bg-raised disabled:opacity-50 disabled:hover:bg-transparent ${
-				phase === "gone" || phase === "error" || otherWorking ? "text-warn" : "text-fg-subtle hover:text-fg"
+				phase === "gone" || phase === "error" || otherWorking
+					? "text-warn"
+					: "text-fg-subtle hover:text-fg"
 			}`}
 		>
 			{target !== undefined && target.kind === "sandbox" ? (

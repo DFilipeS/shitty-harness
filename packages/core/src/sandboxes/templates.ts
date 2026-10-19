@@ -275,7 +275,8 @@ export class TemplateManager {
 	async create(name: string, recipe: TemplateRecipe): Promise<void> {
 		const clean = this.#requireName(name);
 		const existing = await this.#options.store.readRecipe(clean).catch(() => undefined);
-		if (existing !== undefined) throw new SandboxError("invalid", `Template ${clean} already exists`);
+		if (existing !== undefined)
+			throw new SandboxError("invalid", `Template ${clean} already exists`);
 		await this.#options.store.writeRecipe(clean, recipe);
 		this.onChanged?.();
 	}

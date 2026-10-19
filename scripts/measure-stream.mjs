@@ -47,7 +47,9 @@ ws.on("message", (data) => {
 	}
 	if (event.type === "run_end") {
 		const seconds = (Date.now() - first) / 1000;
-		console.log(`\n${batches} batches, ${chars} chars, ${(chars / batches).toFixed(1)} chars/batch, ${(batches / seconds).toFixed(1)} batches/s`);
+		console.log(
+			`\n${batches} batches, ${chars} chars, ${(chars / batches).toFixed(1)} chars/batch, ${(batches / seconds).toFixed(1)} batches/s`,
+		);
 		ws.close();
 	}
 });
@@ -56,7 +58,11 @@ ws.on("open", async () => {
 	try {
 		const { session } = await call("sessions.create");
 		await call("sessions.attach", { sessionId: session.id });
-		await call("sessions.prompt", { sessionId: session.id, text: prompt, requestId: crypto.randomUUID() });
+		await call("sessions.prompt", {
+			sessionId: session.id,
+			text: prompt,
+			requestId: crypto.randomUUID(),
+		});
 	} catch (error) {
 		console.error("FAILED:", error.message);
 		process.exitCode = 1;

@@ -6,7 +6,15 @@ import { useHarness } from "../lib/store.tsx";
 import { useTheme } from "../lib/theme.tsx";
 import { formatKeys, useCommandPalette } from "../lib/commands.tsx";
 import { SHORTCUTS } from "../lib/shortcuts.ts";
-import { CommandIcon, MoonIcon, PencilIcon, PlusIcon, QuestionIcon, SunIcon, TrashIcon } from "./icons.tsx";
+import {
+	CommandIcon,
+	MoonIcon,
+	PencilIcon,
+	PlusIcon,
+	QuestionIcon,
+	SunIcon,
+	TrashIcon,
+} from "./icons.tsx";
 import { MarkdownInline } from "./Markdown.tsx";
 
 export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
@@ -91,7 +99,9 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
 					if (deletingId === session.id) {
 						return (
 							<div key={session.id} className="rounded-md bg-red-500/10 px-2 py-1.5">
-								<p className="truncate text-xs text-red-700 dark:text-red-300">Delete “{session.title}”?</p>
+								<p className="truncate text-xs text-red-700 dark:text-red-300">
+									Delete “{session.title}”?
+								</p>
 								<div className="mt-1.5 flex gap-1.5">
 									<button
 										type="button"
@@ -161,7 +171,9 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
 												Needs input
 											</div>
 										) : (
-											<div className="text-[11px] text-fg-subtle">{relativeTime(session.updatedAt)}</div>
+											<div className="text-[11px] text-fg-subtle">
+												{relativeTime(session.updatedAt)}
+											</div>
 										)}
 									</button>
 									<button
@@ -196,7 +208,11 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
 						status === "connected" ? "bg-ok" : status === "connecting" ? "bg-warn" : "bg-red-500"
 					}`}
 				/>
-				{status === "connected" ? "Connected" : status === "connecting" ? "Connecting…" : "Disconnected"}
+				{status === "connected"
+					? "Connected"
+					: status === "connecting"
+						? "Connecting…"
+						: "Disconnected"}
 			</div>
 		</aside>
 	);

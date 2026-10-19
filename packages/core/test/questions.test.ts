@@ -64,20 +64,37 @@ describe("ask_user", () => {
 		try {
 			const { id } = await service.createSession();
 			await service.prompt(id, "Plan the app", "request-ask");
-			expect(await waitFor(async () => (await session(service, id))?.needsInput === true)).toBe(true);
-			expect(await session(service, id)).toMatchObject({ working: false, needsInput: true, questionCallId: "ask-1" });
+			expect(await waitFor(async () => (await session(service, id))?.needsInput === true)).toBe(
+				true,
+			);
+			expect(await session(service, id)).toMatchObject({
+				working: false,
+				needsInput: true,
+				questionCallId: "ask-1",
+			});
 
 			await expect(
-				service.answer(id, "ask-1", { kind: "answered", answers: [{ selected: ["Postgres", "SQLite"] }, { selected: ["Auth"] }] }),
+				service.answer(id, "ask-1", {
+					kind: "answered",
+					answers: [{ selected: ["Postgres", "SQLite"] }, { selected: ["Auth"] }],
+				}),
 			).rejects.toThrow("takes one answer");
 			await service.answer(id, "ask-1", {
 				kind: "answered",
 				answers: [{ selected: ["SQLite"] }, { selected: ["Auth", "Search"], other: " Dark mode " }],
 			});
 			// The first reply wins.
-			await expect(service.answer(id, "ask-1", { kind: "skipped" })).rejects.toThrow("no longer open");
+			await expect(service.answer(id, "ask-1", { kind: "skipped" })).rejects.toThrow(
+				"no longer open",
+			);
 
-			expect(await waitFor(async () => (await session(service, id))?.working === false && (await toolResults(service, id)).length === 1)).toBe(true);
+			expect(
+				await waitFor(
+					async () =>
+						(await session(service, id))?.working === false &&
+						(await toolResults(service, id)).length === 1,
+				),
+			).toBe(true);
 			const [result] = await toolResults(service, id);
 			const text = JSON.stringify(result?.model);
 			expect(text).toContain("SQLite");
@@ -91,19 +108,26 @@ describe("ask_user", () => {
 	it("tells the model when the user skipped", async () => {
 		const { providers, faux } = createFauxProviders({ tokensPerSecond: 5_000 });
 		faux.setResponses([
-			fauxAssistantMessage([fauxToolCall("ask_user", { questions: QUESTIONS }, { id: "ask-skip" })], {
-				stopReason: "toolUse",
-			}),
+			fauxAssistantMessage(
+				[fauxToolCall("ask_user", { questions: QUESTIONS }, { id: "ask-skip" })],
+				{
+					stopReason: "toolUse",
+				},
+			),
 			fauxAssistantMessage("Going with defaults."),
 		]);
 		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
 		try {
 			const { id } = await service.createSession();
 			await service.prompt(id, "Plan the app", "request-skip");
-			expect(await waitFor(async () => (await session(service, id))?.needsInput === true)).toBe(true);
+			expect(await waitFor(async () => (await session(service, id))?.needsInput === true)).toBe(
+				true,
+			);
 			await service.answer(id, "ask-skip", { kind: "skipped" });
 			expect(await waitFor(async () => (await toolResults(service, id)).length === 1)).toBe(true);
-			expect(JSON.stringify((await toolResults(service, id))[0]?.model)).toContain("skipped the questions");
+			expect(JSON.stringify((await toolResults(service, id))[0]?.model)).toContain(
+				"skipped the questions",
+			);
 		} finally {
 			await service.close();
 		}
@@ -112,18 +136,25 @@ describe("ask_user", () => {
 	it("closes the question when the run is stopped", async () => {
 		const { providers, faux } = createFauxProviders({ tokensPerSecond: 5_000 });
 		faux.setResponses([
-			fauxAssistantMessage([fauxToolCall("ask_user", { questions: QUESTIONS }, { id: "ask-stop" })], {
-				stopReason: "toolUse",
-			}),
+			fauxAssistantMessage(
+				[fauxToolCall("ask_user", { questions: QUESTIONS }, { id: "ask-stop" })],
+				{
+					stopReason: "toolUse",
+				},
+			),
 		]);
 		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
 		try {
 			const { id } = await service.createSession();
 			await service.prompt(id, "Plan the app", "request-stop");
-			expect(await waitFor(async () => (await session(service, id))?.needsInput === true)).toBe(true);
+			expect(await waitFor(async () => (await session(service, id))?.needsInput === true)).toBe(
+				true,
+			);
 			await service.abort(id);
 			expect(await session(service, id)).toMatchObject({ working: false, needsInput: false });
-			await expect(service.answer(id, "ask-stop", { kind: "skipped" })).rejects.toThrow("no longer open");
+			await expect(service.answer(id, "ask-stop", { kind: "skipped" })).rejects.toThrow(
+				"no longer open",
+			);
 		} finally {
 			await service.close();
 		}
@@ -135,22 +166,38 @@ describe("ask_user", () => {
 		try {
 			const first = createFauxProviders({ tokensPerSecond: 5_000 });
 			first.faux.setResponses([
-				fauxAssistantMessage([fauxToolCall("ask_user", { questions: QUESTIONS }, { id: "ask-restart" })], {
-					stopReason: "toolUse",
-				}),
+				fauxAssistantMessage(
+					[fauxToolCall("ask_user", { questions: QUESTIONS }, { id: "ask-restart" })],
+					{
+						stopReason: "toolUse",
+					},
+				),
 			]);
-			const before = await HarnessService.create({ storage: await open(), providers: first.providers });
+			const before = await HarnessService.create({
+				storage: await open(),
+				providers: first.providers,
+			});
 			const { id } = await before.createSession();
 			await before.prompt(id, "Plan the app", "request-restart");
-			expect(await waitFor(async () => (await session(before, id))?.needsInput === true)).toBe(true);
+			expect(await waitFor(async () => (await session(before, id))?.needsInput === true)).toBe(
+				true,
+			);
 			await before.close();
 
 			const second = createFauxProviders({ tokensPerSecond: 5_000 });
 			second.faux.setResponses([fauxAssistantMessage("Thanks.")]);
-			const after = await HarnessService.create({ storage: await open(), providers: second.providers });
+			const after = await HarnessService.create({
+				storage: await open(),
+				providers: second.providers,
+			});
 			try {
-				expect(await waitFor(async () => (await session(after, id))?.needsInput === true)).toBe(true);
-				await after.answer(id, "ask-restart", { kind: "answered", answers: [{ selected: ["Postgres"] }, { selected: ["Export"] }] });
+				expect(await waitFor(async () => (await session(after, id))?.needsInput === true)).toBe(
+					true,
+				);
+				await after.answer(id, "ask-restart", {
+					kind: "answered",
+					answers: [{ selected: ["Postgres"] }, { selected: ["Export"] }],
+				});
 				expect(await waitFor(async () => (await toolResults(after, id)).length === 1)).toBe(true);
 				expect(JSON.stringify((await toolResults(after, id))[0]?.model)).toContain("Postgres");
 			} finally {
@@ -164,14 +211,20 @@ describe("ask_user", () => {
 
 describe("question replies", () => {
 	it("rejects answers that do not fit the questions", () => {
-		expect(() => validateReply(QUESTIONS, { kind: "answered", answers: [{ selected: ["SQLite"] }] })).toThrow(
-			"Expected 2 answers",
-		);
 		expect(() =>
-			validateReply(QUESTIONS, { kind: "answered", answers: [{ selected: ["MySQL"] }, { selected: ["Auth"] }] }),
+			validateReply(QUESTIONS, { kind: "answered", answers: [{ selected: ["SQLite"] }] }),
+		).toThrow("Expected 2 answers");
+		expect(() =>
+			validateReply(QUESTIONS, {
+				kind: "answered",
+				answers: [{ selected: ["MySQL"] }, { selected: ["Auth"] }],
+			}),
 		).toThrow("Not an option");
 		expect(() =>
-			validateReply(QUESTIONS, { kind: "answered", answers: [{ selected: [], other: "  " }, { selected: ["Auth"] }] }),
+			validateReply(QUESTIONS, {
+				kind: "answered",
+				answers: [{ selected: [], other: "  " }, { selected: ["Auth"] }],
+			}),
 		).toThrow("has no answer");
 	});
 
@@ -186,7 +239,10 @@ describe("question replies", () => {
 		expect(
 			validateReply(QUESTIONS, {
 				kind: "answered",
-				answers: [{ selected: [], skipped: true }, { selected: [], skipped: true }],
+				answers: [
+					{ selected: [], skipped: true },
+					{ selected: [], skipped: true },
+				],
 			}),
 		).toEqual({ kind: "skipped" });
 	});

@@ -62,7 +62,12 @@ describe("buildPromptContent", () => {
 	});
 
 	it("escapes quotes and ampersands in file names", async () => {
-		const content = await buildPromptContent("", [attachment({ name: 'a&"b.md' })], TEXT_ONLY, noSave);
+		const content = await buildPromptContent(
+			"",
+			[attachment({ name: 'a&"b.md' })],
+			TEXT_ONLY,
+			noSave,
+		);
 		expect(content).toEqual([
 			{
 				type: "text",
@@ -109,7 +114,10 @@ describe("buildPromptContent", () => {
 			async (_file, index) => (index === 0 ? "saved/a.md" : undefined),
 		);
 		expect(content).toEqual([
-			{ type: "text", text: "Attached files saved in the working directory:\n- a.md (text/markdown): `saved/a.md`" },
+			{
+				type: "text",
+				text: "Attached files saved in the working directory:\n- a.md (text/markdown): `saved/a.md`",
+			},
 			{
 				type: "text",
 				text: '<attached-file name="a.md" mime="text/markdown">\n# Notes\n</attached-file>',
@@ -151,15 +159,20 @@ describe("buildPromptContent", () => {
 
 	it("rejects a text file over the size cap", async () => {
 		const data = "a".repeat(ATTACHMENT_LIMITS.maxTextBytes + 1);
-		expect(await errorCode(() => buildPromptContent("", [attachment({ data })], TEXT_ONLY, noSave))).toBe(
-			"attachment_too_large",
-		);
+		expect(
+			await errorCode(() => buildPromptContent("", [attachment({ data })], TEXT_ONLY, noSave)),
+		).toBe("attachment_too_large");
 	});
 
 	it("rejects an image over the size cap", async () => {
 		const data = "A".repeat(Math.ceil((ATTACHMENT_LIMITS.maxImageBytes + 1) / 3) * 4);
 		const code = await errorCode(() =>
-			buildPromptContent("", [attachment({ name: "shot.png", mimeType: "image/png", data })], VISION, noSave),
+			buildPromptContent(
+				"",
+				[attachment({ name: "shot.png", mimeType: "image/png", data })],
+				VISION,
+				noSave,
+			),
 		);
 		expect(code).toBe("attachment_too_large");
 	});
@@ -168,7 +181,9 @@ describe("buildPromptContent", () => {
 		const attachments = Array.from({ length: ATTACHMENT_LIMITS.maxPerMessage + 1 }, (_, index) =>
 			attachment({ name: `file-${index}.md`, data: "x" }),
 		);
-		expect(await errorCode(() => buildPromptContent("", attachments, TEXT_ONLY, noSave))).toBe("invalid");
+		expect(await errorCode(() => buildPromptContent("", attachments, TEXT_ONLY, noSave))).toBe(
+			"invalid",
+		);
 	});
 
 	it("rejects attachments that are too large together", async () => {
@@ -177,14 +192,21 @@ describe("buildPromptContent", () => {
 		const attachments = Array.from({ length: 5 }, (_, index) =>
 			attachment({ name: `shot-${index}.png`, mimeType: "image/png", data }),
 		);
-		expect(await errorCode(() => buildPromptContent("", attachments, VISION, noSave))).toBe("attachment_too_large");
+		expect(await errorCode(() => buildPromptContent("", attachments, VISION, noSave))).toBe(
+			"attachment_too_large",
+		);
 	});
 });
 
 describe("saveAttachment", () => {
 	function writer(): {
 		writes: { path: string; content: string | Uint8Array }[];
-		env: { writeFile(path: string, content: string | Uint8Array): Promise<{ ok: true; value: undefined }> };
+		env: {
+			writeFile(
+				path: string,
+				content: string | Uint8Array,
+			): Promise<{ ok: true; value: undefined }>;
+		};
 	} {
 		const writes: { path: string; content: string | Uint8Array }[] = [];
 		return {
@@ -238,6 +260,8 @@ describe("saveAttachment", () => {
 				throw new Error("disk full");
 			},
 		};
-		expect(await saveAttachment(env, "42", attachment(), 0, BACKGROUND_CONTEXT, 1_000)).toBeUndefined();
+		expect(
+			await saveAttachment(env, "42", attachment(), 0, BACKGROUND_CONTEXT, 1_000),
+		).toBeUndefined();
 	});
 });

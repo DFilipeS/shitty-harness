@@ -55,17 +55,26 @@ export function mapError(error: unknown): SandboxError {
 	const name = error instanceof Error ? error.name : "";
 	const message = error instanceof Error ? error.message : String(error);
 	const options = { cause: error };
-	if (name === "AuthenticationError" || name === "GitAuthError") return new SandboxError("auth", message, options);
+	if (name === "AuthenticationError" || name === "GitAuthError")
+		return new SandboxError("auth", message, options);
 	if (name === "NotFoundError" || name === "FileNotFoundError" || name === "SandboxNotFoundError") {
 		return new SandboxError("not_found", message, options);
 	}
 	// Both are `TimeoutError` subclasses, but they mean the sandbox stopped or the connection
 	// dropped, not that the command reached its own timeout. Keep the two cases apart.
 	if (name === "SandboxNotRunningError") {
-		return new SandboxError("unavailable", `The sandbox paused or stopped before the command finished (${message})`, options);
+		return new SandboxError(
+			"unavailable",
+			`The sandbox paused or stopped before the command finished (${message})`,
+			options,
+		);
 	}
 	if (name === "SandboxUnreachableError") {
-		return new SandboxError("unavailable", `The sandbox became unreachable before the command finished (${message})`, options);
+		return new SandboxError(
+			"unavailable",
+			`The sandbox became unreachable before the command finished (${message})`,
+			options,
+		);
 	}
 	if (name === "TimeoutError") return new SandboxError("timeout", message, options);
 	if (name === "InvalidArgumentError") return new SandboxError("invalid", message, options);
@@ -104,7 +113,9 @@ function providerTemplateOf(value: unknown): ProviderTemplate | undefined {
 	if (templateId === undefined || templateId === "") return undefined;
 	const template: ProviderTemplate = {
 		templateId,
-		names: Array.isArray(item.names) ? item.names.filter((name): name is string => typeof name === "string") : [],
+		names: Array.isArray(item.names)
+			? item.names.filter((name): name is string => typeof name === "string")
+			: [],
 	};
 	if (typeof item.buildID === "string") template.buildId = item.buildID;
 	if (typeof item.buildStatus === "string") template.buildStatus = item.buildStatus;
@@ -126,7 +137,11 @@ interface RawResult {
 }
 
 /** Run a command and return its result instead of throwing on failure. */
-async function runRaw(sandbox: import("e2b").Sandbox, command: string, timeoutMs = 120_000): Promise<RawResult> {
+async function runRaw(
+	sandbox: import("e2b").Sandbox,
+	command: string,
+	timeoutMs = 120_000,
+): Promise<RawResult> {
 	try {
 		const result = await sandbox.commands.run(command, { timeoutMs });
 		return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
@@ -144,13 +159,24 @@ async function runRaw(sandbox: import("e2b").Sandbox, command: string, timeoutMs
  * Create the hop key on first use. It only authenticates the host to the sandbox; it is never used
  * against a forge.
  */
-async function ensureHopKey(stateDir: string): Promise<{ privateKeyPath: string; publicKey: string }> {
+async function ensureHopKey(
+	stateDir: string,
+): Promise<{ privateKeyPath: string; publicKey: string }> {
 	const privateKeyPath = join(stateDir, "hop-key");
 	await mkdir(stateDir, { recursive: true, mode: 0o700 });
 	try {
 		await readFile(privateKeyPath);
 	} catch {
-		await execFileAsync("ssh-keygen", ["-t", "ed25519", "-N", "", "-C", "harness hop", "-f", privateKeyPath]);
+		await execFileAsync("ssh-keygen", [
+			"-t",
+			"ed25519",
+			"-N",
+			"",
+			"-C",
+			"harness hop",
+			"-f",
+			privateKeyPath,
+		]);
 	}
 	const { stdout } = await execFileAsync("ssh-keygen", ["-y", "-f", privateKeyPath]);
 	return { privateKeyPath, publicKey: stdout.trim() };
@@ -168,7 +194,10 @@ async function authorizeHopKey(sandbox: import("e2b").Sandbox, publicKey: string
 		].join("; "),
 	);
 	if (result.exitCode !== 0) {
-		throw new SandboxError("unknown", `Could not authorize the hop key: ${result.stderr.trim() || "unknown error"}`);
+		throw new SandboxError(
+			"unknown",
+			`Could not authorize the hop key: ${result.stderr.trim() || "unknown error"}`,
+		);
 	}
 }
 
@@ -187,7 +216,10 @@ async function ensureWebsocat(sandbox: import("e2b").Sandbox): Promise<void> {
 		180_000,
 	);
 	if (install.exitCode !== 0) {
-		throw new SandboxError("unknown", `Could not install websocat: ${install.stderr.trim() || "unknown error"}`);
+		throw new SandboxError(
+			"unknown",
+			`Could not install websocat: ${install.stderr.trim() || "unknown error"}`,
+		);
 	}
 }
 
@@ -216,7 +248,10 @@ async function startWebsocat(sandbox: import("e2b").Sandbox): Promise<void> {
 	}
 	const log = await runRaw(sandbox, "tail -n 5 /tmp/harness-websocat.log", 15_000);
 	const detail = log.stdout.trim() || log.stderr.trim();
-	throw new SandboxError("unknown", `websocat did not listen on port ${WEBSOCAT_PORT}${detail ? `: ${detail}` : ""}`);
+	throw new SandboxError(
+		"unknown",
+		`websocat did not listen on port ${WEBSOCAT_PORT}${detail ? `: ${detail}` : ""}`,
+	);
 }
 
 interface TunnelOptions {
@@ -320,7 +355,10 @@ async function waitForSocket(
 		await new Promise((resolve) => setTimeout(resolve, 300));
 	}
 	const detail = errors.at(-1);
-	throw new SandboxError("unknown", `Forwarded agent socket did not appear at ${socketPath}${detail ? `: ${detail}` : ""}`);
+	throw new SandboxError(
+		"unknown",
+		`Forwarded agent socket did not appear at ${socketPath}${detail ? `: ${detail}` : ""}`,
+	);
 }
 
 /** One connected E2B sandbox. */
@@ -355,7 +393,10 @@ class E2BSandboxHandle implements SandboxHandle {
 		}
 	}
 
-	async exec(command: string, options: SandboxExecOptions = {}): Promise<{ exitCode: number | null }> {
+	async exec(
+		command: string,
+		options: SandboxExecOptions = {},
+	): Promise<{ exitCode: number | null }> {
 		try {
 			const handle = await this.#sandbox.commands.run(command, {
 				background: true,
@@ -557,7 +598,12 @@ class E2BProvider implements SandboxProvider {
 				},
 			});
 			await sandbox.files.makeDir(spec.workspaceDir);
-			return new E2BSandboxHandle(sandbox, spec.workspaceDir, this.#config.stateDir, spec.idleTimeoutMs);
+			return new E2BSandboxHandle(
+				sandbox,
+				spec.workspaceDir,
+				this.#config.stateDir,
+				spec.idleTimeoutMs,
+			);
 		} catch (error) {
 			await sandbox?.kill().catch(() => undefined);
 			throw mapError(error);
@@ -624,7 +670,10 @@ class E2BProvider implements SandboxProvider {
 	 * Build a template in the background and wait for it, streaming the build's log lines. The
 	 * build is not tied to the caller; a server restart loses the stream, and E2B keeps building.
 	 */
-	async buildTemplate(spec: TemplateBuildSpec, onLog: (line: string) => void): Promise<TemplateBuildResult> {
+	async buildTemplate(
+		spec: TemplateBuildSpec,
+		onLog: (line: string) => void,
+	): Promise<TemplateBuildResult> {
 		const { Template } = await loadSdk();
 		try {
 			const builder =
@@ -653,7 +702,8 @@ class E2BProvider implements SandboxProvider {
 				);
 				for (const entry of status.logEntries ?? []) onLog(entry.message);
 				offset += status.logEntries?.length ?? 0;
-				if (status.status === "ready") return { templateId: info.templateId, buildId: info.buildId };
+				if (status.status === "ready")
+					return { templateId: info.templateId, buildId: info.buildId };
 				if (status.status === "error") {
 					throw new SandboxError("unknown", status.reason?.message ?? "The template build failed");
 				}

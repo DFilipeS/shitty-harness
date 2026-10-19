@@ -6,7 +6,10 @@ const section = (key: string, text: string): PromptSectionInfo => ({ key, text }
 
 describe("system prompt display", () => {
 	it("strips a section's wrapper for the card body", () => {
-		const wrapped = section("execution-target", "<execution-target>\nYou run locally.\n</execution-target>");
+		const wrapped = section(
+			"execution-target",
+			"<execution-target>\nYou run locally.\n</execution-target>",
+		);
 		expect(sectionBody(wrapped)).toBe("You run locally.");
 	});
 

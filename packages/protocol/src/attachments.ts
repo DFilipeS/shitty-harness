@@ -154,7 +154,9 @@ export function isImageMimeType(mimeType: string): boolean {
 /** True for MIME types that name text. */
 export function isTextMimeType(mimeType: string): boolean {
 	const mime = mimeType.toLowerCase();
-	return mime.startsWith("text/") || (ATTACHMENT_TEXT_MIME_TYPES as readonly string[]).includes(mime);
+	return (
+		mime.startsWith("text/") || (ATTACHMENT_TEXT_MIME_TYPES as readonly string[]).includes(mime)
+	);
 }
 
 /** What an attachment file carries: an image, text, or something the harness cannot send. */

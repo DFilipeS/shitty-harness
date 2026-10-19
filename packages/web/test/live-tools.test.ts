@@ -52,7 +52,9 @@ describe("applyToolOutput", () => {
 	});
 
 	it("drops the front of the window before appending", () => {
-		expect(applyToolOutput("line 1\nline 2\n", { trimStart: 7, append: "line 3\n" })).toBe("line 2\nline 3\n");
+		expect(applyToolOutput("line 1\nline 2\n", { trimStart: 7, append: "line 3\n" })).toBe(
+			"line 2\nline 3\n",
+		);
 	});
 
 	it("trims without appending", () => {
@@ -77,9 +79,7 @@ describe("liveToolsFromSnapshot", () => {
 	});
 
 	it("skips a finished tool whose result is already committed", () => {
-		expect(
-			liveToolsFromSnapshot([{ callId: "call-1", name: "bash", status: "done" }]),
-		).toEqual({});
+		expect(liveToolsFromSnapshot([{ callId: "call-1", name: "bash", status: "done" }])).toEqual({});
 	});
 
 	it("keeps a finished tool that still has output to read", () => {

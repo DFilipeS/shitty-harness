@@ -28,7 +28,11 @@ type SkillFile = {
  * The files of one skill directory, skipping dotfiles, `.git`, and `node_modules`. Symlinked
  * directories are not followed, so a link cycle cannot run away.
  */
-export async function listSkillFiles(fs: SkillFs, dir: string, limit = Number.POSITIVE_INFINITY): Promise<SkillFile[]> {
+export async function listSkillFiles(
+	fs: SkillFs,
+	dir: string,
+	limit = Number.POSITIVE_INFINITY,
+): Promise<SkillFile[]> {
 	const files: SkillFile[] = [];
 	const walk = async (relative: string, depth: number): Promise<void> => {
 		if (depth > MAX_WALK_DEPTH || files.length >= limit) return;
@@ -53,7 +57,8 @@ function parseManifest(text: string | undefined): MirrorManifest {
 		const value = JSON.parse(text) as Partial<MirrorManifest>;
 		const skills: Record<string, string> = {};
 		if (typeof value.skills === "object" && value.skills !== null) {
-			for (const [name, hash] of Object.entries(value.skills)) if (typeof hash === "string") skills[name] = hash;
+			for (const [name, hash] of Object.entries(value.skills))
+				if (typeof hash === "string") skills[name] = hash;
 		}
 		return { version: 1, skills };
 	} catch {
@@ -77,7 +82,11 @@ async function prepare(host: SkillFs, skill: Skill): Promise<PreparedSkill | Ski
 	const listed = await listSkillFiles(host, skill.realDir);
 	const size = listed.reduce((sum, file) => sum + file.size, 0);
 	if (size > MAX_MIRROR_SKILL_BYTES) {
-		return { path: skill.path, name: skill.name, reason: "Not mirrored into the sandbox: the skill is over 10 MB" };
+		return {
+			path: skill.path,
+			name: skill.name,
+			reason: "Not mirrored into the sandbox: the skill is over 10 MB",
+		};
 	}
 	const hash = createHash("sha256");
 	const files: PreparedSkill["files"] = [];
@@ -130,7 +139,11 @@ export async function mirrorSkills(
 		}
 		const size = prepared.files.reduce((sum, file) => sum + file.content.byteLength, 0);
 		if (total + size > MAX_MIRROR_TOTAL_BYTES) {
-			issues.push({ path: skill.path, name: skill.name, reason: "Not mirrored: the mirror is over 50 MB" });
+			issues.push({
+				path: skill.path,
+				name: skill.name,
+				reason: "Not mirrored: the mirror is over 50 MB",
+			});
 			continue;
 		}
 		total += size;
@@ -140,12 +153,18 @@ export async function mirrorSkills(
 		}
 		changed = true;
 		const dir = join(targetDir, skill.name);
-		if (existing.has(skill.name)) await target.remove(dir, { recursive: true, force: true }, context);
+		if (existing.has(skill.name))
+			await target.remove(dir, { recursive: true, force: true }, context);
 		// Record the folder before writing into it, so a failed write is still cleaned up next time.
 		next[skill.name] = "";
 		const written = await writeSkill(target, dir, prepared, context);
 		if (written) next[skill.name] = prepared.hash;
-		else issues.push({ path: skill.path, name: skill.name, reason: "Could not copy the skill into the sandbox" });
+		else
+			issues.push({
+				path: skill.path,
+				name: skill.name,
+				reason: "Could not copy the skill into the sandbox",
+			});
 	}
 
 	for (const name of Object.keys(manifest.skills)) {
@@ -162,11 +181,17 @@ export async function mirrorSkills(
 	return { mirrored: Object.keys(next).filter((name) => next[name] !== ""), issues };
 }
 
-async function writeSkill(target: ExecutionEnv, dir: string, prepared: PreparedSkill, context: Context): Promise<boolean> {
+async function writeSkill(
+	target: ExecutionEnv,
+	dir: string,
+	prepared: PreparedSkill,
+	context: Context,
+): Promise<boolean> {
 	const dirs = new Set<string>([dir]);
 	for (const file of prepared.files) {
 		const parts = file.path.split("/").slice(0, -1);
-		for (let index = 1; index <= parts.length; index++) dirs.add(join(dir, ...parts.slice(0, index)));
+		for (let index = 1; index <= parts.length; index++)
+			dirs.add(join(dir, ...parts.slice(0, index)));
 	}
 	for (const path of [...dirs].sort((a, b) => a.length - b.length)) {
 		const created = await target.createDir(path, { recursive: true }, context);

@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useReducer,
+	type ReactNode,
+} from "react";
 import type {
 	AgentEvent,
 	AgentState,
@@ -155,7 +163,16 @@ const initialState: State = {
 };
 
 function emptySession(id: string): SessionState {
-	return { id, attached: false, entries: [], liveTools: {}, runActive: false, agent: {}, inbox: [], queue: [] };
+	return {
+		id,
+		attached: false,
+		entries: [],
+		liveTools: {},
+		runActive: false,
+		agent: {},
+		inbox: [],
+		queue: [],
+	};
 }
 
 function fromSnapshot(id: string, snapshot: SnapshotEvent): SessionState {
@@ -187,9 +204,13 @@ function appendEntry(entries: EntryRecord[], entry: EntryRecord): EntryRecord[] 
 }
 
 /** Drop a tool's live state once its result is committed; the entry takes over. */
-function withoutResultTool(liveTools: Record<string, LiveTool>, entry: EntryRecord): Record<string, LiveTool> {
+function withoutResultTool(
+	liveTools: Record<string, LiveTool>,
+	entry: EntryRecord,
+): Record<string, LiveTool> {
 	const message = entry.model?.[0];
-	if (message?.role !== "toolResult" || liveTools[message.toolCallId] === undefined) return liveTools;
+	if (message?.role !== "toolResult" || liveTools[message.toolCallId] === undefined)
+		return liveTools;
 	const next = { ...liveTools };
 	delete next[message.toolCallId];
 	return next;
@@ -206,7 +227,10 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 			return { ...session, runActive: false, liveTools: {} };
 		case "message_start":
 			return event.message.role === "assistant"
-				? { ...session, live: { ...fromAssistantMessage(event.message), key: String(event.message.timestamp) } }
+				? {
+						...session,
+						live: { ...fromAssistantMessage(event.message), key: String(event.message.timestamp) },
+					}
 				: session;
 		case "message_update":
 			if (session.live === undefined) return session;
@@ -251,7 +275,9 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 				running: true,
 			};
 			const output =
-				event.output === undefined ? existing.output : applyToolOutput(existing.output, event.output);
+				event.output === undefined
+					? existing.output
+					: applyToolOutput(existing.output, event.output);
 			return {
 				...session,
 				liveTools: { ...session.liveTools, [event.toolCallId]: { ...existing, output } },
@@ -261,14 +287,18 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 			const existing = session.liveTools[event.toolCallId];
 			if (existing === undefined) return session;
 			// A committed result replaces the live window; without one, keep the output for reading.
-			if (event.entry !== undefined) return { ...session, liveTools: withoutResultTool(session.liveTools, event.entry) };
+			if (event.entry !== undefined)
+				return { ...session, liveTools: withoutResultTool(session.liveTools, event.entry) };
 			return {
 				...session,
 				liveTools: { ...session.liveTools, [event.toolCallId]: { ...existing, running: false } },
 			};
 		}
 		case "inbox_update":
-			return { ...session, inbox: event.items.map((item) => ({ id: String(item.id), mode: item.mode })) };
+			return {
+				...session,
+				inbox: event.items.map((item) => ({ id: String(item.id), mode: item.mode })),
+			};
 		case "agent_changed":
 			return { ...session, agent: event.agent };
 		case "usage_changed":
@@ -290,7 +320,13 @@ function reducer(state: State, action: Action): State {
 			if (!activeGone) return { ...state, sessions: action.sessions, sessionsLoaded: true };
 			const sessionsById = { ...state.sessionsById };
 			if (state.activeSessionId !== undefined) delete sessionsById[state.activeSessionId];
-			return { ...state, sessions: action.sessions, sessionsLoaded: true, activeSessionId: undefined, sessionsById };
+			return {
+				...state,
+				sessions: action.sessions,
+				sessionsLoaded: true,
+				activeSessionId: undefined,
+				sessionsById,
+			};
 		}
 		case "sessions/upsert": {
 			const without = state.sessions.filter((session) => session.id !== action.session.id);
@@ -338,14 +374,20 @@ function reducer(state: State, action: Action): State {
 			return {
 				...state,
 				activeSessionId: action.id,
-				sessionsById: { ...state.sessionsById, [action.id]: state.sessionsById[action.id] ?? emptySession(action.id) },
+				sessionsById: {
+					...state.sessionsById,
+					[action.id]: state.sessionsById[action.id] ?? emptySession(action.id),
+				},
 			};
 		case "session/deactivate":
 			return { ...state, activeSessionId: undefined };
 		case "session/attached":
 			return {
 				...state,
-				sessionsById: { ...state.sessionsById, [action.id]: fromSnapshot(action.id, action.snapshot) },
+				sessionsById: {
+					...state.sessionsById,
+					[action.id]: fromSnapshot(action.id, action.snapshot),
+				},
 			};
 		case "session/event": {
 			const current = state.sessionsById[action.id] ?? emptySession(action.id);
@@ -357,7 +399,10 @@ function reducer(state: State, action: Action): State {
 		case "session/live-done": {
 			const current = state.sessionsById[action.id];
 			if (current === undefined || current.live === undefined) return state;
-			return { ...state, sessionsById: { ...state.sessionsById, [action.id]: { ...current, live: undefined } } };
+			return {
+				...state,
+				sessionsById: { ...state.sessionsById, [action.id]: { ...current, live: undefined } },
+			};
 		}
 		case "session/queue": {
 			const current = state.sessionsById[action.id];
@@ -372,7 +417,10 @@ function reducer(state: State, action: Action): State {
 		case "session/agent": {
 			const current = state.sessionsById[action.id];
 			if (current === undefined) return state;
-			return { ...state, sessionsById: { ...state.sessionsById, [action.id]: { ...current, agent: action.agent } } };
+			return {
+				...state,
+				sessionsById: { ...state.sessionsById, [action.id]: { ...current, agent: action.agent } },
+			};
 		}
 		case "error/set":
 			return { ...state, error: action.error };
@@ -598,7 +646,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 				if (!cancelled) dispatch({ type: "session/queue", id, ids: queuedIds, items });
 			} catch (error) {
 				// The session is gone; the session list cleans it up.
-				if (cancelled || (error instanceof ServerCommandError && error.code === "not_found")) return;
+				if (cancelled || (error instanceof ServerCommandError && error.code === "not_found"))
+					return;
 				dispatch({ type: "error/set", error: errorMessage(error) });
 			}
 		})();
@@ -632,14 +681,17 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	}, [state.sessionsLoaded, state.sessions, state.activeSessionId]);
 
 	/** Select a session and keep the URL in step, so reloads and shared links open it. */
-	const activateSession = useCallback((id: string | undefined, mode: "push" | "replace" = "push") => {
-		if (id === undefined) dispatch({ type: "session/deactivate" });
-		else dispatch({ type: "session/activate", id });
-		const path = id === undefined ? "/" : sessionPath(id);
-		if (window.location.pathname === path) return;
-		if (mode === "push") window.history.pushState(null, "", path);
-		else window.history.replaceState(null, "", path);
-	}, []);
+	const activateSession = useCallback(
+		(id: string | undefined, mode: "push" | "replace" = "push") => {
+			if (id === undefined) dispatch({ type: "session/deactivate" });
+			else dispatch({ type: "session/activate", id });
+			const path = id === undefined ? "/" : sessionPath(id);
+			if (window.location.pathname === path) return;
+			if (mode === "push") window.history.pushState(null, "", path);
+			else window.history.replaceState(null, "", path);
+		},
+		[],
+	);
 
 	const createSession = useCallback(async () => {
 		try {
@@ -680,7 +732,9 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 					sessionId: id,
 					text,
 					requestId: crypto.randomUUID(),
-					...(attachments === undefined || attachments.length === 0 ? {} : { attachments: [...attachments] }),
+					...(attachments === undefined || attachments.length === 0
+						? {}
+						: { attachments: [...attachments] }),
 				});
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
@@ -705,7 +759,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			const id = state.activeSessionId;
 			if (id === undefined) return;
 			try {
-				const { outcome } = await client.send({ type: "sessions.withdraw", sessionId: id, submissionId });
+				const { outcome } = await client.send({
+					type: "sessions.withdraw",
+					sessionId: id,
+					submissionId,
+				});
 				if (outcome === "already_placed") {
 					dispatch({
 						type: "notice/set",
@@ -762,7 +820,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			const id = state.activeSessionId;
 			if (id === undefined) return;
 			try {
-				const { agent } = await client.send({ type: "sessions.configure", sessionId: id, thinkingLevel });
+				const { agent } = await client.send({
+					type: "sessions.configure",
+					sessionId: id,
+					thinkingLevel,
+				});
 				dispatch({ type: "session/agent", id, agent });
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
@@ -775,7 +837,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		async (id: string) => {
 			try {
 				await client.send({ type: "sessions.delete", sessionId: id });
-				if (sessionIdFromPath(window.location.pathname) === id) activateSession(undefined, "replace");
+				if (sessionIdFromPath(window.location.pathname) === id)
+					activateSession(undefined, "replace");
 			} catch (error) {
 				dispatch({ type: "error/set", error: errorMessage(error) });
 			}
@@ -806,7 +869,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			const id = state.activeSessionId;
 			if (id === undefined) return;
 			try {
-				const { session } = await client.send({ type: "sessions.setTarget", sessionId: id, target });
+				const { session } = await client.send({
+					type: "sessions.setTarget",
+					sessionId: id,
+					target,
+				});
 				dispatch({ type: "sessions/upsert", session });
 				dispatch({ type: "target/clear", sessionId: id });
 			} catch (error) {
@@ -997,7 +1064,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	const createTemplate = useCallback(
 		async (name: string, recipe?: TemplateRecipeInput) =>
 			await templateCommand(() =>
-				client.send({ type: "templates.create", name, ...(recipe === undefined ? {} : { recipe }) }),
+				client.send({
+					type: "templates.create",
+					name,
+					...(recipe === undefined ? {} : { recipe }),
+				}),
 			),
 		[templateCommand, client],
 	);
@@ -1014,7 +1085,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 	);
 
 	const buildTemplate = useCallback(
-		async (name: string) => await templateCommand(() => client.send({ type: "templates.build", name })),
+		async (name: string) =>
+			await templateCommand(() => client.send({ type: "templates.build", name })),
 		[templateCommand, client],
 	);
 
@@ -1153,7 +1225,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			templatesOther: state.templatesOther,
 			targetStatus: state.targetStatus,
 			...(state.activeSessionId === undefined ? {} : { activeSessionId: state.activeSessionId }),
-			...(state.activeSessionId === undefined || state.sessionsById[state.activeSessionId] === undefined
+			...(state.activeSessionId === undefined ||
+			state.sessionsById[state.activeSessionId] === undefined
 				? {}
 				: { activeSession: state.sessionsById[state.activeSessionId] }),
 			...(state.error === undefined ? {} : { error: state.error }),

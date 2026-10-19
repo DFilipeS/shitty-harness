@@ -15,7 +15,8 @@ export function parseQuestions(args: Record<string, unknown> | undefined): Quest
 	const questions: Question[] = [];
 	for (const item of args.questions) {
 		const question = record(item);
-		if (typeof question?.question !== "string" || !Array.isArray(question.options)) return undefined;
+		if (typeof question?.question !== "string" || !Array.isArray(question.options))
+			return undefined;
 		const options = question.options.map(record);
 		if (options.some((option) => typeof option?.label !== "string")) return undefined;
 		questions.push({
@@ -56,11 +57,14 @@ export function findQuestions(
 	callId: string,
 ): Question[] | undefined {
 	for (const block of live ?? []) {
-		if (block.type === "toolCall" && block.id === callId) return parseQuestions(parseToolArguments(block.argumentsText));
+		if (block.type === "toolCall" && block.id === callId)
+			return parseQuestions(parseToolArguments(block.argumentsText));
 	}
 	for (let index = entries.length - 1; index >= 0; index -= 1) {
 		const assistant = assistantMessageOf(entries[index]!);
-		const call = assistant?.content.find((block) => block.type === "toolCall" && block.id === callId);
+		const call = assistant?.content.find(
+			(block) => block.type === "toolCall" && block.id === callId,
+		);
 		if (call?.type === "toolCall") return parseQuestions(call.arguments);
 	}
 	return undefined;
@@ -70,7 +74,9 @@ export function findQuestions(
 export function answerText(answer: QuestionAnswer | undefined): string {
 	if (answer === undefined) return "";
 	if (answer.skipped === true) return "skipped";
-	return [...answer.selected, ...(answer.other === undefined ? [] : [`“${answer.other}”`])].join(", ");
+	return [...answer.selected, ...(answer.other === undefined ? [] : [`“${answer.other}”`])].join(
+		", ",
+	);
 }
 
 /**
@@ -84,10 +90,19 @@ export type QuestionDraft = {
 	skipped: boolean;
 };
 
-export const EMPTY_DRAFT: QuestionDraft = { selected: [], otherChosen: false, other: "", skipped: false };
+export const EMPTY_DRAFT: QuestionDraft = {
+	selected: [],
+	otherChosen: false,
+	other: "",
+	skipped: false,
+};
 
 /** Pick an option: a single-select question swaps its choice, a multi-select one toggles it. */
-export function toggleOption(question: Question, draft: QuestionDraft, label: string): QuestionDraft {
+export function toggleOption(
+	question: Question,
+	draft: QuestionDraft,
+	label: string,
+): QuestionDraft {
 	if (question.multiSelect === true) {
 		const selected = draft.selected.includes(label)
 			? draft.selected.filter((candidate) => candidate !== label)
@@ -99,7 +114,8 @@ export function toggleOption(question: Question, draft: QuestionDraft, label: st
 
 /** Pick "Other": a single-select question drops its option, a multi-select one keeps them. */
 export function toggleOther(question: Question, draft: QuestionDraft): QuestionDraft {
-	if (question.multiSelect === true) return { ...draft, otherChosen: !draft.otherChosen, skipped: false };
+	if (question.multiSelect === true)
+		return { ...draft, otherChosen: !draft.otherChosen, skipped: false };
 	return { ...draft, selected: [], otherChosen: true, skipped: false };
 }
 
@@ -111,7 +127,9 @@ export function skipDraft(draft: QuestionDraft): QuestionDraft {
 function draftAnswer(draft: QuestionDraft): QuestionAnswer {
 	if (draft.skipped) return { selected: [], skipped: true };
 	const other = draft.other.trim();
-	return draft.otherChosen && other !== "" ? { selected: draft.selected, other } : { selected: draft.selected };
+	return draft.otherChosen && other !== ""
+		? { selected: draft.selected, other }
+		: { selected: draft.selected };
 }
 
 /**
@@ -142,7 +160,10 @@ export function draftDone(draft: QuestionDraft | undefined): boolean {
 }
 
 /** Whether every question is answered or skipped, which is what Submit waits for. */
-export function draftsComplete(questions: readonly Question[], drafts: readonly QuestionDraft[]): boolean {
+export function draftsComplete(
+	questions: readonly Question[],
+	drafts: readonly QuestionDraft[],
+): boolean {
 	return questions.every((_, index) => draftDone(drafts[index]));
 }
 
@@ -163,7 +184,12 @@ export function nextPending(
 }
 
 /** The reply to send; skipping every question skips the call. */
-export function replyFromDrafts(questions: readonly Question[], drafts: readonly QuestionDraft[]): QuestionReply {
+export function replyFromDrafts(
+	questions: readonly Question[],
+	drafts: readonly QuestionDraft[],
+): QuestionReply {
 	const answers = questions.map((_, index) => draftAnswer(drafts[index] ?? EMPTY_DRAFT));
-	return answers.every((answer) => answer.skipped === true) ? { kind: "skipped" } : { kind: "answered", answers };
+	return answers.every((answer) => answer.skipped === true)
+		? { kind: "skipped" }
+		: { kind: "answered", answers };
 }

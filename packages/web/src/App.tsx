@@ -146,7 +146,8 @@ function AppShell() {
 
 /** Commands that make sense anywhere in the app, regardless of the open session. */
 function useGlobalCommands(toggleSidebar: () => void, togglePanel: () => void) {
-	const { sessions, activeSessionId, createSession, selectSession, refreshProviders } = useHarness();
+	const { sessions, activeSessionId, createSession, selectSession, refreshProviders } =
+		useHarness();
 	const { theme, toggleTheme } = useTheme();
 	const providersPalette = useProviderPalette();
 	const defaultsPalette = useDefaultsPalette();

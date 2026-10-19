@@ -115,7 +115,8 @@ function providersFor(models: Models, setApiKey: Providers["setApiKey"]): Provid
 			if (change.target !== undefined) {
 				if (change.target === null) delete next.target;
 				else if (change.target.kind === "sandbox") next.target = { kind: "sandbox" };
-				else if (change.target.path === undefined || change.target.path === "") next.target = { kind: "local" };
+				else if (change.target.path === undefined || change.target.path === "")
+					next.target = { kind: "local" };
 				else next.target = { kind: "local", path: change.target.path };
 			}
 			defaults = next;
@@ -205,11 +206,13 @@ function createFakeImageProvider(image: { data: string; mimeType: string; usage?
  * `tokensPerSecond`, so tests can observe a run while it is in flight. With `image`, a fake image
  * provider is registered too, so the `generate_image` tool has something to call.
  */
-export function createFauxProviders(options: {
-	text?: string;
-	tokensPerSecond?: number;
-	image?: { data: string; mimeType: string; usage?: Usage };
-} = {}): {
+export function createFauxProviders(
+	options: {
+		text?: string;
+		tokensPerSecond?: number;
+		image?: { data: string; mimeType: string; usage?: Usage };
+	} = {},
+): {
 	providers: Providers;
 	faux: FauxProviderHandle;
 } {
@@ -217,6 +220,8 @@ export function createFauxProviders(options: {
 	const faux = fauxProvider({ tokensPerSecond: options.tokensPerSecond ?? 20 });
 	models.setProvider(faux.provider);
 	if (options.image !== undefined) models.setProvider(createFakeImageProvider(options.image));
-	faux.setResponses([fauxAssistantMessage(options.text ?? "The faux model is answering this prompt.")]);
+	faux.setResponses([
+		fauxAssistantMessage(options.text ?? "The faux model is answering this prompt."),
+	]);
 	return { providers: providersFor(models, async () => {}), faux };
 }

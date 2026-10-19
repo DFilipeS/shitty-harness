@@ -15,7 +15,15 @@ export type UsageTotals = {
 /** Sums every model and tool bucket of a session's usage. Undefined until something is recorded. */
 export function usageTotals(usage: UsageState | undefined): UsageTotals | undefined {
 	if (usage === undefined) return undefined;
-	const totals: UsageTotals = { tokens: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, cost: 0 };
+	const totals: UsageTotals = {
+		tokens: 0,
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		reasoning: 0,
+		cost: 0,
+	};
 	let recorded = false;
 	// The buckets are required by the type, but be forgiving about partial state.
 	for (const bucket of [usage.models ?? {}, usage.tools ?? {}]) {
@@ -47,7 +55,8 @@ export function cacheHitRate(totals: UsageTotals): number | undefined {
  * providers only report usage on the final chunk and the live copy can still read zero.
  */
 export function contextTokens(
-	session: { live?: { usage?: Usage; entryId?: unknown }; entries: readonly EntryRecord[] } | undefined,
+	session:
+		{ live?: { usage?: Usage; entryId?: unknown }; entries: readonly EntryRecord[] } | undefined,
 ): number | undefined {
 	if (session === undefined) return undefined;
 	const live = session.live;

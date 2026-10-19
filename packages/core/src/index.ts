@@ -1,4 +1,11 @@
-export { loadConfig, saveConfig, emptyConfig, type AppConfig, type ProviderConfig, type DefaultTargetConfig } from "./config.ts";
+export {
+	loadConfig,
+	saveConfig,
+	emptyConfig,
+	type AppConfig,
+	type ProviderConfig,
+	type DefaultTargetConfig,
+} from "./config.ts";
 export { ConfigCredentialStore } from "./credentials.ts";
 export { FileModelsStore } from "./models-store.ts";
 export { ProviderManager, type ProviderManagerOptions, type Providers } from "./providers.ts";

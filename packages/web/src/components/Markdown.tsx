@@ -66,13 +66,25 @@ function componentsFor(palette: MarkdownPalette): Components {
 			</a>
 		),
 		p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-		ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5 first:mt-0 last:mb-0">{children}</ul>,
-		ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5 first:mt-0 last:mb-0">{children}</ol>,
+		ul: ({ children }) => (
+			<ul className="my-2 list-disc space-y-1 pl-5 first:mt-0 last:mb-0">{children}</ul>
+		),
+		ol: ({ children }) => (
+			<ol className="my-2 list-decimal space-y-1 pl-5 first:mt-0 last:mb-0">{children}</ol>
+		),
 		li: ({ children }) => <li className="pl-0.5">{children}</li>,
-		h1: ({ children }) => <h1 className="mt-4 mb-2 text-base font-semibold first:mt-0">{children}</h1>,
-		h2: ({ children }) => <h2 className="mt-4 mb-2 text-sm font-semibold first:mt-0">{children}</h2>,
-		h3: ({ children }) => <h3 className="mt-3 mb-1.5 text-sm font-semibold first:mt-0">{children}</h3>,
-		h4: ({ children }) => <h4 className="mt-3 mb-1.5 text-sm font-medium first:mt-0">{children}</h4>,
+		h1: ({ children }) => (
+			<h1 className="mt-4 mb-2 text-base font-semibold first:mt-0">{children}</h1>
+		),
+		h2: ({ children }) => (
+			<h2 className="mt-4 mb-2 text-sm font-semibold first:mt-0">{children}</h2>
+		),
+		h3: ({ children }) => (
+			<h3 className="mt-3 mb-1.5 text-sm font-semibold first:mt-0">{children}</h3>
+		),
+		h4: ({ children }) => (
+			<h4 className="mt-3 mb-1.5 text-sm font-medium first:mt-0">{children}</h4>
+		),
 		blockquote: ({ children }) => (
 			<blockquote className={`my-2 border-l-2 pl-3 first:mt-0 last:mb-0 ${palette.blockquote}`}>
 				{children}
@@ -85,7 +97,9 @@ function componentsFor(palette: MarkdownPalette): Components {
 			</div>
 		),
 		thead: ({ children }) => <thead className={`border-b ${palette.tableHead}`}>{children}</thead>,
-		th: ({ children }) => <th className={`px-2 py-1.5 font-medium ${palette.tableHeaderCell}`}>{children}</th>,
+		th: ({ children }) => (
+			<th className={`px-2 py-1.5 font-medium ${palette.tableHeaderCell}`}>{children}</th>
+		),
 		td: ({ children }) => (
 			<td className={`border-t px-2 py-1.5 align-top ${palette.tableCell}`}>{children}</td>
 		),
@@ -95,7 +109,9 @@ function componentsFor(palette: MarkdownPalette): Components {
 			</pre>
 		),
 		code: ({ className, children }) => (
-			<code className={`rounded px-1 py-0.5 font-mono text-[0.85em] ${palette.code} ${className ?? ""}`}>
+			<code
+				className={`rounded px-1 py-0.5 font-mono text-[0.85em] ${palette.code} ${className ?? ""}`}
+			>
 				{children}
 			</code>
 		),
@@ -126,7 +142,9 @@ export const Markdown = memo(function Markdown({
 	size?: MarkdownSize;
 }) {
 	return (
-		<div className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${PALETTES[variant].text}`}>
+		<div
+			className={`${size === "xs" ? "text-xs" : "text-sm"} leading-relaxed ${PALETTES[variant].text}`}
+		>
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm, remarkBreaks]}
 				rehypePlugins={[[rehypeHighlight, { ignoreMissing: true }]]}

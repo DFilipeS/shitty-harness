@@ -100,7 +100,10 @@ async function scanRoot(fs: SkillFs, root: SkillRoot): Promise<Candidate[]> {
  * taken is shadowed and reported; one whose directory was already seen through another path (a
  * symlink) is dropped silently.
  */
-export async function discoverSkills(fs: SkillFs, roots: readonly SkillRoot[]): Promise<SkillCatalog> {
+export async function discoverSkills(
+	fs: SkillFs,
+	roots: readonly SkillRoot[],
+): Promise<SkillCatalog> {
 	const scanned = await Promise.all(roots.map((root) => scanRoot(fs, root)));
 	return mergeCandidates(scanned.flat());
 }
@@ -131,6 +134,11 @@ function mergeCandidates(candidates: readonly Candidate[]): SkillCatalog {
 
 /** Merge catalogs in precedence order, as if their skills had been found together. */
 export function mergeCatalogs(catalogs: readonly SkillCatalog[]): SkillCatalog {
-	const merged = mergeCandidates(catalogs.flatMap((catalog) => catalog.skills.map((skill) => ({ skill }))));
-	return { skills: merged.skills, issues: [...catalogs.flatMap((catalog) => catalog.issues), ...merged.issues] };
+	const merged = mergeCandidates(
+		catalogs.flatMap((catalog) => catalog.skills.map((skill) => ({ skill }))),
+	);
+	return {
+		skills: merged.skills,
+		issues: [...catalogs.flatMap((catalog) => catalog.issues), ...merged.issues],
+	};
 }

@@ -4,7 +4,11 @@ import { parseSkillBlock, userParts } from "../src/lib/messages.ts";
 import { buildSkillsPage } from "../src/lib/skill-commands.tsx";
 import { completeInvocation, invokedSkill, matchSkills, skillQuery } from "../src/lib/skills.ts";
 
-function skill(name: string, description = `${name} things`, overrides: Partial<SkillInfo> = {}): SkillInfo {
+function skill(
+	name: string,
+	description = `${name} things`,
+	overrides: Partial<SkillInfo> = {},
+): SkillInfo {
 	return {
 		name,
 		description,
@@ -30,16 +34,33 @@ describe("skillQuery", () => {
 
 describe("matchSkills", () => {
 	it("ranks name prefixes, then name substrings, then descriptions", () => {
-		const skills = [skill("review-pdf"), skill("pdf"), skill("forms", "Fill PDF forms"), skill("other")];
-		expect(matchSkills(skills, "pdf").map((entry) => entry.name)).toEqual(["pdf", "review-pdf", "forms"]);
-		expect(matchSkills(skills, "").map((entry) => entry.name)).toEqual(["forms", "other", "pdf", "review-pdf"]);
+		const skills = [
+			skill("review-pdf"),
+			skill("pdf"),
+			skill("forms", "Fill PDF forms"),
+			skill("other"),
+		];
+		expect(matchSkills(skills, "pdf").map((entry) => entry.name)).toEqual([
+			"pdf",
+			"review-pdf",
+			"forms",
+		]);
+		expect(matchSkills(skills, "").map((entry) => entry.name)).toEqual([
+			"forms",
+			"other",
+			"pdf",
+			"review-pdf",
+		]);
 	});
 });
 
 describe("completeInvocation", () => {
 	it("replaces the leading token and keeps the rest", () => {
 		expect(completeInvocation("/pd", "pdf")).toEqual({ text: "/skill:pdf ", caret: 11 });
-		expect(completeInvocation("/pd  extract tables", "pdf")).toEqual({ text: "/skill:pdf extract tables", caret: 11 });
+		expect(completeInvocation("/pd  extract tables", "pdf")).toEqual({
+			text: "/skill:pdf extract tables",
+			caret: 11,
+		});
 	});
 });
 
@@ -95,9 +116,20 @@ describe("buildSkillsPage", () => {
 		const page = buildSkillsPage({
 			skills: [
 				skill("pdf"),
-				skill("mine", "Mine", { scope: "user", mirrored: true, modelInvocable: false, warnings: ["Odd name"] }),
+				skill("mine", "Mine", {
+					scope: "user",
+					mirrored: true,
+					modelInvocable: false,
+					warnings: ["Odd name"],
+				}),
 			],
-			issues: [{ path: "/repo/.agents/skills/bad/SKILL.md", name: "bad", reason: "The frontmatter has no description" }],
+			issues: [
+				{
+					path: "/repo/.agents/skills/bad/SKILL.md",
+					name: "bad",
+					reason: "The frontmatter has no description",
+				},
+			],
 		});
 		if (page.kind !== "commands") throw new Error("expected a command page");
 		expect(page.commands.map((command) => [command.group, command.title, command.detail])).toEqual([

@@ -73,17 +73,24 @@ export class FakeSandboxHandle implements SandboxHandle {
 		return this.#lastExecEnv;
 	}
 
-	async exec(command: string, options: SandboxExecOptions = {}): Promise<{ exitCode: number | null }> {
+	async exec(
+		command: string,
+		options: SandboxExecOptions = {},
+	): Promise<{ exitCode: number | null }> {
 		this.#requireAlive();
 		this.#lastExecEnv = options.env;
 		const context =
-			options.signal === undefined ? BACKGROUND_CONTEXT : withAbortSignal(options.signal, BACKGROUND_CONTEXT);
+			options.signal === undefined
+				? BACKGROUND_CONTEXT
+				: withAbortSignal(options.signal, BACKGROUND_CONTEXT);
 		const result = await this.#env.exec(
 			command,
 			{
 				...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 				...(options.env === undefined ? {} : { env: options.env }),
-				...(options.timeoutMs === undefined || options.timeoutMs <= 0 ? {} : { timeout: options.timeoutMs / 1000 }),
+				...(options.timeoutMs === undefined || options.timeoutMs <= 0
+					? {}
+					: { timeout: options.timeoutMs / 1000 }),
 				onOutput: (text, _context, info) => {
 					if (info.stream === "stdout") options.onStdout?.(text);
 					else options.onStderr?.(text);
@@ -93,7 +100,11 @@ export class FakeSandboxHandle implements SandboxHandle {
 		);
 		if (result.ok) return { exitCode: result.value.exitCode };
 		const code =
-			result.error.code === "timeout" ? "timeout" : result.error.code === "aborted" ? "aborted" : "unknown";
+			result.error.code === "timeout"
+				? "timeout"
+				: result.error.code === "aborted"
+					? "aborted"
+					: "unknown";
 		throw new SandboxError(code, result.error.message, { cause: result.error });
 	}
 
@@ -110,7 +121,9 @@ export class FakeSandboxHandle implements SandboxHandle {
 	async listDir(path: string): Promise<SandboxFileInfo[]> {
 		this.#requireAlive();
 		const infos = getOrThrow(await this.#env.listDir(path, BACKGROUND_CONTEXT));
-		return Promise.all(infos.map((info) => this.#describe(info.path, info.name, info.kind, info.size, info.mtimeMs)));
+		return Promise.all(
+			infos.map((info) => this.#describe(info.path, info.name, info.kind, info.size, info.mtimeMs)),
+		);
 	}
 
 	async stat(path: string): Promise<SandboxFileInfo | undefined> {
@@ -233,7 +246,11 @@ export class FakeSandboxProvider implements SandboxProvider {
 	async create(spec: SandboxSpec): Promise<FakeSandboxHandle> {
 		this.createSpecs.push(spec);
 		await mkdir(spec.workspaceDir, { recursive: true });
-		const handle = new FakeSandboxHandle(`fake-${this.#nextId++}`, spec.workspaceDir, spec.idleTimeoutMs);
+		const handle = new FakeSandboxHandle(
+			`fake-${this.#nextId++}`,
+			spec.workspaceDir,
+			spec.idleTimeoutMs,
+		);
 		this.#sandboxes.set(handle.id, handle);
 		return handle;
 	}
@@ -263,7 +280,10 @@ export class FakeSandboxProvider implements SandboxProvider {
 		await handle.kill();
 	}
 
-	async buildTemplate(spec: TemplateBuildSpec, onLog: (line: string) => void): Promise<TemplateBuildResult> {
+	async buildTemplate(
+		spec: TemplateBuildSpec,
+		onLog: (line: string) => void,
+	): Promise<TemplateBuildResult> {
 		this.buildStarts.push(spec.name);
 		for (const line of this.buildLogLines) onLog(line);
 		if (this.buildGate !== undefined) await this.buildGate;
@@ -331,7 +351,8 @@ export class FakeSandboxSettingsStore implements SandboxSettingsStore {
 			else next.template = change.template;
 		}
 		if (change.idleTimeoutMs !== undefined) {
-			if (change.idleTimeoutMs === null) next.idleTimeoutMs = DEFAULT_SANDBOX_SETTINGS.idleTimeoutMs;
+			if (change.idleTimeoutMs === null)
+				next.idleTimeoutMs = DEFAULT_SANDBOX_SETTINGS.idleTimeoutMs;
 			else next.idleTimeoutMs = change.idleTimeoutMs;
 		}
 		if (change.autoPause !== undefined) {
@@ -339,11 +360,13 @@ export class FakeSandboxSettingsStore implements SandboxSettingsStore {
 			else next.autoPause = change.autoPause;
 		}
 		if (change.apiKey !== undefined) {
-			if (change.apiKey.key === null || change.apiKey.key === "") delete next.providers[change.apiKey.provider];
+			if (change.apiKey.key === null || change.apiKey.key === "")
+				delete next.providers[change.apiKey.provider];
 			else next.providers[change.apiKey.provider] = { apiKey: change.apiKey.key };
 		}
 		if (change.sshAgentSocket !== undefined) {
-			if (change.sshAgentSocket === null || change.sshAgentSocket === "") delete next.ssh.agentSocket;
+			if (change.sshAgentSocket === null || change.sshAgentSocket === "")
+				delete next.ssh.agentSocket;
 			else next.ssh.agentSocket = change.sshAgentSocket;
 		}
 		if (change.forwardAgent !== undefined) {

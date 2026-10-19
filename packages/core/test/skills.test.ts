@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxToolCall, type Message } from "@earendil-works/pi-ai";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { MemoryStorage, type ConversationId, type DocumentReader } from "@earendil-works/pi-durable";
+import {
+	MemoryStorage,
+	type ConversationId,
+	type DocumentReader,
+} from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { afterEach, describe, expect, it } from "vitest";
 import { HarnessService } from "../src/index.ts";
@@ -26,7 +30,12 @@ afterEach(async () => {
 	for (const dir of temps.splice(0)) await rm(dir, { recursive: true, force: true });
 });
 
-async function writeSkill(root: string, name: string, frontmatter: string, body = "Do the thing."): Promise<string> {
+async function writeSkill(
+	root: string,
+	name: string,
+	frontmatter: string,
+	body = "Do the thing.",
+): Promise<string> {
 	const dir = join(root, name);
 	await mkdir(dir, { recursive: true });
 	await writeFile(join(dir, "SKILL.md"), `---\n${frontmatter}\n---\n\n${body}\n`);
@@ -70,7 +79,10 @@ describe("parseSkill", () => {
 	});
 
 	it("repairs unquoted colons and warns about a mismatched name", () => {
-		const result = parseSkill("---\nname: Other\ndescription: Use when: the user asks\n---\nbody", "folder");
+		const result = parseSkill(
+			"---\nname: Other\ndescription: Use when: the user asks\n---\nbody",
+			"folder",
+		);
 		if (!result.ok) throw new Error(result.reason);
 		expect(result.skill.description).toBe("Use when: the user asks");
 		expect(result.skill.warnings).toEqual([
@@ -80,7 +92,10 @@ describe("parseSkill", () => {
 	});
 
 	it("honours disable-model-invocation", () => {
-		const result = parseSkill("---\ndescription: d\ndisable-model-invocation: true\n---\n", "deploy");
+		const result = parseSkill(
+			"---\ndescription: d\ndisable-model-invocation: true\n---\n",
+			"deploy",
+		);
 		if (!result.ok) throw new Error(result.reason);
 		expect(result.skill).toMatchObject({ name: "deploy", modelInvocable: false });
 	});
@@ -108,7 +123,11 @@ describe("discoverSkills", () => {
 		await mkdir(claude, { recursive: true });
 		await symlink(shared, join(claude, "shared"));
 		await writeSkill(claude, "review", "name: review\ndescription: Project review.");
-		await writeSkill(join(home, ".agents", "skills"), "review", "name: review\ndescription: User review.");
+		await writeSkill(
+			join(home, ".agents", "skills"),
+			"review",
+			"name: review\ndescription: User review.",
+		);
 		await writeSkill(join(home, ".agents", "skills"), "broken", "name: broken");
 
 		const catalog = await discoverSkills(hostSkillFs, skillRoots(workspace, home));
@@ -117,7 +136,11 @@ describe("discoverSkills", () => {
 			["review", "project", "Project review."],
 		]);
 		expect(catalog.issues).toEqual([
-			{ path: join(home, ".agents", "skills", "broken", "SKILL.md"), name: "broken", reason: "The frontmatter has no description" },
+			{
+				path: join(home, ".agents", "skills", "broken", "SKILL.md"),
+				name: "broken",
+				reason: "The frontmatter has no description",
+			},
 			{
 				path: join(home, ".agents", "skills", "review", "SKILL.md"),
 				name: "review",
@@ -149,7 +172,9 @@ describe("mirrorSkills", () => {
 		]);
 		expect(await readFile(join(targetDir, "tool", "scripts", "run.sh"), "utf8")).toBe("echo hi\n");
 		await expect(readFile(join(targetDir, "tool", ".hidden"), "utf8")).rejects.toThrow();
-		expect(await readFile(join(targetDir, "native", "SKILL.md"), "utf8")).toContain("Sandbox copy.");
+		expect(await readFile(join(targetDir, "native", "SKILL.md"), "utf8")).toContain(
+			"Sandbox copy.",
+		);
 		const manifest = JSON.parse(await readFile(join(targetDir, MIRROR_MANIFEST), "utf8")) as {
 			skills: Record<string, string>;
 		};
@@ -161,7 +186,9 @@ describe("mirrorSkills", () => {
 		const none = await mirrorSkills(hostSkillFs, [], env, targetDir, BACKGROUND_CONTEXT);
 		expect(none.mirrored).toEqual([]);
 		await expect(readFile(join(targetDir, "tool", "SKILL.md"), "utf8")).rejects.toThrow();
-		expect(await readFile(join(targetDir, "native", "SKILL.md"), "utf8")).toContain("Sandbox copy.");
+		expect(await readFile(join(targetDir, "native", "SKILL.md"), "utf8")).toContain(
+			"Sandbox copy.",
+		);
 	});
 });
 
@@ -175,11 +202,15 @@ describe("restoreSkills", () => {
 	});
 
 	it("puts a skill that was compacted away in front of the first message", () => {
-		const messages: Message[] = [{ role: "user", content: "Summary of earlier work", timestamp: 1 }];
+		const messages: Message[] = [
+			{ role: "user", content: "Summary of earlier work", timestamp: 1 },
+		];
 		const restored = restoreSkills(messages, active);
 		expect(restored).toHaveLength(1);
 		const content = restored?.[0]?.content;
-		expect(Array.isArray(content) && content[0]?.type === "text" ? content[0].text : "").toContain(block);
+		expect(Array.isArray(content) && content[0]?.type === "text" ? content[0].text : "").toContain(
+			block,
+		);
 		expect(JSON.stringify(restored)).toContain("Summary of earlier work");
 	});
 });
@@ -187,7 +218,12 @@ describe("restoreSkills", () => {
 describe("skills in a session", () => {
 	it("lists skills, invokes one from the message, and lets the model activate another", async () => {
 		const workspace = await temp("skills-session-");
-		await writeSkill(join(workspace, ".agents", "skills"), "greet", "name: greet\ndescription: Greet people warmly.", "Say hello.");
+		await writeSkill(
+			join(workspace, ".agents", "skills"),
+			"greet",
+			"name: greet\ndescription: Greet people warmly.",
+			"Say hello.",
+		);
 		await writeSkill(
 			join(workspace, ".agents", "skills"),
 			"deploy",
@@ -209,7 +245,9 @@ describe("skills in a session", () => {
 					.map((message) => JSON.stringify(message))
 					.join("\n");
 				firstUser = JSON.stringify(context.messages.find((message) => message.role === "user"));
-				return fauxAssistantMessage([fauxToolCall("skill", { name: "greet" })], { stopReason: "toolUse" });
+				return fauxAssistantMessage([fauxToolCall("skill", { name: "greet" })], {
+					stopReason: "toolUse",
+				});
 			},
 			fauxAssistantMessage([fauxToolCall("skill", { name: "greet" })], { stopReason: "toolUse" }),
 			fauxAssistantMessage([fauxToolCall("skill", { name: "secret" })], { stopReason: "toolUse" }),
@@ -265,8 +303,16 @@ describe("SkillLibrary on a sandbox target", () => {
 		const hostHome = await temp("skills-lib-host-");
 		const sandboxHome = await temp("skills-lib-sandbox-");
 		const workspace = join(sandboxHome, "workspace");
-		await writeSkill(join(hostHome, ".agents", "skills"), "mine", "name: mine\ndescription: From the host.");
-		await writeSkill(join(workspace, ".agents", "skills"), "repo", "name: repo\ndescription: From the repo.");
+		await writeSkill(
+			join(hostHome, ".agents", "skills"),
+			"mine",
+			"name: mine\ndescription: From the host.",
+		);
+		await writeSkill(
+			join(workspace, ".agents", "skills"),
+			"repo",
+			"name: repo\ndescription: From the repo.",
+		);
 
 		const local = new NodeExecutionEnv({ cwd: workspace });
 		// The sandbox's shell reports its own home; everything else is a plain local environment.
@@ -274,30 +320,51 @@ describe("SkillLibrary on a sandbox target", () => {
 			get(target, property, receiver) {
 				if (property === "id") return "sandbox:test:1";
 				if (property === "exec") {
-					return async (_command: unknown, options: { onOutput?: (text: string, context: unknown, info: { stream: string }) => void } | undefined) => {
+					return async (
+						_command: unknown,
+						options:
+							| { onOutput?: (text: string, context: unknown, info: { stream: string }) => void }
+							| undefined,
+					) => {
 						options?.onOutput?.(sandboxHome, BACKGROUND_CONTEXT, { stream: "stdout" });
 						return { ok: true, value: { exitCode: 0 } };
 					};
 				}
 				const value = Reflect.get(target, property, receiver) as unknown;
-				return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+				return typeof value === "function"
+					? (value as (...args: unknown[]) => unknown).bind(target)
+					: value;
 			},
 		});
 		const library = new SkillLibrary({
 			home: hostHome,
-			resolveTarget: async () => ({ kind: "sandbox", provider: "test", sandboxId: "1", workspaceDir: workspace, forwardAgent: false }),
+			resolveTarget: async () => ({
+				kind: "sandbox",
+				provider: "test",
+				sandboxId: "1",
+				workspaceDir: workspace,
+				forwardAgent: false,
+			}),
 		});
 		const read = {} as DocumentReader;
 		const id = 1 as ConversationId;
 
 		const scanned = await library.catalog(read, id, env, BACKGROUND_CONTEXT);
-		expect(scanned.skills.map((skill) => [skill.name, skill.scope, skill.mirrored === true, skill.dir])).toEqual([
+		expect(
+			scanned.skills.map((skill) => [skill.name, skill.scope, skill.mirrored === true, skill.dir]),
+		).toEqual([
 			["repo", "project", false, join(workspace, ".agents", "skills", "repo")],
 			["mine", "user", true, join(sandboxHome, ".agents", "skills", "mine")],
 		]);
-		expect(await readFile(join(sandboxHome, ".agents", "skills", "mine", "SKILL.md"), "utf8")).toContain("From the host.");
+		expect(
+			await readFile(join(sandboxHome, ".agents", "skills", "mine", "SKILL.md"), "utf8"),
+		).toContain("From the host.");
 
-		await writeSkill(join(hostHome, ".agents", "skills"), "later", "name: later\ndescription: Added after the scan.");
+		await writeSkill(
+			join(hostHome, ".agents", "skills"),
+			"later",
+			"name: later\ndescription: Added after the scan.",
+		);
 		library.invalidate(id);
 		const offline = await library.list(read, id, BACKGROUND_CONTEXT);
 		expect(offline.skills.map((skill) => skill.name)).toEqual(["repo", "mine", "later"]);

@@ -21,17 +21,23 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 10_000): P
 	}
 }
 
-const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const PNG =
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 describe("coding tools", () => {
 	it("offers the bundled tools and runs them in the local environment", async () => {
 		const workspace = await mkdtemp(join(tmpdir(), "harness-tools-"));
 		const { providers, faux } = createFauxProviders();
 		faux.setResponses([
-			fauxAssistantMessage([fauxToolCall("write", { path: "hello.txt", content: "hi from the tool\n" })], {
+			fauxAssistantMessage(
+				[fauxToolCall("write", { path: "hello.txt", content: "hi from the tool\n" })],
+				{
+					stopReason: "toolUse",
+				},
+			),
+			fauxAssistantMessage([fauxToolCall("bash", { command: "cat hello.txt" })], {
 				stopReason: "toolUse",
 			}),
-			fauxAssistantMessage([fauxToolCall("bash", { command: "cat hello.txt" })], { stopReason: "toolUse" }),
 			fauxAssistantMessage("Done."),
 		]);
 		const service = await HarnessService.create({
@@ -42,8 +48,12 @@ describe("coding tools", () => {
 		try {
 			const session = await service.createSession();
 			await service.prompt(session.id, "Write hello.txt and read it back", "request-tools");
-			const started = await waitFor(async () => (await service.listSessions())[0]?.working === true);
-			const finished = await waitFor(async () => (await service.listSessions())[0]?.working === false);
+			const started = await waitFor(
+				async () => (await service.listSessions())[0]?.working === true,
+			);
+			const finished = await waitFor(
+				async () => (await service.listSessions())[0]?.working === false,
+			);
 			expect({ started, finished }).toEqual({ started: true, finished: true });
 
 			expect(await readFile(join(workspace, "hello.txt"), "utf8")).toBe("hi from the tool\n");
@@ -64,7 +74,10 @@ describe("coding tools", () => {
 		const workspace = await mkdtemp(join(tmpdir(), "harness-env-"));
 		try {
 			const environment = localEnvironment(workspace);
-			const target = { conversationId: 1, read: {} } as unknown as Parameters<EnvironmentFactory>[0];
+			const target = {
+				conversationId: 1,
+				read: {},
+			} as unknown as Parameters<EnvironmentFactory>[0];
 			const env = await environment(target, BACKGROUND_CONTEXT);
 			expect(env?.cwd).toBe(workspace);
 			const written = await env?.writeFile("note.txt", "hi", BACKGROUND_CONTEXT);
@@ -76,7 +89,9 @@ describe("coding tools", () => {
 	});
 
 	it("puts the image instruction in the prompt", async () => {
-		const { providers, faux } = createFauxProviders({ image: { data: PNG, mimeType: "image/png" } });
+		const { providers, faux } = createFauxProviders({
+			image: { data: PNG, mimeType: "image/png" },
+		});
 		let prompt = "";
 		faux.setResponses([
 			(context) => {
@@ -102,9 +117,13 @@ describe("coding tools", () => {
 
 	it("generates an image through the harness and keeps it in the transcript", async () => {
 		const workspace = await mkdtemp(join(tmpdir(), "harness-tools-image-"));
-		const { providers, faux } = createFauxProviders({ image: { data: PNG, mimeType: "image/png" } });
+		const { providers, faux } = createFauxProviders({
+			image: { data: PNG, mimeType: "image/png" },
+		});
 		faux.setResponses([
-			fauxAssistantMessage([fauxToolCall("generate_image", { prompt: "a red apple" })], { stopReason: "toolUse" }),
+			fauxAssistantMessage([fauxToolCall("generate_image", { prompt: "a red apple" })], {
+				stopReason: "toolUse",
+			}),
 			fauxAssistantMessage("Here is your image."),
 		]);
 		const service = await HarnessService.create({
@@ -137,7 +156,9 @@ describe("coding tools", () => {
 	it("fails tool calls when no environment is configured", async () => {
 		const { providers, faux } = createFauxProviders();
 		faux.setResponses([
-			fauxAssistantMessage([fauxToolCall("bash", { command: "echo hi" })], { stopReason: "toolUse" }),
+			fauxAssistantMessage([fauxToolCall("bash", { command: "echo hi" })], {
+				stopReason: "toolUse",
+			}),
 			fauxAssistantMessage("Done."),
 		]);
 		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });

@@ -1,4 +1,9 @@
-import type { ProviderTemplateInfo, TemplateInfo, TemplateRecipeInput, TemplatesState } from "@harness/protocol";
+import type {
+	ProviderTemplateInfo,
+	TemplateInfo,
+	TemplateRecipeInput,
+	TemplatesState,
+} from "@harness/protocol";
 import {
 	CheckIcon,
 	FilePlusIcon,
@@ -68,10 +73,15 @@ export function buildTemplatePickerPage(options: {
 	/** `null` selects the provider default. */
 	select(template: string | null): void;
 }): CommandPage {
-	const pickable = options.templates.filter((template) => template.state === "ready" || template.state === "stale");
+	const pickable = options.templates.filter(
+		(template) => template.state === "ready" || template.state === "stale",
+	);
 	const known = new Set(options.templates.map((template) => template.name));
 	const others = options.other
-		.map((template) => ({ template, name: templateShortName(template.names[0] ?? template.templateId) }))
+		.map((template) => ({
+			template,
+			name: templateShortName(template.names[0] ?? template.templateId),
+		}))
 		.filter((entry) => !known.has(entry.name));
 	return {
 		kind: "commands",
@@ -87,27 +97,26 @@ export function buildTemplatePickerPage(options: {
 				current: options.current === undefined,
 				run: () => options.select(null),
 			},
-			...pickable.map(
-				(template): Command => ({
-					id: `${options.idPrefix}.template.${template.name}`,
-					title: template.name,
-					group: "Sandbox templates",
-					detail: `${stateLabel(template)}${template.description === undefined ? "" : ` · ${template.description}`}`,
-					icon: <LayersIcon />,
-					current: options.current === template.name,
-					run: () => options.select(template.name),
-				}),
-			),
-			...others.map(
-				(entry): Command => ({
-					id: `${options.idPrefix}.other.${entry.template.templateId}`,
-					title: entry.name,
-					group: "Other E2B templates",
-					detail: entry.template.buildStatus === undefined ? "in this E2B project" : `${entry.template.buildStatus} · in this E2B project`,
-					current: options.current === entry.name,
-					run: () => options.select(entry.name),
-				}),
-			),
+			...pickable.map((template): Command => ({
+				id: `${options.idPrefix}.template.${template.name}`,
+				title: template.name,
+				group: "Sandbox templates",
+				detail: `${stateLabel(template)}${template.description === undefined ? "" : ` · ${template.description}`}`,
+				icon: <LayersIcon />,
+				current: options.current === template.name,
+				run: () => options.select(template.name),
+			})),
+			...others.map((entry): Command => ({
+				id: `${options.idPrefix}.other.${entry.template.templateId}`,
+				title: entry.name,
+				group: "Other E2B templates",
+				detail:
+					entry.template.buildStatus === undefined
+						? "in this E2B project"
+						: `${entry.template.buildStatus} · in this E2B project`,
+				current: options.current === entry.name,
+				run: () => options.select(entry.name),
+			})),
 			{
 				id: `${options.idPrefix}.name`,
 				title: "Use a name…",
@@ -151,7 +160,10 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 	const { openPage } = useCommandPalette();
 
 	/** The recipe a change produces, keeping the fields the change does not touch. */
-	const recipeOf = (template: TemplateInfo, change: Partial<TemplateRecipeInput>): TemplateRecipeInput => ({
+	const recipeOf = (
+		template: TemplateInfo,
+		change: Partial<TemplateRecipeInput>,
+	): TemplateRecipeInput => ({
 		...(template.description === undefined ? {} : { description: template.description }),
 		source: template.source,
 		run: template.run,
@@ -192,7 +204,10 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 				keepOpen: true,
 				run: async ({ replacePage }) => {
 					showTemplate(
-						await updateTemplate(template.name, recipeOf(template, { source: { kind: "default" } })),
+						await updateTemplate(
+							template.name,
+							recipeOf(template, { source: { kind: "default" } }),
+						),
 						template.name,
 						replacePage,
 					);
@@ -200,27 +215,25 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 			},
 			...templates
 				.filter((candidate) => candidate.name !== template.name)
-				.map(
-					(candidate): Command => ({
-						id: `template.base.${candidate.name}`,
-						title: candidate.name,
-						group: "Sandbox templates",
-						detail: stateLabel(candidate),
-						icon: <LayersIcon />,
-						current: template.source.kind === "template" && template.source.name === candidate.name,
-						keepOpen: true,
-						run: async ({ replacePage }) => {
-							showTemplate(
-								await updateTemplate(
-									template.name,
-									recipeOf(template, { source: { kind: "template", name: candidate.name } }),
-								),
+				.map((candidate): Command => ({
+					id: `template.base.${candidate.name}`,
+					title: candidate.name,
+					group: "Sandbox templates",
+					detail: stateLabel(candidate),
+					icon: <LayersIcon />,
+					current: template.source.kind === "template" && template.source.name === candidate.name,
+					keepOpen: true,
+					run: async ({ replacePage }) => {
+						showTemplate(
+							await updateTemplate(
 								template.name,
-								replacePage,
-							);
-						},
-					}),
-				),
+								recipeOf(template, { source: { kind: "template", name: candidate.name } }),
+							),
+							template.name,
+							replacePage,
+						);
+					},
+				})),
 			{
 				id: "template.base.template-name",
 				title: "Another template by name…",
@@ -236,7 +249,10 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 							const name = value.trim();
 							if (name === "") return false;
 							showTemplate(
-								await updateTemplate(template.name, recipeOf(template, { source: { kind: "template", name } })),
+								await updateTemplate(
+									template.name,
+									recipeOf(template, { source: { kind: "template", name } }),
+								),
 								template.name,
 								replacePage,
 							);
@@ -258,7 +274,10 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 							const image = value.trim();
 							if (image === "") return false;
 							showTemplate(
-								await updateTemplate(template.name, recipeOf(template, { source: { kind: "image", image } })),
+								await updateTemplate(
+									template.name,
+									recipeOf(template, { source: { kind: "image", image } }),
+								),
 								template.name,
 								replacePage,
 							);
@@ -293,7 +312,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 								if (next === "") return false;
 								const run = [...template.run];
 								run[index] = next;
-								showTemplate(await updateTemplate(template.name, recipeOf(template, { run })), template.name, replacePage);
+								showTemplate(
+									await updateTemplate(template.name, recipeOf(template, { run })),
+									template.name,
+									replacePage,
+								);
 							},
 						}),
 				},
@@ -310,7 +333,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 						if (previous === undefined || current === undefined) return;
 						run[index - 1] = current;
 						run[index] = previous;
-						showTemplate(await updateTemplate(template.name, recipeOf(template, { run })), template.name, replacePage);
+						showTemplate(
+							await updateTemplate(template.name, recipeOf(template, { run })),
+							template.name,
+							replacePage,
+						);
 					},
 				},
 				{
@@ -326,7 +353,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 						if (next === undefined || current === undefined) return;
 						run[index + 1] = current;
 						run[index] = next;
-						showTemplate(await updateTemplate(template.name, recipeOf(template, { run })), template.name, replacePage);
+						showTemplate(
+							await updateTemplate(template.name, recipeOf(template, { run })),
+							template.name,
+							replacePage,
+						);
 					},
 				},
 				{
@@ -337,7 +368,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 					keepOpen: true,
 					run: async ({ replacePage }) => {
 						const run = template.run.filter((_command, position) => position !== index);
-						showTemplate(await updateTemplate(template.name, recipeOf(template, { run })), template.name, replacePage);
+						showTemplate(
+							await updateTemplate(template.name, recipeOf(template, { run })),
+							template.name,
+							replacePage,
+						);
 					},
 				},
 			],
@@ -363,25 +398,31 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 						onSubmit: async (value) => {
 							const command = value.trim();
 							if (command === "") return false;
-							const state = await updateTemplate(template.name, recipeOf(template, { run: [...template.run, command] }));
+							const state = await updateTemplate(
+								template.name,
+								recipeOf(template, { run: [...template.run, command] }),
+							);
 							showTemplate(state, template.name, replacePage);
 						},
 					}),
 			},
-			...template.run.map(
-				(command, index): Command => ({
-					id: `template.command.${index}`,
-					title: command,
-					group: "Commands",
-					detail: `#${index + 1}`,
-					run: ({ pushPage }) => pushPage(commandPage(template, index)),
-				}),
-			),
+			...template.run.map((command, index): Command => ({
+				id: `template.command.${index}`,
+				title: command,
+				group: "Commands",
+				detail: `#${index + 1}`,
+				run: ({ pushPage }) => pushPage(commandPage(template, index)),
+			})),
 		],
 	});
 
 	/** A confirmation page: one action and a way back. */
-	const confirmPage = (title: string, action: string, detail: string, run: () => void): CommandPage => ({
+	const confirmPage = (
+		title: string,
+		action: string,
+		detail: string,
+		run: () => void,
+	): CommandPage => ({
 		kind: "commands",
 		title,
 		placeholder: "Confirm…",
@@ -407,8 +448,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 					icon: <TrashIcon />,
 					run: ({ pushPage }) =>
 						pushPage(
-							confirmPage("Delete template", `Delete ${name} in E2B`, "Cannot be undone", () =>
-								void deleteProviderTemplate(template.templateId),
+							confirmPage(
+								"Delete template",
+								`Delete ${name} in E2B`,
+								"Cannot be undone",
+								() => void deleteProviderTemplate(template.templateId),
 							),
 						),
 				},
@@ -423,7 +467,10 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 		};
 	};
 
-	const templatePage = (template: TemplateInfo, isDefault = templatesDefault === template.name): CommandPage => ({
+	const templatePage = (
+		template: TemplateInfo,
+		isDefault = templatesDefault === template.name,
+	): CommandPage => ({
 		kind: "commands",
 		title: template.name,
 		placeholder: "Actions…",
@@ -462,7 +509,10 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 						returnToPage: true,
 						onSubmit: async (value) => {
 							const description = value.trim();
-							const state = await updateTemplate(template.name, recipeOf(template, { description }));
+							const state = await updateTemplate(
+								template.name,
+								recipeOf(template, { description }),
+							);
 							showTemplate(state, template.name, replacePage);
 						},
 					}),
@@ -516,8 +566,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 				icon: <TrashIcon />,
 				run: ({ pushPage }) =>
 					pushPage(
-						confirmPage("Remove template", `Remove ${template.name}`, "The E2B template stays", () =>
-							void removeTemplate(template.name),
+						confirmPage(
+							"Remove template",
+							`Remove ${template.name}`,
+							"The E2B template stays",
+							() => void removeTemplate(template.name),
 						),
 					),
 			},
@@ -530,8 +583,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 				when: () => template.lastBuild?.templateId !== undefined,
 				run: ({ pushPage }) =>
 					pushPage(
-						confirmPage("Delete template", `Delete ${template.name} in E2B`, "Cannot be undone", () =>
-							void deleteTemplate(template.name),
+						confirmPage(
+							"Delete template",
+							`Delete ${template.name} in E2B`,
+							"Cannot be undone",
+							() => void deleteTemplate(template.name),
 						),
 					),
 			},
@@ -555,7 +611,11 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 				const fresh = state?.templates.find((template) => template.name === name);
 				return fresh !== undefined
 					? templatePage(fresh)
-					: page(state?.templates ?? templates, state?.configured ?? templatesConfigured, state?.providerName ?? templatesProviderName);
+					: page(
+							state?.templates ?? templates,
+							state?.configured ?? templatesConfigured,
+							state?.providerName ?? templatesProviderName,
+						);
 			},
 		});
 		return {
@@ -571,17 +631,15 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 					icon: <TerminalIcon />,
 					run: ({ pushPage }) => pushPage(creatingPage({ source: { kind: "default" } })),
 				},
-				...templates.map(
-					(candidate): Command => ({
-						id: `template.new.${candidate.name}`,
-						title: candidate.name,
-						group: "Sandbox templates",
-						detail: stateLabel(candidate),
-						icon: <LayersIcon />,
-						run: ({ pushPage }) =>
-							pushPage(creatingPage({ source: { kind: "template", name: candidate.name } })),
-					}),
-				),
+				...templates.map((candidate): Command => ({
+					id: `template.new.${candidate.name}`,
+					title: candidate.name,
+					group: "Sandbox templates",
+					detail: stateLabel(candidate),
+					icon: <LayersIcon />,
+					run: ({ pushPage }) =>
+						pushPage(creatingPage({ source: { kind: "template", name: candidate.name } })),
+				})),
 				{
 					id: "template.new.image",
 					title: "A Docker image…",
@@ -624,24 +682,23 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 			title: "Sandbox templates",
 			placeholder: "Search templates…",
 			commands: [
-				...list.map(
-					(template): Command => ({
-						id: `template.manage.${template.name}`,
-						title: template.name,
-						group: "Templates",
-						detail: `${templatesDefault === template.name ? "default · " : ""}${stateLabel(template)}${template.description === undefined ? "" : ` · ${template.description}`}`,
-						icon: <TerminalIcon />,
-						current: templatesDefault === template.name,
-						run: ({ pushPage }) => pushPage(templatePage(template)),
-					}),
-				),
+				...list.map((template): Command => ({
+					id: `template.manage.${template.name}`,
+					title: template.name,
+					group: "Templates",
+					detail: `${templatesDefault === template.name ? "default · " : ""}${stateLabel(template)}${template.description === undefined ? "" : ` · ${template.description}`}`,
+					icon: <TerminalIcon />,
+					current: templatesDefault === template.name,
+					run: ({ pushPage }) => pushPage(templatePage(template)),
+				})),
 				...templatesOther.map((template): Command => {
 					const name = templateShortName(template.names[0] ?? template.templateId);
 					return {
 						id: `template.other.${template.templateId}`,
 						title: name,
 						group: "Other E2B templates",
-						detail: template.buildStatus === undefined ? "in this E2B project" : template.buildStatus,
+						detail:
+							template.buildStatus === undefined ? "in this E2B project" : template.buildStatus,
 						run: ({ pushPage }) => pushPage(otherTemplatePage(template)),
 					};
 				}),
@@ -674,7 +731,8 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 								keepOpen: true,
 								run: async ({ replacePage }) => {
 									const state = await createStarterTemplate();
-									if (state !== undefined) replacePage(page(state.templates, state.configured, state.providerName));
+									if (state !== undefined)
+										replacePage(page(state.templates, state.configured, state.providerName));
 								},
 							} satisfies Command,
 						]),
@@ -687,7 +745,8 @@ export function useTemplatesPalette(): { page(): CommandPage; open(): void } {
 					keepOpen: true,
 					run: async ({ replacePage }) => {
 						const state = await refreshTemplates();
-						if (state !== undefined) replacePage(page(state.templates, state.configured, state.providerName));
+						if (state !== undefined)
+							replacePage(page(state.templates, state.configured, state.providerName));
 					},
 				},
 			],

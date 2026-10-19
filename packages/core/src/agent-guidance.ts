@@ -6,7 +6,12 @@ import { resolveTarget } from "./targets.ts";
 export type AgentGuidanceOptions = {
 	workspacesDir?: string;
 	defaultTarget: () => DefaultTargetConfig | undefined;
-	sandboxDefaults: () => { provider: string; template?: string; workspaceDir?: string; forwardAgent?: boolean };
+	sandboxDefaults: () => {
+		provider: string;
+		template?: string;
+		workspaceDir?: string;
+		forwardAgent?: boolean;
+	};
 };
 
 const IDENTITY = `You are an expert coding agent operating inside ${PRODUCT_NAME}, a durable coding agent harness. You help the user by reading files, executing commands, editing code, and writing new files.`;
@@ -19,7 +24,8 @@ const RULES = [
 ];
 
 /** The one rule that varies with the target: care on the user's machine, freedom in a sandbox. */
-const LOCAL_TARGET_RULE = "Your tools run on the user's local machine: prefer asking before destructive commands there.";
+const LOCAL_TARGET_RULE =
+	"Your tools run on the user's local machine: prefer asking before destructive commands there.";
 const SANDBOX_TARGET_RULE = "Your tools run in a sandbox you may freely experiment in.";
 
 const QUESTION_RULE =
@@ -39,6 +45,12 @@ export function createAgentGuidanceSection(options: AgentGuidanceOptions) {
 			sandboxDefaults: options.sandboxDefaults(),
 		});
 		const targetRule = target.kind === "sandbox" ? SANDBOX_TARGET_RULE : LOCAL_TARGET_RULE;
-		return [IDENTITY, "", ...RULES.map((rule) => `- ${rule}`), `- ${targetRule}`, `- ${QUESTION_RULE}`].join("\n");
+		return [
+			IDENTITY,
+			"",
+			...RULES.map((rule) => `- ${rule}`),
+			`- ${targetRule}`,
+			`- ${QUESTION_RULE}`,
+		].join("\n");
 	});
 }

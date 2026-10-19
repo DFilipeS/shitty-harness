@@ -23,7 +23,12 @@ const single: Question = {
 	],
 };
 
-const multi: Question = { ...single, question: "Which features?", header: "Features", multiSelect: true };
+const multi: Question = {
+	...single,
+	question: "Which features?",
+	header: "Features",
+	multiSelect: true,
+};
 
 describe("parseQuestions", () => {
 	it("reads the call's questions", () => {
@@ -39,7 +44,11 @@ describe("parseQuestions", () => {
 describe("questionReplyOf", () => {
 	it("reads answers and skips from the result details", () => {
 		expect(questionReplyOf({ reply: { kind: "skipped" } })).toEqual({ kind: "skipped" });
-		expect(questionReplyOf({ reply: { kind: "answered", answers: [{ selected: ["SQLite"], other: "x" }] } })).toEqual({
+		expect(
+			questionReplyOf({
+				reply: { kind: "answered", answers: [{ selected: ["SQLite"], other: "x" }] },
+			}),
+		).toEqual({
 			kind: "answered",
 			answers: [{ selected: ["SQLite"], other: "x" }],
 		});
@@ -81,7 +90,10 @@ describe("drafts", () => {
 
 	it("leaves out typed text once Other is unchosen", () => {
 		const draft = { ...toggleOption(single, EMPTY_DRAFT, "SQLite"), other: "draft" };
-		expect(replyFromDrafts([single], [draft])).toEqual({ kind: "answered", answers: [{ selected: ["SQLite"] }] });
+		expect(replyFromDrafts([single], [draft])).toEqual({
+			kind: "answered",
+			answers: [{ selected: ["SQLite"] }],
+		});
 	});
 });
 
@@ -91,7 +103,10 @@ describe("skipping", () => {
 		expect(skipped).toMatchObject({ selected: [], skipped: true });
 		expect(draftsComplete([single], [skipped])).toBe(true);
 		expect(nextPending([single, multi], [EMPTY_DRAFT, skipped], 0)).toBeUndefined();
-		expect(toggleOption(single, skipped, "Postgres")).toMatchObject({ selected: ["Postgres"], skipped: false });
+		expect(toggleOption(single, skipped, "Postgres")).toMatchObject({
+			selected: ["Postgres"],
+			skipped: false,
+		});
 		expect(toggleOther(single, skipped)).toMatchObject({ otherChosen: true, skipped: false });
 	});
 
@@ -109,7 +124,9 @@ describe("skipping", () => {
 
 describe("changeDraft", () => {
 	it("changes a draft the form never set up, as after opening before the questions loaded", () => {
-		const drafts = changeDraft([single, multi], [], 0, (draft) => toggleOption(single, draft, "SQLite"));
+		const drafts = changeDraft([single, multi], [], 0, (draft) =>
+			toggleOption(single, draft, "SQLite"),
+		);
 		expect(drafts).toEqual([{ ...EMPTY_DRAFT, selected: ["SQLite"] }, EMPTY_DRAFT]);
 	});
 });
@@ -131,6 +148,8 @@ describe("nextPending", () => {
 
 describe("answerText", () => {
 	it("lists picked options, then the user's own words", () => {
-		expect(answerText({ selected: ["Auth", "Search"], other: "Dark mode" })).toBe("Auth, Search, “Dark mode”");
+		expect(answerText({ selected: ["Auth", "Search"], other: "Dark mode" })).toBe(
+			"Auth, Search, “Dark mode”",
+		);
 	});
 });

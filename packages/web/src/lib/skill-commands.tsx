@@ -24,7 +24,15 @@ export function buildSkillsPage(result: SessionsSkillsResult | undefined): Comma
 		return {
 			kind: "commands",
 			title: "Skills",
-			commands: [{ id: "skills.error", title: "Could not list the skills", group: "Skills", keepOpen: true, run: () => {} }],
+			commands: [
+				{
+					id: "skills.error",
+					title: "Could not list the skills",
+					group: "Skills",
+					keepOpen: true,
+					run: () => {},
+				},
+			],
 		};
 	}
 	const commands: Command[] = result.skills.map((skill) => ({
@@ -68,7 +76,11 @@ export function useSkillsPalette() {
 		page(): CommandPage | undefined {
 			const id = activeSessionId;
 			if (id === undefined) return undefined;
-			return { kind: "loading", title: "Skills", load: async () => buildSkillsPage(await listSkills(id)) };
+			return {
+				kind: "loading",
+				title: "Skills",
+				load: async () => buildSkillsPage(await listSkills(id)),
+			};
 		},
 	};
 }

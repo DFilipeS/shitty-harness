@@ -60,14 +60,19 @@ export type ResolvedTarget =
 			workspaceDir: string;
 			/** Whether this sandbox forwards the host SSH agent. */
 			forwardAgent: boolean;
-		};
+	  };
 
 export type TargetResolutionOptions = {
 	defaultTarget?: DefaultTargetConfig;
 	/** Root that holds per-session scratch directories. Without it, scratch paths resolve to "". */
 	workspacesDir?: string;
 	/** Defaults for a default-target sandbox that names no provider or workspace of its own. */
-	sandboxDefaults?: { provider: string; template?: string; workspaceDir?: string; forwardAgent?: boolean };
+	sandboxDefaults?: {
+		provider: string;
+		template?: string;
+		workspaceDir?: string;
+		forwardAgent?: boolean;
+	};
 };
 
 /** The stored state for a sandbox target. */
@@ -93,7 +98,10 @@ export function sandboxTargetState(target: {
 }
 
 /** The scratch directory of one session; `""` when the harness has no workspaces root. */
-export function scratchPath(workspacesDir: string | undefined, conversationId: ConversationId): string {
+export function scratchPath(
+	workspacesDir: string | undefined,
+	conversationId: ConversationId,
+): string {
 	return workspacesDir === undefined ? "" : join(workspacesDir, String(conversationId));
 }
 
@@ -105,13 +113,17 @@ export async function resolveTarget(
 	options: TargetResolutionOptions,
 ): Promise<ResolvedTarget> {
 	const stored = await read.snapshot(SessionTargetDoc, conversationId, context);
-	if (stored?.kind === "sandbox" && stored.sandbox !== null) return sandboxFromState(stored.sandbox);
-	if (stored?.kind === "local") return localFromPath(stored.path, options.workspacesDir, conversationId);
+	if (stored?.kind === "sandbox" && stored.sandbox !== null)
+		return sandboxFromState(stored.sandbox);
+	if (stored?.kind === "local")
+		return localFromPath(stored.path, options.workspacesDir, conversationId);
 	if (options.defaultTarget?.kind === "sandbox") {
 		return {
 			kind: "sandbox",
 			provider: options.sandboxDefaults?.provider ?? "e2b",
-			...(options.sandboxDefaults?.template === undefined ? {} : { template: options.sandboxDefaults.template }),
+			...(options.sandboxDefaults?.template === undefined
+				? {}
+				: { template: options.sandboxDefaults.template }),
 			workspaceDir: options.sandboxDefaults?.workspaceDir ?? DEFAULT_SANDBOX_WORKSPACE,
 			forwardAgent: options.sandboxDefaults?.forwardAgent ?? true,
 		};
@@ -137,7 +149,12 @@ function sandboxFromState(state: SandboxTargetState): ResolvedTarget {
 		...(state.template === null ? {} : { template: state.template }),
 		...(state.sourceKind === null
 			? {}
-			: { source: state.sourceKind === "git" && state.sourceUrl !== null ? { kind: "git", url: state.sourceUrl } : { kind: "empty" } }),
+			: {
+					source:
+						state.sourceKind === "git" && state.sourceUrl !== null
+							? { kind: "git", url: state.sourceUrl }
+							: { kind: "empty" },
+				}),
 		workspaceDir: state.workspaceDir,
 		forwardAgent: state.forwardAgent ?? true,
 	};
@@ -170,8 +187,11 @@ const TIMEOUT_NOTE =
 export function targetPrompt(target: ResolvedTarget, providerName?: string): string {
 	if (target.kind === "sandbox") {
 		const name = providerName ?? target.provider;
-		const where = target.sandboxId === undefined ? "a new sandbox" : `sandbox ${name}:${target.sandboxId}`;
-		const agent = target.forwardAgent ? " The host SSH agent is forwarded, so `git` over SSH works." : "";
+		const where =
+			target.sandboxId === undefined ? "a new sandbox" : `sandbox ${name}:${target.sandboxId}`;
+		const agent = target.forwardAgent
+			? " The host SSH agent is forwarded, so `git` over SSH works."
+			: "";
 		return `Your tools run in the remote ${where} at \`${target.workspaceDir}\`. Saved file paths refer to this target.${agent}${TIMEOUT_NOTE}`;
 	}
 	const note = target.scratch ? " (the session's scratch directory)" : "";
@@ -181,7 +201,12 @@ export function targetPrompt(target: ResolvedTarget, providerName?: string): str
 export type TargetSectionOptions = {
 	workspacesDir?: string;
 	defaultTarget: () => DefaultTargetConfig | undefined;
-	sandboxDefaults: () => { provider: string; template?: string; workspaceDir?: string; forwardAgent?: boolean };
+	sandboxDefaults: () => {
+		provider: string;
+		template?: string;
+		workspaceDir?: string;
+		forwardAgent?: boolean;
+	};
 	/** Human-readable provider name for the prompt. */
 	providerName?: (provider: string) => string;
 };
@@ -194,6 +219,9 @@ export function createTargetSection(options: TargetSectionOptions) {
 			defaultTarget: options.defaultTarget(),
 			sandboxDefaults: options.sandboxDefaults(),
 		});
-		return targetPrompt(target, target.kind === "sandbox" ? options.providerName?.(target.provider) : undefined);
+		return targetPrompt(
+			target,
+			target.kind === "sandbox" ? options.providerName?.(target.provider) : undefined,
+		);
 	});
 }

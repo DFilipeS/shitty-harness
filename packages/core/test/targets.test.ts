@@ -30,7 +30,13 @@ describe("targets", () => {
 	it("names the provider in the target prompt", () => {
 		expect(
 			targetPrompt(
-				{ kind: "sandbox", provider: "e2b", sandboxId: "abc123", workspaceDir: "/home/user/workspace", forwardAgent: true },
+				{
+					kind: "sandbox",
+					provider: "e2b",
+					sandboxId: "abc123",
+					workspaceDir: "/home/user/workspace",
+					forwardAgent: true,
+				},
 				"E2B",
 			),
 		).toContain("sandbox E2B:abc123");
@@ -45,7 +51,11 @@ describe("targets", () => {
 	it("gives a new session a scratch target under the workspaces root", async () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const providers = createFakeProviders();
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers, workspacesDir });
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			const session = await service.createSession();
 			expect(session.target).toEqual({
@@ -63,7 +73,11 @@ describe("targets", () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const folder = await mkdtemp(join(tmpdir(), "harness-folder-"));
 		const providers = createFakeProviders();
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers, workspacesDir });
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			const session = await service.createSession();
 			const updated = await service.setTarget(session.id, { kind: "local", path: folder });
@@ -93,13 +107,21 @@ describe("targets", () => {
 		const file = join(workspacesDir, "note.txt");
 		await writeFile(file, "not a folder");
 		const providers = createFakeProviders();
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers, workspacesDir });
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			const session = await service.createSession();
-			await expect(service.setTarget(session.id, { kind: "local", path: file })).rejects.toMatchObject({
+			await expect(
+				service.setTarget(session.id, { kind: "local", path: file }),
+			).rejects.toMatchObject({
 				code: "invalid",
 			});
-			await expect(service.setTarget(session.id, { kind: "local", path: join(workspacesDir, "missing") })).rejects.toMatchObject({
+			await expect(
+				service.setTarget(session.id, { kind: "local", path: join(workspacesDir, "missing") }),
+			).rejects.toMatchObject({
 				code: "invalid",
 			});
 		} finally {
@@ -112,7 +134,11 @@ describe("targets", () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const folder = await mkdtemp(join(tmpdir(), "harness-default-"));
 		const providers = createFakeProviders();
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers, workspacesDir });
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			await service.setDefaults({ target: { kind: "local", path: folder } });
 			const first = await service.createSession();
@@ -136,7 +162,11 @@ describe("targets", () => {
 	it("rejects a default target that is not a directory", async () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const providers = createFakeProviders();
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers, workspacesDir });
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			await expect(
 				service.setDefaults({ target: { kind: "local", path: join(workspacesDir, "missing") } }),
@@ -150,7 +180,11 @@ describe("targets", () => {
 	it("browses and creates folders", async () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
 		const providers = createFakeProviders();
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers, workspacesDir });
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			const listing = await service.browseWorkspaces(workspacesDir);
 			expect(listing.path).toBe(workspacesDir);
@@ -165,7 +199,9 @@ describe("targets", () => {
 			await expect(service.createWorkspaceFolder(workspacesDir, "project")).rejects.toMatchObject({
 				code: "invalid",
 			});
-			await expect(service.createWorkspaceFolder(workspacesDir, "a/b")).rejects.toMatchObject({ code: "invalid" });
+			await expect(service.createWorkspaceFolder(workspacesDir, "a/b")).rejects.toMatchObject({
+				code: "invalid",
+			});
 			await expect(service.browseWorkspaces(join(workspacesDir, "missing"))).rejects.toMatchObject({
 				code: "not_found",
 			});
@@ -177,15 +213,26 @@ describe("targets", () => {
 
 	it("refuses to change the target while a run is active", async () => {
 		const workspacesDir = await mkdtemp(join(tmpdir(), "harness-targets-"));
-		const { providers, faux } = createFauxProviders({ text: "thinking about it ".repeat(50), tokensPerSecond: 5 });
+		const { providers, faux } = createFauxProviders({
+			text: "thinking about it ".repeat(50),
+			tokensPerSecond: 5,
+		});
 		faux.setResponses([fauxAssistantMessage("thinking about it ".repeat(50))]);
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers, workspacesDir });
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			const session = await service.createSession();
 			await service.prompt(session.id, "Go", "request-busy");
-			const started = await waitFor(async () => (await service.listSessions())[0]?.working === true);
+			const started = await waitFor(
+				async () => (await service.listSessions())[0]?.working === true,
+			);
 			expect(started).toBe(true);
-			await expect(service.setTarget(session.id, { kind: "local" })).rejects.toMatchObject({ code: "busy" });
+			await expect(service.setTarget(session.id, { kind: "local" })).rejects.toMatchObject({
+				code: "busy",
+			});
 			await service.abort(session.id);
 			await waitFor(async () => (await service.listSessions())[0]?.working === false);
 		} finally {
@@ -230,9 +277,12 @@ describe("targets", () => {
 		const { providers, faux } = createFauxProviders();
 		faux.setResponses([
 			fauxAssistantMessage("Just chatting."),
-			fauxAssistantMessage([fauxToolCall("write", { path: "hello.txt", content: "hi from the tool\n" })], {
-				stopReason: "toolUse",
-			}),
+			fauxAssistantMessage(
+				[fauxToolCall("write", { path: "hello.txt", content: "hi from the tool\n" })],
+				{
+					stopReason: "toolUse",
+				},
+			),
 			fauxAssistantMessage("Done."),
 		]);
 		const service = await HarnessService.create({

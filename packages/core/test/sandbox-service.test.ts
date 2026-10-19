@@ -42,7 +42,10 @@ describe("sandbox targets", () => {
 		const manager = new SandboxManager({ store: new FakeSandboxSettingsStore() });
 		const service = await HarnessService.create({
 			storage: new MemoryStorage(),
-			providers: toolCallingService("write", { path: "hello.txt", content: "hi from the sandbox\n" }),
+			providers: toolCallingService("write", {
+				path: "hello.txt",
+				content: "hi from the sandbox\n",
+			}),
 			environment: localEnvironment(),
 			workspacesDir,
 			sandboxes: manager,
@@ -63,7 +66,9 @@ describe("sandbox targets", () => {
 			await waitFor(async () => (await service.listSessions())[0]?.working === false);
 
 			expect(await readFile(join(sandboxRoot, "hello.txt"), "utf8")).toBe("hi from the sandbox\n");
-			const listed = (await service.listSessions()).find((candidate) => candidate.id === session.id);
+			const listed = (await service.listSessions()).find(
+				(candidate) => candidate.id === session.id,
+			);
 			expect(listed?.target.kind).toBe("sandbox");
 			const sandboxId = listed?.target.kind === "sandbox" ? listed.target.sandboxId : undefined;
 			expect(sandboxId).toBeDefined();
@@ -153,7 +158,9 @@ describe("sandbox targets", () => {
 			const toolResults = snapshot.entries.filter((entry) => entry.kind === "pi.tool-result");
 			expect(toolResults).toHaveLength(1);
 			expect(JSON.stringify(toolResults[0]?.model)).toContain("gone");
-			await expect(readFile(join(workspacesDir, session.id, "fallback.txt"), "utf8")).rejects.toThrow();
+			await expect(
+				readFile(join(workspacesDir, session.id, "fallback.txt"), "utf8"),
+			).rejects.toThrow();
 			const gone = statuses.some(
 				(event) => event.type === "target" && event.status.phase === "gone",
 			);
@@ -240,7 +247,9 @@ describe("sandbox targets", () => {
 			sandboxes: manager,
 		});
 		try {
-			await expect(service.configureSandboxProvider("fake", "bad")).rejects.toMatchObject({ code: "auth" });
+			await expect(service.configureSandboxProvider("fake", "bad")).rejects.toMatchObject({
+				code: "auth",
+			});
 			expect(manager.settings.providers.fake).toBeUndefined();
 		} finally {
 			await service.close();
@@ -308,10 +317,18 @@ describe("sandbox targets", () => {
 			await service.createSandbox({ workspaceDir: sandboxRoot, source: { kind: "empty" } });
 			expect(provider.createSpecs[0]?.template).toBe("harness-base");
 
-			await service.createSandbox({ workspaceDir: sandboxRoot, source: { kind: "empty" }, template: null });
+			await service.createSandbox({
+				workspaceDir: sandboxRoot,
+				source: { kind: "empty" },
+				template: null,
+			});
 			expect(provider.createSpecs[1]?.template).toBe("base");
 
-			await service.createSandbox({ workspaceDir: sandboxRoot, source: { kind: "empty" }, template: "node-22" });
+			await service.createSandbox({
+				workspaceDir: sandboxRoot,
+				source: { kind: "empty" },
+				template: "node-22",
+			});
 			expect(provider.createSpecs[2]?.template).toBe("node-22");
 		} finally {
 			await service.close();

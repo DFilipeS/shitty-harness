@@ -75,8 +75,13 @@ describe("buildTemplatePickerPage", () => {
 			other: [],
 			select: () => {},
 		});
-		expect(commands(providerDefault).find((command) => command.id === "pick.default")?.current).toBe(true);
-		expect(commands(providerDefault).find((command) => command.id === "pick.template.ready-one")?.current).toBe(false);
+		expect(
+			commands(providerDefault).find((command) => command.id === "pick.default")?.current,
+		).toBe(true);
+		expect(
+			commands(providerDefault).find((command) => command.id === "pick.template.ready-one")
+				?.current,
+		).toBe(false);
 
 		const named = buildTemplatePickerPage({
 			idPrefix: "pick",
@@ -86,7 +91,9 @@ describe("buildTemplatePickerPage", () => {
 			select: () => {},
 		});
 		expect(commands(named).find((command) => command.id === "pick.default")?.current).toBe(false);
-		expect(commands(named).find((command) => command.id === "pick.template.ready-one")?.current).toBe(true);
+		expect(
+			commands(named).find((command) => command.id === "pick.template.ready-one")?.current,
+		).toBe(true);
 	});
 
 	it("selects the provider default with null and a template by name", () => {
@@ -97,9 +104,15 @@ describe("buildTemplatePickerPage", () => {
 			other: [other(["project/elsewhere:default"], "tpl-elsewhere")],
 			select: (value) => selected.push(value),
 		});
-		commands(picker).find((command) => command.id === "pick.default")?.run(context());
-		commands(picker).find((command) => command.id === "pick.template.ready-one")?.run(context());
-		commands(picker).find((command) => command.id === "pick.other.tpl-elsewhere")?.run(context());
+		commands(picker)
+			.find((command) => command.id === "pick.default")
+			?.run(context());
+		commands(picker)
+			.find((command) => command.id === "pick.template.ready-one")
+			?.run(context());
+		commands(picker)
+			.find((command) => command.id === "pick.other.tpl-elsewhere")
+			?.run(context());
 		expect(selected).toEqual([null, "ready-one", "elsewhere"]);
 	});
 
@@ -112,9 +125,9 @@ describe("buildTemplatePickerPage", () => {
 			other: [],
 			select: (value) => selected.push(value),
 		});
-		commands(picker).find((command) => command.id === "pick.name")?.run(
-			context({ prompt: (options) => (submitted = options.onSubmit) }),
-		);
+		commands(picker)
+			.find((command) => command.id === "pick.name")
+			?.run(context({ prompt: (options) => (submitted = options.onSubmit) }));
 		expect(await submitted?.("  ")).toBe(false);
 		expect(selected).toEqual([]);
 		await submitted?.(" custom ");

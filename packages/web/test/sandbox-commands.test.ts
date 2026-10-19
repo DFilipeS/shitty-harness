@@ -102,7 +102,10 @@ describe("buildSandboxSettingsPage", () => {
 		);
 
 		command(page, "sandbox.settings.idle")?.run(
-			context({ prompt: (options) => (submitted = options), replacePage: (next) => (replaced = next) }),
+			context({
+				prompt: (options) => (submitted = options),
+				replacePage: (next) => (replaced = next),
+			}),
 		);
 		expect(submitted?.returnToPage).toBe(true);
 
@@ -117,7 +120,10 @@ describe("buildSandboxSettingsPage", () => {
 		const page = buildSandboxSettingsPage(settings(), () => pending);
 
 		command(page, "sandbox.settings.idle")?.run(
-			context({ prompt: (options) => (submitted = options), replacePage: (next) => replaced.push(next) }),
+			context({
+				prompt: (options) => (submitted = options),
+				replacePage: (next) => replaced.push(next),
+			}),
 		);
 		void submitted?.onSubmit("15");
 		expect(command(replaced[0], "sandbox.settings.idle")?.detail).toBe("15 min");
@@ -165,7 +171,9 @@ describe("buildSandboxSettingsPage", () => {
 			return state(settings());
 		});
 
-		command(page, "sandbox.settings.idle")?.run(context({ prompt: (options) => (submitted = options) }));
+		command(page, "sandbox.settings.idle")?.run(
+			context({ prompt: (options) => (submitted = options) }),
+		);
 		expect(await submitted?.onSubmit("soon")).toBe(false);
 		expect(calls).toBe(0);
 	});

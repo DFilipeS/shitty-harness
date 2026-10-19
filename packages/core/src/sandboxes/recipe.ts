@@ -6,9 +6,7 @@ const TEMPLATE_NAME_PATTERN = /^[a-z0-9-_]{1,128}$/;
 
 /** Where a sandbox template build starts. */
 export type TemplateSource =
-	| { kind: "default" }
-	| { kind: "template"; name: string }
-	| { kind: "image"; image: string };
+	{ kind: "default" } | { kind: "template"; name: string } | { kind: "image"; image: string };
 
 /** A template recipe: where the build starts and the commands it runs. */
 export type TemplateRecipe = {
@@ -54,10 +52,13 @@ export function parseRecipe(text: string): TemplateRecipe {
 	try {
 		document = parseYaml(text);
 	} catch (error) {
-		throw invalid(`The recipe is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
+		throw invalid(
+			`The recipe is not valid YAML: ${error instanceof Error ? error.message : String(error)}`,
+		);
 	}
 	if (document === null || document === undefined) return { source: { kind: "default" }, run: [] };
-	if (!isRecord(document)) throw invalid("The recipe must be a mapping with `description`, `from`, and `run`");
+	if (!isRecord(document))
+		throw invalid("The recipe must be a mapping with `description`, `from`, and `run`");
 	for (const key of Object.keys(document)) {
 		if (key !== "description" && key !== "from" && key !== "run") {
 			throw invalid(`Unknown recipe field: ${key}`);
@@ -92,11 +93,13 @@ function parseSource(value: unknown): TemplateSource {
 		throw invalid("`from` must have either `template` or `image`, not both");
 	}
 	if (template !== undefined) {
-		if (typeof template !== "string" || template.trim() === "") throw invalid("`from.template` must be a template name");
+		if (typeof template !== "string" || template.trim() === "")
+			throw invalid("`from.template` must be a template name");
 		return { kind: "template", name: template.trim() };
 	}
 	if (image !== undefined) {
-		if (typeof image !== "string" || image.trim() === "") throw invalid("`from.image` must be an image name");
+		if (typeof image !== "string" || image.trim() === "")
+			throw invalid("`from.image` must be an image name");
 		return { kind: "image", image: image.trim() };
 	}
 	return { kind: "default" };
@@ -113,10 +116,12 @@ export function normalizeRecipe(input: TemplateRecipeInput): TemplateRecipe {
 	if (input.source !== undefined) {
 		const source = input.source;
 		if (source.kind === "template") {
-			if (typeof source.name !== "string" || source.name.trim() === "") throw invalid("`from.template` must be a template name");
+			if (typeof source.name !== "string" || source.name.trim() === "")
+				throw invalid("`from.template` must be a template name");
 			recipe.source = { kind: "template", name: source.name.trim() };
 		} else if (source.kind === "image") {
-			if (typeof source.image !== "string" || source.image.trim() === "") throw invalid("`from.image` must be an image name");
+			if (typeof source.image !== "string" || source.image.trim() === "")
+				throw invalid("`from.image` must be an image name");
 			recipe.source = { kind: "image", image: source.image.trim() };
 		} else if (source.kind === "default") {
 			recipe.source = { kind: "default" };
@@ -138,7 +143,8 @@ export function normalizeRecipe(input: TemplateRecipeInput): TemplateRecipe {
 /** Render a recipe as the YAML the harness stores. */
 export function serializeRecipe(recipe: TemplateRecipe): string {
 	const document: Record<string, unknown> = {};
-	if (recipe.description !== undefined && recipe.description !== "") document.description = recipe.description;
+	if (recipe.description !== undefined && recipe.description !== "")
+		document.description = recipe.description;
 	if (recipe.source.kind === "template") document.from = { template: recipe.source.name };
 	else if (recipe.source.kind === "image") document.from = { image: recipe.source.image };
 	document.run = [...recipe.run];

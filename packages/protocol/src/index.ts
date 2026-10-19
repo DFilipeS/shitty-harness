@@ -1,5 +1,11 @@
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
-import type { AgentEvent, AgentState, EntryRecord, SnapshotEvent, UsageState } from "@earendil-works/pi-durable";
+import type {
+	AgentEvent,
+	AgentState,
+	EntryRecord,
+	SnapshotEvent,
+	UsageState,
+} from "@earendil-works/pi-durable";
 import type { PromptAttachment } from "./attachments.ts";
 
 export type { AgentEvent, AgentState, EntryRecord, ModelThinkingLevel, SnapshotEvent, UsageState };
@@ -35,7 +41,7 @@ export type TargetInfo =
 			path: string;
 			/** True when the path is the session's own scratch directory. */
 			scratch: boolean;
-		}
+	  }
 	| {
 			kind: "sandbox";
 			provider: string;
@@ -47,7 +53,7 @@ export type TargetInfo =
 			workspaceDir: string;
 			/** Whether this target asks for the host SSH agent. */
 			forwardAgent?: boolean;
-		};
+	  };
 
 /** Where a new sandbox gets its files. */
 export type SandboxSourceChoice = { kind: "empty" } | { kind: "git"; url: string };
@@ -67,9 +73,7 @@ export type SandboxChoice = {
 };
 
 /** What the client asks for: a local folder, a scratch directory, or a sandbox. */
-export type TargetChoice =
-	| { kind: "local"; path?: string }
-	| ({ kind: "sandbox" } & SandboxChoice);
+export type TargetChoice = { kind: "local"; path?: string } | ({ kind: "sandbox" } & SandboxChoice);
 
 /** A sandbox as the client lists it. */
 export type SandboxInfo = {
@@ -131,9 +135,7 @@ export type TargetStatus = {
 
 /** Where a sandbox template build starts. */
 export type TemplateSourceChoice =
-	| { kind: "default" }
-	| { kind: "template"; name: string }
-	| { kind: "image"; image: string };
+	{ kind: "default" } | { kind: "template"; name: string } | { kind: "image"; image: string };
 
 /** A template recipe as a client sends it. */
 export type TemplateRecipeInput = {
@@ -304,7 +306,8 @@ export type DefaultsSetResult = {
 };
 
 /** How a provider's model catalog refresh ended. */
-export type ProviderRefreshOutcome = "fetched" | "not-modified" | "unavailable" | "throttled" | "failed";
+export type ProviderRefreshOutcome =
+	"fetched" | "not-modified" | "unavailable" | "throttled" | "failed";
 
 /** Result of refreshing one provider's catalog, shown to the user after a manual refresh. */
 export type ProviderRefreshReport = {
@@ -437,7 +440,7 @@ export type ClientCommand =
 			text: string;
 			attachments?: PromptAttachment[];
 			requestId: string;
-		}
+	  }
 	| { id: string; type: "sessions.abort"; sessionId: string }
 	| { id: string; type: "sessions.answer"; sessionId: string; callId: string; reply: QuestionReply }
 	| {

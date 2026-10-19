@@ -14,10 +14,13 @@ export function SessionStats() {
 	const rate = cacheHitRate(totals);
 	const percent = Math.round((rate ?? 0) * 100);
 	const cached = totals.cacheRead + totals.cacheWrite;
-	const exactCost = totals.cost > 0 && totals.cost < 0.01 ? `$${totals.cost.toFixed(6)}` : formatCost(totals.cost);
+	const exactCost =
+		totals.cost > 0 && totals.cost < 0.01 ? `$${totals.cost.toFixed(6)}` : formatCost(totals.cost);
 
 	const model = activeSession?.agent.model;
-	const info = models.find((candidate) => candidate.provider === model?.provider && candidate.id === model.modelId);
+	const info = models.find(
+		(candidate) => candidate.provider === model?.provider && candidate.id === model.modelId,
+	);
 	const used = contextTokens(activeSession);
 	const context =
 		info !== undefined && info.contextWindow > 0 && used !== undefined

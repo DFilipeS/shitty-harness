@@ -44,7 +44,9 @@ describe("modelCapabilities", () => {
 
 	it("reports all three in display order", () => {
 		expect(
-			modelCapabilities(model({ reasoning: true, input: ["text", "image"], imageGeneration: true })),
+			modelCapabilities(
+				model({ reasoning: true, input: ["text", "image"], imageGeneration: true }),
+			),
 		).toEqual(["reasoning", "image", "imageGeneration"]);
 	});
 });

@@ -2,7 +2,6 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-
 /*
  * Semantic colors. Components only use these tokens, so light and dark are one set of classes.
  * Values are Tailwind's zinc palette plus accent shades; `.dark` is toggled on <html>.

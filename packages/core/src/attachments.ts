@@ -13,7 +13,10 @@ import { ServiceError } from "./errors.ts";
 const textEncoder = new TextEncoder();
 
 /** Where an attachment was saved: a workspace path, or undefined when it could not be written. */
-export type SaveAttachment = (attachment: PromptAttachment, index: number) => Promise<string | undefined>;
+export type SaveAttachment = (
+	attachment: PromptAttachment,
+	index: number,
+) => Promise<string | undefined>;
 
 /**
  * The model-facing content for a prompt: the message text, then the saved paths, then each text file
@@ -43,7 +46,11 @@ export async function buildPromptContent(
 	}
 	for (const attachment of attachments) {
 		if (!isImageMimeType(attachment.mimeType)) continue;
-		parts.push({ type: "image", data: attachment.data, mimeType: imageMimeType(attachment.mimeType) });
+		parts.push({
+			type: "image",
+			data: attachment.data,
+			mimeType: imageMimeType(attachment.mimeType),
+		});
 	}
 	return parts;
 }
@@ -63,10 +70,14 @@ export async function saveAttachment(
 ): Promise<string | undefined> {
 	const path = `.harness/attachments/${conversationId}/${now}-${index + 1}-${safeFileName(attachment.name)}`;
 	try {
-		const data = isImageMimeType(attachment.mimeType) ? decodeBase64(attachment.data) : attachment.data;
+		const data = isImageMimeType(attachment.mimeType)
+			? decodeBase64(attachment.data)
+			: attachment.data;
 		const result = await env.writeFile(path, data, context);
 		if (result.ok) return path;
-		console.warn(`[core] saving attachment ${attachment.name} to ${path} failed: ${result.error.message}`);
+		console.warn(
+			`[core] saving attachment ${attachment.name} to ${path} failed: ${result.error.message}`,
+		);
 	} catch (error) {
 		console.warn(`[core] saving attachment ${attachment.name} to ${path} failed:`, error);
 	}
@@ -89,7 +100,10 @@ function savedFilesNote(
 }
 
 /** Rejects attachments the model or the providers cannot take. */
-function validateAttachments(attachments: readonly PromptAttachment[], modelInput: readonly string[] | undefined): void {
+function validateAttachments(
+	attachments: readonly PromptAttachment[],
+	modelInput: readonly string[] | undefined,
+): void {
 	if (attachments.length > ATTACHMENT_LIMITS.maxPerMessage) {
 		throw new ServiceError(
 			"invalid",
@@ -108,10 +122,16 @@ function validateAttachments(attachments: readonly PromptAttachment[], modelInpu
 			);
 		}
 		const bytes =
-			kind === "image" ? base64Bytes(attachment.data) : textEncoder.encode(attachment.data).byteLength;
-		const limit = kind === "image" ? ATTACHMENT_LIMITS.maxImageBytes : ATTACHMENT_LIMITS.maxTextBytes;
+			kind === "image"
+				? base64Bytes(attachment.data)
+				: textEncoder.encode(attachment.data).byteLength;
+		const limit =
+			kind === "image" ? ATTACHMENT_LIMITS.maxImageBytes : ATTACHMENT_LIMITS.maxTextBytes;
 		if (bytes > limit) {
-			throw new ServiceError("attachment_too_large", `${attachment.name} is larger than ${formatBytes(limit)}.`);
+			throw new ServiceError(
+				"attachment_too_large",
+				`${attachment.name} is larger than ${formatBytes(limit)}.`,
+			);
 		}
 		totalBytes += bytes;
 		if (kind === "image") hasImage = true;

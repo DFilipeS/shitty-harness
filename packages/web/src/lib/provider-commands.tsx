@@ -6,7 +6,10 @@ import { useHarness } from "./store.tsx";
 type Configure = (providerId: string, apiKey: string | null) => Promise<void>;
 
 /** Providers, configured first, each opening its own action page. */
-export function buildProviderPage(providers: ProviderInfo[], configureProvider: Configure): CommandPage {
+export function buildProviderPage(
+	providers: ProviderInfo[],
+	configureProvider: Configure,
+): CommandPage {
 	const sorted = [...providers].sort(
 		(a, b) => Number(b.configured) - Number(a.configured) || a.name.localeCompare(b.name),
 	);

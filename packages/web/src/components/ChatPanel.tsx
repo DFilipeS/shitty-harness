@@ -67,7 +67,9 @@ export function ChatPanel({
 					<SidebarToggle onToggleSidebar={onToggleSidebar} />
 				</div>
 				<div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-					<p className="text-sm text-fg-muted">{sessionsLoaded ? "No session selected." : "Loading…"}</p>
+					<p className="text-sm text-fg-muted">
+						{sessionsLoaded ? "No session selected." : "Loading…"}
+					</p>
 					<button
 						type="button"
 						onClick={() => void createSession()}
@@ -86,9 +88,17 @@ export function ChatPanel({
 			<ChatHeader onToggleSidebar={onToggleSidebar} onToggleSessionPanel={onToggleSessionPanel} />
 			<MessageList />
 			{/* The composer stays mounted under an open question, so a draft survives it. */}
-			<Composer hidden={questionCallId !== undefined} {...(questionCallId === undefined ? { ref: composerRef } : {})} />
+			<Composer
+				hidden={questionCallId !== undefined}
+				{...(questionCallId === undefined ? { ref: composerRef } : {})}
+			/>
 			{questionCallId !== undefined && (
-				<QuestionForm key={questionCallId} ref={composerRef} callId={questionCallId} questions={questions} />
+				<QuestionForm
+					key={questionCallId}
+					ref={composerRef}
+					callId={questionCallId}
+					questions={questions}
+				/>
 			)}
 		</main>
 	);
@@ -105,8 +115,15 @@ function scrollToLatest() {
 
 /** Commands that act on the open conversation. They are hidden while no session is selected. */
 function useChatCommands() {
-	const { sessions, models, activeSessionId, activeSession, renameSession, deleteSession, abortSession } =
-		useHarness();
+	const {
+		sessions,
+		models,
+		activeSessionId,
+		activeSession,
+		renameSession,
+		deleteSession,
+		abortSession,
+	} = useHarness();
 	const modelPalette = useModelPalette();
 	const thinkingPalette = useThinkingPalette();
 	const targetPalette = useTargetPalette();

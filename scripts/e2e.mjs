@@ -50,14 +50,22 @@ ws.on("open", async () => {
 	try {
 		const providers = await call("providers.list");
 		const configured = providers.providers.filter((provider) => provider.configured);
-		console.log("configured providers:", configured.map((provider) => provider.id).join(", ") || "(none)");
-		if (configured.length === 0) throw new Error("No configured providers; set an API key env var for this test");
+		console.log(
+			"configured providers:",
+			configured.map((provider) => provider.id).join(", ") || "(none)",
+		);
+		if (configured.length === 0)
+			throw new Error("No configured providers; set an API key env var for this test");
 
 		const { session } = await call("sessions.create");
 		console.log("session:", session.id, session.title);
 		await call("sessions.attach", { sessionId: session.id });
 		console.log("prompt:", prompt);
-		await call("sessions.prompt", { sessionId: session.id, text: prompt, requestId: crypto.randomUUID() });
+		await call("sessions.prompt", {
+			sessionId: session.id,
+			text: prompt,
+			requestId: crypto.randomUUID(),
+		});
 	} catch (error) {
 		console.error("E2E FAILED:", error.message);
 		process.exitCode = 1;

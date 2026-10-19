@@ -101,7 +101,9 @@ export class HarnessClient {
 		});
 	}
 
-	send<T extends ClientCommand["type"]>(command: Extract<CommandInput, { type: T }>): Promise<CommandResult[T]> {
+	send<T extends ClientCommand["type"]>(
+		command: Extract<CommandInput, { type: T }>,
+	): Promise<CommandResult[T]> {
 		const socket = this.#socket;
 		if (socket === undefined || socket.readyState !== WebSocket.OPEN) {
 			return Promise.reject(new Error("Not connected to the server"));

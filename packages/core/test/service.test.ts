@@ -32,7 +32,10 @@ async function openService(options: OpenOptions = {}): Promise<HarnessService> {
 	return HarnessService.create(dependencies);
 }
 
-async function withService(run: (service: HarnessService) => Promise<void>, options: OpenOptions = {}): Promise<void> {
+async function withService(
+	run: (service: HarnessService) => Promise<void>,
+	options: OpenOptions = {},
+): Promise<void> {
 	const service = await openService(options);
 	try {
 		await run(service);
@@ -72,7 +75,9 @@ describe("HarnessService", () => {
 			async (service) => {
 				const session = await service.createSession();
 				expect(session.title).toBe("New session");
-				expect((await service.listSessions()).map((candidate) => candidate.id)).toContain(session.id);
+				expect((await service.listSessions()).map((candidate) => candidate.id)).toContain(
+					session.id,
+				);
 
 				const agent = await service.configureSession(session.id, {});
 				expect(agent.model).toEqual({ provider: FAKE_PROVIDER_ID, modelId: FAKE_MODEL_ID });
@@ -95,7 +100,10 @@ describe("HarnessService", () => {
 
 				const session = await service.createSession();
 				const agent = await service.configureSession(session.id, {});
-				expect(agent.model).toEqual({ provider: FAKE_PROVIDER_ID, modelId: FAKE_REASONING_MODEL_ID });
+				expect(agent.model).toEqual({
+					provider: FAKE_PROVIDER_ID,
+					modelId: FAKE_REASONING_MODEL_ID,
+				});
 				expect(agent.thinkingLevel).toBe("high");
 			},
 			{ apiKey: "test-key", models: [FAKE_REASONING_MODEL] },
@@ -118,7 +126,9 @@ describe("HarnessService", () => {
 	it("falls back to the first model when the default is cleared", async () => {
 		await withService(
 			async (service) => {
-				await service.setDefaults({ model: { provider: FAKE_PROVIDER_ID, modelId: FAKE_REASONING_MODEL_ID } });
+				await service.setDefaults({
+					model: { provider: FAKE_PROVIDER_ID, modelId: FAKE_REASONING_MODEL_ID },
+				});
 				await service.setDefaults({ model: null });
 				const session = await service.createSession();
 				const agent = await service.configureSession(session.id, {});
@@ -150,7 +160,10 @@ describe("HarnessService", () => {
 			const defaults = await service.setDefaults({
 				imageModel: { provider: FAKE_IMAGE_PROVIDER_ID, modelId: FAKE_IMAGE_MODEL_ID },
 			});
-			expect(defaults.imageModel).toEqual({ provider: FAKE_IMAGE_PROVIDER_ID, modelId: FAKE_IMAGE_MODEL_ID });
+			expect(defaults.imageModel).toEqual({
+				provider: FAKE_IMAGE_PROVIDER_ID,
+				modelId: FAKE_IMAGE_MODEL_ID,
+			});
 			const { imageModels } = await service.listProviders();
 			expect(imageModels.map((model) => model.id)).toContain(FAKE_IMAGE_MODEL_ID);
 		} finally {
@@ -181,7 +194,9 @@ describe("HarnessService", () => {
 			expect(renamed.title).toBe("Renamed");
 			expect((await service.listSessions())[0]?.title).toBe("Renamed");
 
-			await expect(service.renameSession(session.id, "   ")).rejects.toMatchObject({ code: "invalid" });
+			await expect(service.renameSession(session.id, "   ")).rejects.toMatchObject({
+				code: "invalid",
+			});
 		});
 	});
 
@@ -191,31 +206,43 @@ describe("HarnessService", () => {
 			await service.deleteSession(session.id);
 			expect(await service.listSessions()).toEqual([]);
 
-			await expect(service.renameSession(session.id, "Again")).rejects.toMatchObject({ code: "not_found" });
-			await expect(service.subscribeSession(session.id, () => {})).rejects.toMatchObject({ code: "not_found" });
+			await expect(service.renameSession(session.id, "Again")).rejects.toMatchObject({
+				code: "not_found",
+			});
+			await expect(service.subscribeSession(session.id, () => {})).rejects.toMatchObject({
+				code: "not_found",
+			});
 		});
 	});
 
 	it("configures and clears a provider API key", async () => {
 		await withService(async (service) => {
 			const before = await service.listProviders();
-			expect(before.providers.find((provider) => provider.id === FAKE_PROVIDER_ID)?.configured).toBe(false);
+			expect(
+				before.providers.find((provider) => provider.id === FAKE_PROVIDER_ID)?.configured,
+			).toBe(false);
 
 			await service.configureProvider(FAKE_PROVIDER_ID, "test-key");
 			const configured = await service.listProviders();
-			expect(configured.providers.find((provider) => provider.id === FAKE_PROVIDER_ID)?.configured).toBe(true);
+			expect(
+				configured.providers.find((provider) => provider.id === FAKE_PROVIDER_ID)?.configured,
+			).toBe(true);
 			expect(configured.models.map((model) => model.id)).toContain(FAKE_MODEL_ID);
 
 			await service.configureProvider(FAKE_PROVIDER_ID, null);
 			const cleared = await service.listProviders();
-			expect(cleared.providers.find((provider) => provider.id === FAKE_PROVIDER_ID)?.configured).toBe(false);
+			expect(
+				cleared.providers.find((provider) => provider.id === FAKE_PROVIDER_ID)?.configured,
+			).toBe(false);
 		});
 	});
 
 	it("rejects prompts with an empty message", async () => {
 		await withService(async (service) => {
 			const session = await service.createSession();
-			await expect(service.prompt(session.id, "   ", "request-1")).rejects.toMatchObject({ code: "invalid" });
+			await expect(service.prompt(session.id, "   ", "request-1")).rejects.toMatchObject({
+				code: "invalid",
+			});
 		});
 	});
 
@@ -224,7 +251,9 @@ describe("HarnessService", () => {
 			async (service) => {
 				const session = await service.createSession();
 				await service.configureSession(session.id, { model: null });
-				await expect(service.prompt(session.id, "Hello", "request-2")).rejects.toMatchObject({ code: "no_model" });
+				await expect(service.prompt(session.id, "Hello", "request-2")).rejects.toMatchObject({
+					code: "no_model",
+				});
 			},
 			{ apiKey: "test-key" },
 		);
@@ -280,7 +309,9 @@ describe("HarnessService", () => {
 
 			const { snapshot, unsubscribe } = await service.subscribeSession(session.id, () => {});
 			const user = snapshot.entries.find((entry) => entry.kind === "pi.user");
-			expect(JSON.stringify(user?.model?.[0]?.content)).toContain(`.harness/attachments/${session.id}/${file}`);
+			expect(JSON.stringify(user?.model?.[0]?.content)).toContain(
+				`.harness/attachments/${session.id}/${file}`,
+			);
 			unsubscribe();
 		} finally {
 			await service.close();
@@ -296,7 +327,9 @@ describe("HarnessService", () => {
 			await service.prompt(session.id, "  ", "request-title", [
 				{ name: "notes.md", mimeType: "text/markdown", data: "hi" },
 			]);
-			const listed = (await service.listSessions()).find((candidate) => candidate.id === session.id);
+			const listed = (await service.listSessions()).find(
+				(candidate) => candidate.id === session.id,
+			);
 			expect(listed?.title).toBe("notes.md");
 		} finally {
 			await service.close();
@@ -322,7 +355,9 @@ describe("HarnessService", () => {
 			image: { data: "aGk=", mimeType: "image/png", usage: FAKE_IMAGE_USAGE },
 		});
 		faux.setResponses([
-			fauxAssistantMessage([fauxToolCall("generate_image", { prompt: "a cat" })], { stopReason: "toolUse" }),
+			fauxAssistantMessage([fauxToolCall("generate_image", { prompt: "a cat" })], {
+				stopReason: "toolUse",
+			}),
 			fauxAssistantMessage("Done."),
 		]);
 		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
@@ -384,7 +419,9 @@ describe("HarnessService", () => {
 				"execution-target",
 			]);
 			const instructions = reloaded.find((section) => section.key === "project-instructions");
-			expect(instructions?.text).toContain(`<project_instructions path="${join(workspace, "AGENTS.md")}">`);
+			expect(instructions?.text).toContain(
+				`<project_instructions path="${join(workspace, "AGENTS.md")}">`,
+			);
 			expect(instructions?.text).toContain("Be kind.");
 			await rm(workspace, { recursive: true, force: true });
 
@@ -400,7 +437,9 @@ describe("HarnessService", () => {
 		try {
 			const session = await service.createSession();
 			await service.prompt(session.id, "First", "request-queue-1");
-			expect(await waitFor(async () => (await service.listSessions())[0]?.working === true)).toBe(true);
+			expect(await waitFor(async () => (await service.listSessions())[0]?.working === true)).toBe(
+				true,
+			);
 
 			// A prompt while the run is busy queues behind it, attachments and all.
 			await service.prompt(session.id, "Second", "request-queue-2", [
@@ -416,15 +455,23 @@ describe("HarnessService", () => {
 				images: 1,
 			});
 
-			await expect(service.withdraw(session.id, queued.items[0]!.id)).resolves.toEqual({ outcome: "aborted" });
+			await expect(service.withdraw(session.id, queued.items[0]!.id)).resolves.toEqual({
+				outcome: "aborted",
+			});
 			expect((await service.queue(session.id)).items).toEqual([]);
 			// The withdrawn submission still exists, so withdrawing again reports it settled.
-			await expect(service.withdraw(session.id, queued.items[0]!.id)).resolves.toEqual({ outcome: "settled" });
-			await expect(service.withdraw(session.id, "999999")).rejects.toMatchObject({ code: "not_found" });
+			await expect(service.withdraw(session.id, queued.items[0]!.id)).resolves.toEqual({
+				outcome: "settled",
+			});
+			await expect(service.withdraw(session.id, "999999")).rejects.toMatchObject({
+				code: "not_found",
+			});
 			await expect(service.queue("999")).rejects.toMatchObject({ code: "not_found" });
 
 			// The withdrawn message never lands: the transcript keeps only the first prompt.
-			expect(await waitFor(async () => (await service.listSessions())[0]?.working === false)).toBe(true);
+			expect(await waitFor(async () => (await service.listSessions())[0]?.working === false)).toBe(
+				true,
+			);
 			const { snapshot, unsubscribe } = await service.subscribeSession(session.id, () => {});
 			expect(snapshot.entries.filter((entry) => entry.kind === "pi.user")).toHaveLength(1);
 			unsubscribe();
@@ -442,12 +489,17 @@ describe("HarnessService", () => {
 
 			const observed: boolean[] = [];
 			service.on((event) => {
-				if (event.type === "sessions") observed.push(...event.sessions.map((candidate) => candidate.working));
+				if (event.type === "sessions")
+					observed.push(...event.sessions.map((candidate) => candidate.working));
 			});
 
 			await service.prompt(session.id, "Are you working?", "request-working");
-			const started = await waitFor(async () => (await service.listSessions())[0]?.working === true);
-			const finished = await waitFor(async () => (await service.listSessions())[0]?.working === false);
+			const started = await waitFor(
+				async () => (await service.listSessions())[0]?.working === true,
+			);
+			const finished = await waitFor(
+				async () => (await service.listSessions())[0]?.working === false,
+			);
 			expect({ started, finished }).toEqual({ started: true, finished: true });
 			expect(observed).toContain(true);
 		} finally {

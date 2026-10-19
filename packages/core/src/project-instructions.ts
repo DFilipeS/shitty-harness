@@ -37,7 +37,11 @@ type Found = ContextFile;
 export type ProjectInstructionsOptions = {
 	/** The host's home directory, for the local target's global file; without it, none loads. */
 	home?: string;
-	resolveTarget: (read: DocumentReader, conversationId: ConversationId, context: Context) => Promise<ResolvedTarget>;
+	resolveTarget: (
+		read: DocumentReader,
+		conversationId: ConversationId,
+		context: Context,
+	) => Promise<ResolvedTarget>;
 	/** Overrides the host file access, for tests. */
 	hostFs?: SkillFs;
 };
@@ -95,7 +99,11 @@ export class ProjectInstructionsLibrary {
 		return files;
 	}
 
-	async #scan(target: ResolvedTarget, env: ExecutionEnv | undefined, context: Context): Promise<ContextFile[] | undefined> {
+	async #scan(
+		target: ResolvedTarget,
+		env: ExecutionEnv | undefined,
+		context: Context,
+	): Promise<ContextFile[] | undefined> {
 		if (target.kind === "local") {
 			return loadContextFiles(this.#host, target.path, this.#options.home);
 		}
@@ -122,7 +130,9 @@ export class ProjectInstructionsLibrary {
 async function contextFileIn(fs: SkillFs, dir: string): Promise<ContextFile | undefined> {
 	const entries = await fs.list(dir);
 	if (entries === undefined) return undefined;
-	const listed = new Set(entries.filter((entry) => entry.kind !== "directory").map((entry) => entry.name));
+	const listed = new Set(
+		entries.filter((entry) => entry.kind !== "directory").map((entry) => entry.name),
+	);
 	for (const candidate of CONTEXT_FILE_CANDIDATES) {
 		if (!listed.has(candidate)) continue;
 		const file = await readContextFile(fs, join(dir, candidate));
@@ -179,7 +189,8 @@ function byteLength(text: string): number {
 /** The longest prefix that fits the cap; UTF-8 bytes are never fewer than chars, so `max` bounds it. */
 function truncateBytes(text: string): string {
 	let end = MAX_CONTEXT_FILE_BYTES;
-	while (end > 0 && byteLength(text.slice(0, end)) > MAX_CONTEXT_FILE_BYTES) end = Math.floor(end / 2);
+	while (end > 0 && byteLength(text.slice(0, end)) > MAX_CONTEXT_FILE_BYTES)
+		end = Math.floor(end / 2);
 	return text.slice(0, end);
 }
 
@@ -196,7 +207,9 @@ export function createProjectInstructionsSection(library: ProjectInstructionsLib
 				[
 					`<project_instructions path="${file.path}">`,
 					file.text,
-					file.truncated ? `[Truncated: this file exceeds the ${MAX_CONTEXT_FILE_BYTES}-byte cap.]` : "",
+					file.truncated
+						? `[Truncated: this file exceeds the ${MAX_CONTEXT_FILE_BYTES}-byte cap.]`
+						: "",
 					"</project_instructions>",
 				]
 					.filter((line) => line !== "")

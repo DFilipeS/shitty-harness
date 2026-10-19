@@ -38,7 +38,12 @@ ws.on("message", (data) => {
 ws.on("open", async () => {
 	try {
 		const providers = await call("providers.list");
-		console.log("providers:", providers.providers.length, "configured:", providers.providers.filter((p) => p.configured).map((p) => p.id));
+		console.log(
+			"providers:",
+			providers.providers.length,
+			"configured:",
+			providers.providers.filter((p) => p.configured).map((p) => p.id),
+		);
 		console.log("models:", providers.models.length);
 		console.log("sessions:", await call("sessions.list"));
 		const { session } = await call("sessions.create");
@@ -46,7 +51,11 @@ ws.on("open", async () => {
 		console.log("sessions:", await call("sessions.list"));
 		let prompted = false;
 		try {
-			await call("sessions.prompt", { sessionId: session.id, text: "Hello there, this is a test", requestId: "r1" });
+			await call("sessions.prompt", {
+				sessionId: session.id,
+				text: "Hello there, this is a test",
+				requestId: "r1",
+			});
 			prompted = true;
 			console.log("prompt: accepted");
 		} catch (error) {
@@ -56,12 +65,17 @@ ws.on("open", async () => {
 		console.log("attach snapshot keys:", Object.keys(attach.snapshot).join(","));
 		if (prompted) {
 			const isWorking = async () =>
-				(await call("sessions.list")).sessions.find((candidate) => candidate.id === session.id)?.working === true;
+				(await call("sessions.list")).sessions.find((candidate) => candidate.id === session.id)
+					?.working === true;
 			const working = await waitFor(isWorking, 5_000);
 			console.log("working while running:", working);
 			if (working) {
 				// A prompt while busy queues; the queue lists it and withdraw takes it back out.
-				await call("sessions.prompt", { sessionId: session.id, text: "Follow-up", requestId: "r2" });
+				await call("sessions.prompt", {
+					sessionId: session.id,
+					text: "Follow-up",
+					requestId: "r2",
+				});
 				const queued = await call("sessions.queue", { sessionId: session.id });
 				console.log("queued while running:", JSON.stringify(queued.items));
 				if (queued.items.length > 0) {
@@ -77,9 +91,15 @@ ws.on("open", async () => {
 			console.log("working cleared after abort:", idle);
 		}
 		await call("sessions.rename", { sessionId: session.id, title: "Renamed session" });
-		console.log("titles:", (await call("sessions.list")).sessions.map((s) => s.title));
+		console.log(
+			"titles:",
+			(await call("sessions.list")).sessions.map((s) => s.title),
+		);
 		await call("sessions.delete", { sessionId: session.id });
-		console.log("titles after delete:", (await call("sessions.list")).sessions.map((s) => s.title));
+		console.log(
+			"titles after delete:",
+			(await call("sessions.list")).sessions.map((s) => s.title),
+		);
 		try {
 			await call("sessions.attach", { sessionId: session.id });
 			console.log("attach after delete: unexpectedly succeeded");

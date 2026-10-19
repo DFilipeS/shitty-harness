@@ -6,7 +6,12 @@ import { describe, expect, it } from "vitest";
 import { HarnessService } from "../src/index.ts";
 import { localEnvironment } from "../src/node.ts";
 import { SandboxError } from "../src/sandboxes/provider.ts";
-import { parseRecipe, serializeRecipe, STARTER_RECIPE, templateName } from "../src/sandboxes/recipe.ts";
+import {
+	parseRecipe,
+	serializeRecipe,
+	STARTER_RECIPE,
+	templateName,
+} from "../src/sandboxes/recipe.ts";
 import { SandboxManager } from "../src/sandboxes/manager.ts";
 import { TemplateManager, TemplateStore } from "../src/sandboxes/templates.ts";
 import { createFauxProviders } from "./helpers/fake-providers.ts";
@@ -110,7 +115,10 @@ describe("template manager", () => {
 		await withDir(async (dir) => {
 			const provider = new FakeSandboxProvider();
 			const manager = templateManager(dir, provider);
-			await manager.create("node-22", { source: { kind: "image", image: "node:22" }, run: ["corepack enable"] });
+			await manager.create("node-22", {
+				source: { kind: "image", image: "node:22" },
+				run: ["corepack enable"],
+			});
 			expect((await manager.list()).templates).toMatchObject([{ name: "node-22", state: "draft" }]);
 
 			await manager.startBuild("node-22");
@@ -167,12 +175,16 @@ describe("template manager", () => {
 			await waitFor(async () => provider.buildStarts.length === 1);
 			expect(provider.buildStarts).toEqual(["first"]);
 			// The second build waits while the first is gated, and the list shows it queued.
-			expect((await manager.list()).templates.find((template) => template.name === "second")?.state).toBe("building");
+			expect(
+				(await manager.list()).templates.find((template) => template.name === "second")?.state,
+			).toBe("building");
 
 			release();
 			await waitFor(async () => provider.buildStarts.length === 2);
 			expect(provider.buildStarts).toEqual(["first", "second"]);
-			await waitFor(async () => (await manager.list()).templates.every((template) => template.state === "ready"));
+			await waitFor(async () =>
+				(await manager.list()).templates.every((template) => template.state === "ready"),
+			);
 		});
 	});
 
@@ -181,7 +193,9 @@ describe("template manager", () => {
 			const manager = templateManager(dir, new FakeSandboxProvider());
 			await manager.createStarter();
 			await expect(manager.createStarter()).rejects.toBeInstanceOf(SandboxError);
-			expect((await manager.list()).templates.map((template) => template.name)).toEqual(["harness-base"]);
+			expect((await manager.list()).templates.map((template) => template.name)).toEqual([
+				"harness-base",
+			]);
 			await manager.remove("harness-base");
 			expect((await manager.list()).templates).toHaveLength(0);
 		});
@@ -324,7 +338,9 @@ describe("template service commands", () => {
 			templates: templateManager(dir, provider),
 		});
 		try {
-			await expect(service.createTemplate("Bad Name", {})).rejects.toMatchObject({ code: "invalid" });
+			await expect(service.createTemplate("Bad Name", {})).rejects.toMatchObject({
+				code: "invalid",
+			});
 		} finally {
 			await service.close();
 			await rm(dir, { recursive: true, force: true });
@@ -372,7 +388,9 @@ describe("template service commands", () => {
 			providers,
 			environment: localEnvironment(),
 			sandboxes: manager,
-			templates: templateManager(dir, provider, { defaultTemplate: () => store.getSandboxSettings().template }),
+			templates: templateManager(dir, provider, {
+				defaultTemplate: () => store.getSandboxSettings().template,
+			}),
 		});
 		const defaults: (string | undefined)[] = [];
 		service.on((event) => {
