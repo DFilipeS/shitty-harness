@@ -298,6 +298,15 @@ export function ImageIcon({ className }: IconProps) {
 	);
 }
 
+export function ClockIcon({ className }: IconProps) {
+	return (
+		<Svg className={className}>
+			<circle cx="12" cy="12" r="10" />
+			<path d="M12 6v6l4 2" />
+		</Svg>
+	);
+}
+
 export function WandIcon({ className }: IconProps) {
 	return (
 		<Svg className={className}>

@@ -13,6 +13,7 @@ import type {
 	ProviderRefreshReport,
 	ProviderTemplateInfo,
 	QuestionReply,
+	QueuedMessageInfo,
 	SandboxChoice,
 	SandboxInfo,
 	SandboxMetricsInfo,
@@ -58,6 +59,8 @@ export type SessionState = {
 	runActive: boolean;
 	agent: AgentState;
 	inbox: { id: string; mode: string }[];
+	/** Queued messages with their display text, fetched whenever the queued ids change. */
+	queue: QueuedMessageInfo[];
 	usage?: UsageState;
 };
 
@@ -124,6 +127,7 @@ type Action =
 	| { type: "session/deactivate" }
 	| { type: "session/attached"; id: string; snapshot: SnapshotEvent }
 	| { type: "session/event"; id: string; event: AgentEvent }
+	| { type: "session/queue"; id: string; ids: string; items: QueuedMessageInfo[] }
 	| { type: "session/live-done"; id: string }
 	| { type: "session/agent"; id: string; agent: AgentState }
 	| { type: "error/set"; error: string }
@@ -151,7 +155,7 @@ const initialState: State = {
 };
 
 function emptySession(id: string): SessionState {
-	return { id, attached: false, entries: [], liveTools: {}, runActive: false, agent: {}, inbox: [] };
+	return { id, attached: false, entries: [], liveTools: {}, runActive: false, agent: {}, inbox: [], queue: [] };
 }
 
 function fromSnapshot(id: string, snapshot: SnapshotEvent): SessionState {
@@ -171,6 +175,8 @@ function fromSnapshot(id: string, snapshot: SnapshotEvent): SessionState {
 		runActive: snapshot.run !== undefined,
 		agent: snapshot.agent,
 		inbox: snapshot.inbox.map((item) => ({ id: String(item.id), mode: item.mode })),
+		// The queue's text is fetched on attach; a snapshot replaces only the event-stream view.
+		queue: [],
 		usage: snapshot.usage,
 	};
 }
@@ -192,7 +198,7 @@ function withoutResultTool(liveTools: Record<string, LiveTool>, entry: EntryReco
 function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 	switch (event.type) {
 		case "snapshot":
-			return fromSnapshot(session.id, event);
+			return { ...fromSnapshot(session.id, event), queue: session.queue };
 		case "run_start":
 			return { ...session, runActive: true };
 		case "run_end":
@@ -353,6 +359,16 @@ function reducer(state: State, action: Action): State {
 			if (current === undefined || current.live === undefined) return state;
 			return { ...state, sessionsById: { ...state.sessionsById, [action.id]: { ...current, live: undefined } } };
 		}
+		case "session/queue": {
+			const current = state.sessionsById[action.id];
+			if (current === undefined) return state;
+			// A fetch that lost the race with a newer inbox change is dropped; its own refetch follows.
+			if (current.inbox.map((item) => item.id).join(",") !== action.ids) return state;
+			return {
+				...state,
+				sessionsById: { ...state.sessionsById, [action.id]: { ...current, queue: action.items } },
+			};
+		}
 		case "session/agent": {
 			const current = state.sessionsById[action.id];
 			if (current === undefined) return state;
@@ -397,6 +413,8 @@ type HarnessContextValue = {
 	deleteSession(id: string): Promise<void>;
 	sendPrompt(text: string, attachments?: readonly PromptAttachment[]): Promise<void>;
 	abortSession(): Promise<void>;
+	/** Remove one message from the active session's queue; a notice reports races with the run. */
+	withdrawQueued(submissionId: string): Promise<void>;
 	/** Reply to the active session's open question; false when the server refused it. */
 	answerQuestion(callId: string, reply: QuestionReply): Promise<boolean>;
 	finishLive(sessionId: string): void;
@@ -564,6 +582,31 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 		};
 	}, [state.status, state.activeSessionId, client]);
 
+	// The event stream carries only the queued ids, so fetch their text whenever the ids change.
+	// Re-attaching re-runs this too, so a queue that changed in another tab while detached heals.
+	const queuedIds =
+		state.activeSessionId === undefined
+			? undefined
+			: state.sessionsById[state.activeSessionId]?.inbox.map((item) => item.id).join(",");
+	useEffect(() => {
+		const id = state.activeSessionId;
+		if (state.status !== "connected" || id === undefined || queuedIds === undefined) return;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const { items } = await client.send({ type: "sessions.queue", sessionId: id });
+				if (!cancelled) dispatch({ type: "session/queue", id, ids: queuedIds, items });
+			} catch (error) {
+				// The session is gone; the session list cleans it up.
+				if (cancelled || (error instanceof ServerCommandError && error.code === "not_found")) return;
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [state.status, state.activeSessionId, queuedIds, client]);
+
 	// Back and forward move between sessions, following the URL.
 	useEffect(() => {
 		const onPopState = () => {
@@ -655,6 +698,31 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			dispatch({ type: "error/set", error: errorMessage(error) });
 		}
 	}, [client, state.activeSessionId]);
+
+	/** Remove one queued message; the queue updates through the session's next inbox event. */
+	const withdrawQueued = useCallback(
+		async (submissionId: string) => {
+			const id = state.activeSessionId;
+			if (id === undefined) return;
+			try {
+				const { outcome } = await client.send({ type: "sessions.withdraw", sessionId: id, submissionId });
+				if (outcome === "already_placed") {
+					dispatch({
+						type: "notice/set",
+						notice: { text: "The run picked that message up already.", tone: "info" },
+					});
+				} else if (outcome === "settled") {
+					dispatch({
+						type: "notice/set",
+						notice: { text: "That message is no longer queued.", tone: "info" },
+					});
+				}
+			} catch (error) {
+				dispatch({ type: "error/set", error: errorMessage(error) });
+			}
+		},
+		[client, state.activeSessionId],
+	);
 
 	const answerQuestion = useCallback(
 		async (callId: string, reply: QuestionReply) => {
@@ -1096,6 +1164,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			deleteSession,
 			sendPrompt,
 			abortSession,
+			withdrawQueued,
 			answerQuestion,
 			finishLive,
 			configureModel,
@@ -1136,6 +1205,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			deleteSession,
 			sendPrompt,
 			abortSession,
+			withdrawQueued,
 			answerQuestion,
 			finishLive,
 			configureModel,

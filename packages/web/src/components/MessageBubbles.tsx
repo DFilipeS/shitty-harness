@@ -13,19 +13,22 @@ import {
 	type ToolResultView,
 	type UserPart,
 } from "../lib/messages.ts";
-import type { Question } from "@harness/protocol";
+import type { Question, QueuedMessageInfo } from "@harness/protocol";
 import {
 	BookIcon,
 	BrainIcon,
 	CheckIcon,
 	ChevronDownIcon,
+	ClockIcon,
 	FileIcon,
 	FilePlusIcon,
+	ImageIcon,
 	PencilIcon,
 	QuestionIcon,
 	SpinnerIcon,
 	TerminalIcon,
 	WrenchIcon,
+	XIcon,
 } from "./icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 
@@ -62,6 +65,66 @@ export function UserBubble({ parts }: { parts: UserPart[] }) {
 					if (part.type === "skill") return <SkillCard key={index} skill={part.skill} />;
 					return <Markdown key={index} text={part.text} variant="user" />;
 				})}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * A message waiting in the queue, drawn where it will land once the run places it: the user's own
+ * text and attachments behind a queued badge, with a way to take it back out.
+ */
+export function QueuedMessage({
+	message,
+	onRemove,
+}: {
+	message: QueuedMessageInfo;
+	onRemove: () => void;
+}) {
+	return (
+		<div className="flex justify-end" data-queued-message={message.id}>
+			<div className="flex min-w-0 max-w-[85%] flex-col gap-1.5 rounded-2xl rounded-br-sm border border-dashed border-line-strong bg-user-bubble/60 px-3.5 py-2">
+				<div className="flex items-center gap-1.5 text-[11px] text-fg-faint">
+					<ClockIcon className="h-3.5 w-3.5 shrink-0" />
+					<span>{message.mode === "steer" ? "Queued · joins at the next step" : "Queued · runs next"}</span>
+				</div>
+				{message.skill !== undefined && (
+					<div className="flex items-center gap-1.5 rounded-md border border-line bg-panel/50 px-2 py-1 text-xs">
+						<BookIcon className="h-3.5 w-3.5 shrink-0 text-link" />
+						<span className="shrink-0 text-fg-subtle">skill</span>
+						<span className="min-w-0 truncate font-mono text-fg">{message.skill}</span>
+					</div>
+				)}
+				{message.text !== "" && (
+					<p className="text-sm whitespace-pre-wrap text-fg-muted">{message.text}</p>
+				)}
+				{(message.attachments.length > 0 || message.images > 0) && (
+					<div className="flex flex-wrap gap-1.5">
+						{message.attachments.map((name) => (
+							<span
+								key={name}
+								className="flex items-center gap-1 rounded-md border border-line bg-panel/50 px-1.5 py-0.5 text-[11px] text-fg-muted"
+							>
+								<FileIcon className="h-3 w-3 shrink-0" />
+								<span className="max-w-40 truncate">{name}</span>
+							</span>
+						))}
+						{message.images > 0 && (
+							<span className="flex items-center gap-1 rounded-md border border-line bg-panel/50 px-1.5 py-0.5 text-[11px] text-fg-muted">
+								<ImageIcon className="h-3 w-3 shrink-0" />
+								{message.images === 1 ? "1 image" : `${message.images} images`}
+							</span>
+						)}
+					</div>
+				)}
+				<button
+					type="button"
+					onClick={onRemove}
+					className="flex items-center gap-1 self-start rounded-md px-1 text-[11px] text-fg-faint hover:bg-raised hover:text-fg"
+				>
+					<XIcon className="h-3 w-3" />
+					Remove
+				</button>
 			</div>
 		</div>
 	);

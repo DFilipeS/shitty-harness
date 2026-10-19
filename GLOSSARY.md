@@ -84,6 +84,10 @@ _Avoid_: round, step
 A piece of user input or an entry write that the harness has durably admitted, whether or not it has been processed yet.
 _Avoid_: request, prompt
 
+**Queue**:
+The messages of a session that wait behind its active run. A queued message can be taken back out until the run picks it up.
+_Avoid_: backlog, buffer, inbox
+
 **Attachment**:
 A file sent with a message. Images travel as image content to models that accept them; text files are inlined into the message text. Every attachment is also saved in the workspace, and the message lists the paths.
 _Avoid_: upload, file

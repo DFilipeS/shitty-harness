@@ -21,12 +21,13 @@ import {
 	AssistantBubble,
 	Divider,
 	HiddenOutputNotice,
+	QueuedMessage,
 	ToolResultBubble,
 	UserBubble,
 } from "./MessageBubbles.tsx";
 
 export function MessageList() {
-	const { activeSession, models } = useHarness();
+	const { activeSession, models, withdrawQueued } = useHarness();
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const stickToBottom = useRef(true);
 
@@ -43,6 +44,7 @@ export function MessageList() {
 	const live = activeSession?.live;
 	const liveTools = activeSession?.liveTools ?? {};
 	const entries = activeSession?.entries ?? [];
+	const queue = activeSession?.queue ?? [];
 	// The committed entry stays hidden while the live reveal is still catching up to it.
 	const visibleEntries = live?.entryId === undefined ? entries : entries.filter((entry) => entry.id !== live.entryId);
 
@@ -74,7 +76,7 @@ export function MessageList() {
 	useEffect(() => {
 		const element = scrollRef.current;
 		if (element !== null && stickToBottom.current) element.scrollTop = element.scrollHeight;
-	}, [entries.length, live]);
+	}, [entries.length, live, queue.length]);
 
 	const handleReveal = useCallback(() => {
 		const element = scrollRef.current;
@@ -104,7 +106,10 @@ export function MessageList() {
 						liveTools={liveTools}
 					/>
 				)}
-				{entries.length === 0 && live === undefined && (
+				{queue.map((message) => (
+					<QueuedMessage key={message.id} message={message} onRemove={() => void withdrawQueued(message.id)} />
+				))}
+				{entries.length === 0 && live === undefined && queue.length === 0 && (
 					<p className="py-10 text-center text-sm text-fg-subtle">Send a message to start the conversation.</p>
 				)}
 			</div>
