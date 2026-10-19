@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SessionSummary } from "@harness/protocol";
+import { PRODUCT_NAME, type SessionSummary } from "@harness/protocol";
 import { relativeTime } from "../lib/format.ts";
 import { useProviderPalette } from "../lib/provider-commands.tsx";
 import { useHarness } from "../lib/store.tsx";
@@ -48,7 +48,7 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
 		>
 			<div className="flex items-center justify-between px-3 py-3">
 				<div>
-					<div className="text-sm font-semibold">Shitty Harness</div>
+					<div className="text-sm font-semibold">{PRODUCT_NAME}</div>
 					<div className="text-[11px] text-fg-subtle">pi-durable agent</div>
 				</div>
 				<div className="flex items-center gap-1">
