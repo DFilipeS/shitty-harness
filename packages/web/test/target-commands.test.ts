@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandContext, CommandPage } from "../src/lib/commands.tsx";
 import {
 	buildFolderPage,
@@ -6,6 +6,7 @@ import {
 	targetLabel,
 	type NewSandboxChoice,
 } from "../src/lib/target-commands.tsx";
+import { fakeStorage } from "./fake-storage.ts";
 
 const emptyPage = (): CommandPage => ({ kind: "commands", title: "Empty", commands: [] });
 
@@ -146,6 +147,13 @@ describe("buildFolderPage", () => {
 		],
 	};
 
+	beforeEach(() => {
+		vi.stubGlobal("localStorage", fakeStorage());
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
 	it("offers the current folder, its parent, its children, and a new folder", () => {
 		const page = buildFolderPage(
 			listing,
@@ -210,5 +218,61 @@ describe("buildFolderPage", () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(requested).toEqual({ parent: "/Users/me", name: "project" });
 		expect(chosen).toBe("/Users/me/project");
+	});
+
+	it("lists recent folders first, minus the one being browsed", () => {
+		localStorage.setItem(
+			"harness-recent-folders",
+			JSON.stringify(["/Users/me/project", "/Users/me", "/opt/tools"]),
+		);
+		const page = buildFolderPage(
+			listing,
+			emptyPage,
+			() => {},
+			async () => undefined,
+		);
+		if (page.kind !== "commands") throw new Error("expected a command page");
+		expect(page.commands.slice(0, 3)).toEqual([
+			expect.objectContaining({
+				id: "folder.recent./Users/me/project",
+				title: "project",
+				group: "Recent",
+				detail: "/Users/me/project",
+			}),
+			expect.objectContaining({ id: "folder.recent./opt/tools", title: "tools" }),
+			expect.objectContaining({ id: "folder.choose" }),
+		]);
+	});
+
+	it("chooses a recent folder and moves it to the front of the recents", () => {
+		localStorage.setItem(
+			"harness-recent-folders",
+			JSON.stringify(["/Users/me/project", "/opt/tools"]),
+		);
+		let chosen: string | undefined;
+		const page = buildFolderPage(
+			listing,
+			emptyPage,
+			(path) => (chosen = path),
+			async () => undefined,
+		);
+		if (page.kind !== "commands") throw new Error("expected a command page");
+		page.commands[0]?.run(context());
+		expect(chosen).toBe("/Users/me/project");
+		expect(localStorage.getItem("harness-recent-folders")).toBe(
+			JSON.stringify(["/Users/me/project", "/opt/tools"]),
+		);
+	});
+
+	it("remembers the folder chosen with Use this folder", () => {
+		const page = buildFolderPage(
+			listing,
+			emptyPage,
+			() => {},
+			async () => undefined,
+		);
+		if (page.kind !== "commands") throw new Error("expected a command page");
+		page.commands[0]?.run(context());
+		expect(localStorage.getItem("harness-recent-folders")).toBe(JSON.stringify(["/Users/me"]));
 	});
 });

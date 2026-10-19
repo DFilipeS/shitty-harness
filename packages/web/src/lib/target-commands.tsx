@@ -7,6 +7,7 @@ import type {
 } from "@harness/protocol";
 import {
 	CheckIcon,
+	ClockIcon,
 	FilePlusIcon,
 	FolderIcon,
 	KeyIcon,
@@ -14,6 +15,7 @@ import {
 	TerminalIcon,
 } from "../components/icons.tsx";
 import { useCommandPalette, type Command, type CommandPage } from "./commands.tsx";
+import { recentFolders, rememberFolder } from "./recent-folders.ts";
 import { useHarness } from "./store.tsx";
 import { buildTemplatePickerPage } from "./template-commands.tsx";
 
@@ -36,23 +38,44 @@ export function targetLabel(target: TargetInfo | undefined): string {
 	return `${target.providerName}:${target.sandboxId.slice(0, 8)}`;
 }
 
-/** The folder browser: use the current folder, walk into a child, go up, or create a new folder. */
+/** The last segment of a folder path, e.g. "project" for "/Users/me/project". */
+function folderName(path: string): string {
+	const segments = path.split(/[/\\]/).filter((segment) => segment !== "");
+	return segments[segments.length - 1] ?? path;
+}
+
+/** The folder browser: pick a recent, use the current folder, walk into a child, go up, or create one. */
 export function buildFolderPage(
 	listing: FolderListing,
 	browse: (path: string) => CommandPage,
 	choose: (path: string) => void,
 	createFolder: (parent: string, name: string) => Promise<{ path: string } | undefined>,
 ): CommandPage {
-	const commands: Command[] = [
-		{
-			id: "folder.choose",
-			title: "Use this folder",
-			group: "Folder",
-			detail: listing.path,
-			icon: <CheckIcon />,
-			run: () => choose(listing.path),
-		},
-	];
+	const chooseFolder = (path: string): void => {
+		rememberFolder(path);
+		choose(path);
+	};
+	const commands: Command[] = [];
+	for (const folder of recentFolders()) {
+		if (folder === listing.path) continue;
+		commands.push({
+			id: `folder.recent.${folder}`,
+			title: folderName(folder),
+			group: "Recent",
+			detail: folder,
+			keywords: [folder],
+			icon: <ClockIcon />,
+			run: () => chooseFolder(folder),
+		});
+	}
+	commands.push({
+		id: "folder.choose",
+		title: "Use this folder",
+		group: "Folder",
+		detail: listing.path,
+		icon: <CheckIcon />,
+		run: () => chooseFolder(listing.path),
+	});
 	if (listing.parent !== undefined) {
 		const parent = listing.parent;
 		commands.push({
@@ -86,7 +109,7 @@ export function buildFolderPage(
 					const name = value.trim();
 					if (name === "") return false;
 					void createFolder(listing.path, name).then((created) => {
-						if (created !== undefined) choose(created.path);
+						if (created !== undefined) chooseFolder(created.path);
 					});
 				},
 			}),
