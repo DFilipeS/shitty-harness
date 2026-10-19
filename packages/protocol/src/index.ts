@@ -377,6 +377,23 @@ export type SessionsSystemPromptResult = {
 	sections: PromptSectionInfo[];
 };
 
+/** One tool a session's agent can offer, as the session panel's Tools tab lists it. */
+export type ToolInfo = {
+	name: string;
+	description: string;
+	/** The extension that brings the tool. */
+	extension: string;
+	/** Pinned tools stay offered; a session cannot turn them off. */
+	pinned: boolean;
+	/** False when the session has turned the tool off for its next request. */
+	enabled: boolean;
+};
+
+/** A session's tools: every installed tool and whether the session offers it. */
+export type SessionsToolsResult = {
+	tools: ToolInfo[];
+};
+
 /**
  * One message waiting in a session's queue, as the queue display shows it: the user's own text,
  * the files it carries, and the skill it starts, without the wrappers the model content adds.
@@ -449,10 +466,13 @@ export type ClientCommand =
 			sessionId: string;
 			model?: ModelRef | null;
 			thinkingLevel?: ModelThinkingLevel | null;
+			/** The tools the session turns off for its next request; null turns every tool back on. */
+			tools?: { remove: string[] } | null;
 	  }
 	| { id: string; type: "sessions.setTarget"; sessionId: string; target: TargetChoice }
 	| { id: string; type: "sessions.skills"; sessionId: string }
 	| { id: string; type: "sessions.systemPrompt"; sessionId: string }
+	| { id: string; type: "sessions.tools"; sessionId: string }
 	| { id: string; type: "sessions.queue"; sessionId: string }
 	| { id: string; type: "sessions.withdraw"; sessionId: string; submissionId: string }
 	| { id: string; type: "workspaces.browse"; path?: string }
@@ -512,6 +532,7 @@ export type CommandResult = {
 	"sessions.setTarget": SessionsSetTargetResult;
 	"sessions.skills": SessionsSkillsResult;
 	"sessions.systemPrompt": SessionsSystemPromptResult;
+	"sessions.tools": SessionsToolsResult;
 	"sessions.queue": SessionsQueueResult;
 	"sessions.withdraw": SessionsWithdrawResult;
 	"workspaces.browse": WorkspacesBrowseResult;

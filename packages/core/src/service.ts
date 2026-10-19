@@ -17,6 +17,7 @@ import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
 import { queuedMessageInfo } from "./queue.ts";
 import {
+	ASK_USER_TOOL,
 	OpenQuestionsDoc,
 	QuestionsExtension,
 	validateReply,
@@ -28,6 +29,7 @@ import {
 	Harness,
 	InboxDoc,
 	watchEvents,
+	type AgentChange,
 	type AgentEvent,
 	type AgentEventStream,
 	type AgentState,
@@ -35,11 +37,13 @@ import {
 	type ConversationId,
 	type DocumentWatch,
 	type EnvTarget,
+	type Registry,
 	type SnapshotEvent,
 	type Storage,
 	type SubmissionId,
 	type TaskGraph,
 	type TaskGraphWatch,
+	type ToolRegistration,
 } from "@earendil-works/pi-durable";
 import type {
 	BrowseDirectory,
@@ -60,6 +64,7 @@ import type {
 	SessionSummary,
 	SessionsQueueResult,
 	SessionsSystemPromptResult,
+	SessionsToolsResult,
 	SessionsWithdrawResult,
 	TargetChoice,
 	TargetInfo,
@@ -68,6 +73,7 @@ import type {
 	TemplateRecipeInput,
 	TemplatesLogsResult,
 	TemplatesState,
+	ToolInfo,
 	WorkspacesBrowseResult,
 } from "@harness/protocol";
 import type { EnvironmentFactory } from "./environment.ts";
@@ -94,6 +100,7 @@ import {
 	recordActivation,
 	SkillLibrary,
 	SkillsDoc,
+	SKILL_TOOL_NAME,
 	type SkillCatalog,
 } from "./skills/index.ts";
 import {
@@ -145,7 +152,14 @@ function parseSubmissionId(value: string): SubmissionId {
 type SessionAgentChange = {
 	model?: ModelRef | null;
 	thinkingLevel?: AgentState["thinkingLevel"] | null;
+	tools?: { remove: string[] } | null;
 };
+
+/** Tools a session cannot turn off: the harness's own flows depend on them. */
+const PINNED_TOOLS: ReadonlySet<string> = new Set([ASK_USER_TOOL, SKILL_TOOL_NAME]);
+
+/** A mutable draft of an agent change; `AgentChange`'s fields are readonly. */
+type AgentChangeDraft = { -readonly [K in keyof AgentChange]: AgentChange[K] };
 
 export { ServiceError };
 
@@ -302,6 +316,7 @@ function composeEnvironment(options: ComposeEnvironmentOptions): EnvironmentFact
  */
 export class HarnessService {
 	readonly #harness: Harness;
+	readonly #registry: Registry;
 	readonly #providers: Providers;
 	readonly #environment: EnvironmentFactory | undefined;
 	readonly #workspacesDir: string | undefined;
@@ -324,6 +339,7 @@ export class HarnessService {
 
 	private constructor(
 		harness: Harness,
+		registry: Registry,
 		providers: Providers,
 		environment: EnvironmentFactory | undefined,
 		workspacesDir: string | undefined,
@@ -334,6 +350,7 @@ export class HarnessService {
 		codemode: CodemodeSandbox,
 	) {
 		this.#harness = harness;
+		this.#registry = registry;
 		this.#providers = providers;
 		this.#environment = environment;
 		this.#workspacesDir = workspacesDir;
@@ -472,6 +489,7 @@ export class HarnessService {
 
 		const service = new HarnessService(
 			harness,
+			registry,
 			providers,
 			environment,
 			dependencies.workspacesDir,
@@ -850,6 +868,32 @@ export class HarnessService {
 		return { sections: replayedSections(view.messages) };
 	}
 
+	/**
+	 * The session's tools: every installed tool with its extension and whether the session offers
+	 * it to the model. This is the resolved view — what the next request would offer — not the raw
+	 * stored removals.
+	 */
+	async listTools(id: string): Promise<SessionsToolsResult> {
+		const conversation = await this.#requireConversation(parseConversationId(id));
+		const agent = await conversation.agent(BACKGROUND_CONTEXT);
+		const offered = new Set(agent.tools.map((tool) => tool.name));
+		// A later extension's tool with the same name replaces an earlier one, so last wins.
+		const byName = new Map<string, { name: string; description: string; extension: string }>();
+		for (const { extension, tool } of this.#registry.snapshot().tools()) {
+			byName.set(tool.name, {
+				name: tool.name,
+				description: tool.description,
+				extension: extension.name,
+			});
+		}
+		const tools: ToolInfo[] = [...byName.values()].map((info) => ({
+			...info,
+			pinned: PINNED_TOOLS.has(info.name),
+			enabled: offered.has(info.name),
+		}));
+		return { tools };
+	}
+
 	async abort(id: string): Promise<void> {
 		const conversation = await this.#requireConversation(parseConversationId(id));
 		await conversation.abort(BACKGROUND_CONTEXT);
@@ -887,7 +931,7 @@ export class HarnessService {
 		const conversation = await this.#requireConversation(parseConversationId(id));
 		const current = await conversation.agent(BACKGROUND_CONTEXT);
 
-		const agentChange: SessionAgentChange = {};
+		const agentChange: AgentChangeDraft = {};
 		if (change.model !== undefined) agentChange.model = change.model;
 		if (change.thinkingLevel !== undefined) {
 			let level = change.thinkingLevel;
@@ -909,11 +953,46 @@ export class HarnessService {
 				);
 			}
 		}
+		if (change.tools !== undefined) {
+			if (change.tools === null) {
+				agentChange.tools = null;
+			} else {
+				const remove = this.#resolveRemovals(change.tools.remove);
+				if (remove.length > 0) agentChange.tools = { remove };
+			}
+		}
 		if (Object.keys(agentChange).length > 0)
 			await conversation.configure(agentChange, BACKGROUND_CONTEXT);
 
 		const agent = await conversation.agent(BACKGROUND_CONTEXT);
 		return { model: agent.model, thinkingLevel: agent.thinkingLevel };
+	}
+
+	/** Resolve requested removals to installed tools; pinned tools cannot be removed. */
+	#resolveRemovals(names: readonly string[]): ToolRegistration[] {
+		const installed = new Map(
+			this.#registry
+				.snapshot()
+				.tools()
+				.map((entry) => [entry.tool.name, entry.tool]),
+		);
+		const remove: ToolRegistration[] = [];
+		for (const name of names) {
+			if (PINNED_TOOLS.has(name)) {
+				throw new ServiceError(
+					"pinned_tool",
+					`The ${name} tool is pinned and cannot be turned off`,
+				);
+			}
+			const tool = installed.get(name);
+			if (tool === undefined) {
+				// A name the registry does not know has no effect; dropping it keeps stored state honest.
+				console.warn(`[service] ignoring the removal of uninstalled tool ${name}`);
+				continue;
+			}
+			remove.push(tool);
+		}
+		return remove;
 	}
 
 	/**
@@ -1420,7 +1499,7 @@ export class HarnessService {
 	}
 
 	/** The model and thinking level a new session starts with, honouring the stored defaults. */
-	async #initialAgentChange(): Promise<SessionAgentChange> {
+	async #initialAgentChange(): Promise<AgentChange> {
 		// Same order as the model picker, so "first available" is the first row users see.
 		const available = sortModelsForDisplay(await this.#providers.models.getAvailable());
 		const preferred = this.#providers.getDefaults().model;
@@ -1430,7 +1509,7 @@ export class HarnessService {
 				: available.find(
 						(model) => model.provider === preferred.provider && model.id === preferred.modelId,
 					)) ?? available[0];
-		const change: SessionAgentChange = {};
+		const change: AgentChangeDraft = {};
 		if (chosen !== undefined) change.model = { provider: chosen.provider, modelId: chosen.id };
 
 		const level = this.#providers.getDefaults().thinkingLevel;

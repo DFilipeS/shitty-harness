@@ -58,6 +58,7 @@ const COMMAND_TYPES = new Set<string>([
 	"sessions.setTarget",
 	"sessions.skills",
 	"sessions.systemPrompt",
+	"sessions.tools",
 	"sessions.queue",
 	"sessions.withdraw",
 	"workspaces.browse",
@@ -157,6 +158,15 @@ function optionalThinkingLevel(value: unknown): ModelThinkingLevel | null | unde
 		throw new ServiceError("invalid", "thinkingLevel is not a known thinking level");
 	}
 	return value as ModelThinkingLevel;
+}
+
+function optionalToolChange(value: unknown): { remove: string[] } | null | undefined {
+	if (value === undefined) return undefined;
+	if (value === null) return null;
+	if (!isRecord(value) || !Array.isArray(value.remove)) {
+		throw new ServiceError("invalid", "tools must be { remove: string[] } or null");
+	}
+	return { remove: value.remove.map((name) => requireString(name, "tools.remove")) };
 }
 
 function optionalTargetChoice(value: unknown): TargetChoice | null | undefined {
@@ -460,6 +470,7 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 				const agent = await service.configureSession(sessionId, {
 					model: optionalModelRef(command.model),
 					thinkingLevel: optionalThinkingLevel(command.thinkingLevel),
+					tools: optionalToolChange(command.tools),
 				});
 				return { data: { agent } };
 			}
@@ -475,6 +486,10 @@ export function startServer(options: HarnessServerOptions): Promise<HarnessServe
 			case "sessions.systemPrompt": {
 				const sessionId = requireString(command.sessionId, "sessionId");
 				return { data: await service.systemPrompt(sessionId) };
+			}
+			case "sessions.tools": {
+				const sessionId = requireString(command.sessionId, "sessionId");
+				return { data: await service.listTools(sessionId) };
 			}
 			case "sessions.queue": {
 				const sessionId = requireString(command.sessionId, "sessionId");
