@@ -42,6 +42,25 @@ function fakeFs(files: Record<string, string>): SkillFs {
 }
 
 const local: ResolvedTarget = { kind: "local", path: "/home/dev/proj/app", scratch: false };
+
+/** The SkillFs methods the loader never calls; inline fakes override `list` and `readText`. */
+const noOpFs: SkillFs = {
+	async list() {
+		return [];
+	},
+	async readText() {
+		return undefined;
+	},
+	async readBytes() {
+		return undefined;
+	},
+	async realPath(path) {
+		return path;
+	},
+	async isDirectory() {
+		return true;
+	},
+};
 const resolveLocal = async () => local;
 const conversationId = "c1" as unknown as ConversationId;
 /** The section only reads `read`, `conversationId`, and `env`; the rest is a cast stub. */
@@ -120,6 +139,46 @@ describe("project instructions", () => {
 			new ProjectInstructionsLibrary({ resolveTarget: resolveLocal, hostFs: fs }),
 		);
 		expect(await section.render(input(fs), {} as Context)).toBeUndefined();
+	});
+
+	it("follows a symlinked context file", async () => {
+		const files = await loadContextFiles(
+			{
+				...fakeFs({ "/home/dev/.agents/irrelevant": "no" }),
+				async list(dir) {
+					if (dir === "/home/dev/.agents") return [{ name: "AGENTS.md", kind: "symlink", size: 0 }];
+				return [];
+				},
+				async readText(path) {
+					return path === "/home/dev/.agents/AGENTS.md" ? "global via link" : undefined;
+				},
+			},
+			"/home/dev/proj/app",
+			"/home/dev",
+		);
+		expect(files.map((file) => file.text)).toEqual(["global via link"]);
+	});
+
+	it("falls through a broken symlink to the next candidate", async () => {
+		const files = await loadContextFiles(
+			{
+				...noOpFs,
+				async list(dir) {
+					if (dir === "/work")
+						return [
+							{ name: "AGENTS.override.md", kind: "symlink", size: 0 },
+							{ name: "AGENTS.md", kind: "file", size: 0 },
+						];
+					return [];
+				},
+				async readText(path) {
+					return path === "/work/AGENTS.md" ? "the real one" : undefined;
+				},
+			},
+			"/work",
+			undefined,
+		);
+		expect(files.map((file) => file.path)).toEqual(["/work/AGENTS.md"]);
 	});
 
 	it("lists candidates in precedence order", () => {

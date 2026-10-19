@@ -32,7 +32,7 @@ export type ContextFile = {
 };
 
 /** A file found in a directory but not yet read. */
-type Found = { path: string };
+type Found = ContextFile;
 
 export type ProjectInstructionsOptions = {
 	/** The host's home directory, for the local target's global file; without it, none loads. */
@@ -114,13 +114,19 @@ export class ProjectInstructionsLibrary {
 	}
 }
 
-/** The first candidate file `dir` holds, if any. One directory listing, no per-file stats. */
-async function contextFileIn(fs: SkillFs, dir: string): Promise<Found | undefined> {
+/**
+ * The first candidate `dir` carries, read. A symlink counts as a candidate (listings report
+ * them apart from files, and a linked AGENTS.md is a normal setup); a broken or directory
+ * link fails the read and the next candidate gets its chance, as Pi's `existsSync` would.
+ */
+async function contextFileIn(fs: SkillFs, dir: string): Promise<ContextFile | undefined> {
 	const entries = await fs.list(dir);
 	if (entries === undefined) return undefined;
-	const names = new Map(entries.filter((entry) => entry.kind === "file").map((entry) => [entry.name, entry]));
+	const listed = new Set(entries.filter((entry) => entry.kind !== "directory").map((entry) => entry.name));
 	for (const candidate of CONTEXT_FILE_CANDIDATES) {
-		if (names.has(candidate)) return { path: join(dir, candidate) };
+		if (!listed.has(candidate)) continue;
+		const file = await readContextFile(fs, join(dir, candidate));
+		if (file !== undefined) return file;
 	}
 	return undefined;
 }
@@ -136,24 +142,23 @@ export async function loadContextFiles(
 ): Promise<ContextFile[]> {
 	const files: ContextFile[] = [];
 	const seen = new Set<string>();
-	const push = async (found: Found | undefined) => {
-		if (found === undefined || seen.has(found.path)) return;
-		seen.add(found.path);
-		const file = await readContextFile(fs, found.path);
-		if (file !== undefined) files.push(file);
+	const push = (file: ContextFile | undefined) => {
+		if (file === undefined || seen.has(file.path)) return;
+		seen.add(file.path);
+		files.push(file);
 	};
-	await push(home === undefined ? undefined : await contextFileIn(fs, join(home, ".agents")));
+	push(home === undefined ? undefined : await contextFileIn(fs, join(home, ".agents")));
 	const ancestors: Found[] = [];
 	let dir = workspace;
 	for (;;) {
-		const found = await contextFileIn(fs, dir);
+		const file = await contextFileIn(fs, dir);
 		// `push` owns the dedup mark; the walk only checks, so ancestors still load.
-		if (found !== undefined && !seen.has(found.path)) ancestors.unshift(found);
+		if (file !== undefined && !seen.has(file.path)) ancestors.unshift(file);
 		const parent = dirname(dir);
 		if (parent === dir) break;
 		dir = parent;
 	}
-	for (const found of ancestors) await push(found);
+	for (const found of ancestors) push(found);
 	return files;
 }
 
