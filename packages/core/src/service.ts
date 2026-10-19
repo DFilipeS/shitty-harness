@@ -6,6 +6,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
 import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
 import { buildPromptContent, saveAttachment } from "./attachments.ts";
+import { createAgentGuidanceSection } from "./agent-guidance.ts";
 import { ServiceError } from "./errors.ts";
 import { createImageTools } from "./image-tool.ts";
 import { OpenQuestionsDoc, QuestionsExtension, validateReply, type OpenQuestionsState } from "./questions.ts";
@@ -312,6 +313,19 @@ export class HarnessService {
 		// Every conversation selects every installed extension, so installing the coding tools is
 		// all it takes for agents to read, write, edit, and run commands.
 		const registry = createRegistry();
+		// Installed first, so the agent guidance renders ahead of every other section.
+		registry.install(
+			defineExtension({
+				name: "agent-guidance",
+				sections: [
+					createAgentGuidanceSection({
+						...(dependencies.workspacesDir === undefined ? {} : { workspacesDir: dependencies.workspacesDir }),
+						defaultTarget: () => providers.getDefaults().target,
+						sandboxDefaults: () => sandboxDefaults(dependencies.sandboxes),
+					}),
+				],
+			}),
+		);
 		registry.install(CodingTools);
 		registry.install(
 			createImageTools({

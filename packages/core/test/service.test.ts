@@ -5,6 +5,7 @@ import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { MemoryStorage } from "@earendil-works/pi-durable";
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { describe, expect, it } from "vitest";
+import { PRODUCT_NAME } from "@harness/protocol";
 import { HarnessService, type HarnessServiceDependencies } from "../src/index.ts";
 import {
 	createFakeProviders,
@@ -361,8 +362,14 @@ describe("HarnessService", () => {
 				expect(section.text.startsWith(`<${section.key}>\n`)).toBe(true);
 				expect(section.text.endsWith(`\n</${section.key}>`)).toBe(true);
 			}
-			// The harness's own extensions are part of the prompt.
-			expect(sections.map((section) => section.key)).toContain("execution-target");
+			// The agent guidance leads, ahead of the harness's own extensions.
+			const keys = sections.map((section) => section.key);
+			expect(keys.indexOf("agent")).toBe(0);
+			expect(keys).toContain("execution-target");
+			const guidance = sections[0]?.text ?? "";
+			expect(guidance).toContain(PRODUCT_NAME);
+			expect(guidance).toContain("local machine");
+			expect(guidance).toContain("ask_user");
 
 			await expect(service.systemPrompt("missing")).rejects.toMatchObject({ code: "not_found" });
 		} finally {
