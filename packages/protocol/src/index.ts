@@ -3,6 +3,12 @@ import type { AgentEvent, AgentState, EntryRecord, SnapshotEvent, UsageState } f
 import type { PromptAttachment } from "./attachments.ts";
 
 export type { AgentEvent, AgentState, EntryRecord, ModelThinkingLevel, SnapshotEvent, UsageState };
+
+/**
+ * The product's display name, the one place it is spelled. The web chrome and the agent's own
+ * prompt both read it, so renaming the product is a one-line change.
+ */
+export const PRODUCT_NAME = "Shitty Harness";
 export {
 	ATTACHMENT_IMAGE_MIME_TYPES,
 	ATTACHMENT_LIMITS,
