@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { formatTokens } from "../lib/format.ts";
-import { toolBlockOpen, toolChoiceAfterToggle, type LiveTool } from "../lib/live-tools.ts";
+import {
+	toolBlockOpen,
+	toolChoiceAfterToggle,
+	type LiveTool,
+	type NestedToolView,
+} from "../lib/live-tools.ts";
 import { answerText, ASK_USER_TOOL, parseQuestions } from "../lib/questions.ts";
 import {
 	parseSkillBlock,
 	parseToolArguments,
 	toolCallSummary,
 	type LiveBlock,
+	type NestedCallView,
 	type SkillBlock,
 	type LiveMessage,
 	type ToolResultImage,
@@ -193,6 +199,7 @@ export function AssistantBubble({
 	usage,
 	toolResults,
 	liveTools,
+	nestedTools,
 	activeIndex,
 	streaming = false,
 	error,
@@ -204,6 +211,8 @@ export function AssistantBubble({
 	toolResults?: ReadonlyMap<string, ToolResultView>;
 	/** Output of this message's running tool calls, keyed by tool call id. */
 	liveTools?: Readonly<Record<string, LiveTool>>;
+	/** Nested calls of this message's tool calls, keyed by parent tool call id. */
+	nestedTools?: Readonly<Record<string, readonly NestedToolView[]>>;
 	/** Index of the block a live message is still writing, so it can show as busy. */
 	activeIndex?: number;
 	streaming?: boolean;
@@ -225,6 +234,7 @@ export function AssistantBubble({
 						stateKey={`${messageKey}:${index}`}
 						toolResults={toolResults}
 						{...(liveTools === undefined ? {} : { liveTools })}
+						{...(nestedTools === undefined ? {} : { nestedTools })}
 					/>
 				);
 			})}
@@ -265,12 +275,14 @@ function BlockView({
 	stateKey,
 	toolResults,
 	liveTools,
+	nestedTools,
 }: {
 	block: LiveBlock;
 	active: boolean;
 	stateKey: string;
 	toolResults?: ReadonlyMap<string, ToolResultView>;
 	liveTools?: Readonly<Record<string, LiveTool>>;
+	nestedTools?: Readonly<Record<string, readonly NestedToolView[]>>;
 }) {
 	if (block.type === "thinking") {
 		return <ThinkingBlock stateKey={stateKey} thinking={block.thinking} active={active} />;
@@ -288,12 +300,64 @@ function BlockView({
 			if (questions !== undefined)
 				return <QuestionBlock call={block} questions={questions} result={result} />;
 		}
-		return <ToolCallBlock call={block} result={result} live={liveTools?.[block.id]} />;
+		return (
+			<ToolCallBlock
+				call={block}
+				result={result}
+				live={liveTools?.[block.id]}
+				nested={nestedTools?.[block.id]}
+			/>
+		);
 	}
 	return <Markdown text={block.text} />;
 }
 
 type ToolCall = Extract<LiveBlock, { type: "toolCall" }>;
+
+/** A nested call a script made, as the settled result lists it or the live view carries it. */
+type NestedCallLine = {
+	name: string;
+	args: string;
+	status: "running" | "ok" | "error" | "cancelled";
+	error?: string;
+};
+
+/** The tool calls a code mode script made: one plain line each, with its status. */
+function NestedCallLines({ calls }: { calls: readonly NestedCallLine[] }) {
+	if (calls.length === 0) return null;
+	return (
+		<ul className="flex flex-col gap-1 border-t border-line pt-1.5">
+			{calls.map((call) => (
+				<li
+					key={`${call.name}:${call.args}`}
+					data-nested-call={call.status}
+					className="flex gap-1.5"
+				>
+					<span className="mt-px w-3.5 shrink-0">
+						{call.status === "running" ? (
+							<SpinnerIcon className="h-3.5 w-3.5 text-fg-subtle" />
+						) : call.status === "ok" ? (
+							<CheckIcon className="h-3.5 w-3.5 text-ok" />
+						) : (
+							<XIcon
+								className={`h-3.5 w-3.5 ${call.status === "error" ? "text-red-500" : "text-fg-faint"}`}
+							/>
+						)}
+					</span>
+					<span className="shrink-0 font-mono text-fg-subtle">{call.name}</span>
+					<span className="min-w-0 truncate font-mono text-fg-faint" title={call.args}>
+						{call.args}
+					</span>
+					{call.error !== undefined && (
+						<span className="min-w-0 truncate font-mono text-red-500" title={call.error}>
+							{call.error}
+						</span>
+					)}
+				</li>
+			))}
+		</ul>
+	);
+}
 
 /** The tool's icon; unknown tools get a wrench. */
 function ToolIcon({ name, className }: { name: string; className?: string }) {
@@ -318,10 +382,12 @@ function ToolCallBlock({
 	call,
 	result,
 	live,
+	nested,
 }: {
 	call: ToolCall;
 	result?: ToolResultView;
 	live?: LiveTool;
+	nested?: readonly NestedToolView[];
 }) {
 	const [choice, setChoice] = useState<boolean | undefined>(() => toolOpenChoices.get(call.id));
 	const running = result === undefined;
@@ -398,6 +464,14 @@ function ToolCallBlock({
 					className="mt-1.5 flex max-h-80 flex-col gap-1.5 overflow-y-auto"
 				>
 					<ToolArguments name={call.name} text={call.argumentsText} args={args} />
+					{/* A code mode script's calls read as plain lines: live while the script runs, then from
+					    the committed result, so they stay attached to the block that made them. */}
+					{result !== undefined && result.nestedCalls !== undefined && (
+						<NestedCallLines calls={result.nestedCalls} />
+					)}
+					{running && nested !== undefined && nested.length > 0 && (
+						<NestedCallLines calls={nested} />
+					)}
 					{result?.imageModel !== undefined && (
 						<div className="text-fg-faint">
 							Model: {result.imageModel.providerName} · {result.imageModel.modelName} (

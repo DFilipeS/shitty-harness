@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { EntryRecord, ModelInfo } from "@harness/protocol";
-import type { LiveTool } from "../lib/live-tools.ts";
+import { nestedToolsByParent, type LiveTool, type NestedToolView } from "../lib/live-tools.ts";
 import {
 	assistantError,
 	assistantMessageOf,
+	codemodeCalls,
 	generatedImageInfo,
 	hasHiddenOutput,
 	toolResultImages,
@@ -43,6 +44,10 @@ export function MessageList() {
 
 	const live = activeSession?.live;
 	const liveTools = activeSession?.liveTools ?? {};
+	const nestedTools = useMemo(
+		() => nestedToolsByParent(activeSession?.nestedTools ?? []),
+		[activeSession?.nestedTools],
+	);
 	const entries = activeSession?.entries ?? [];
 	const queue = activeSession?.queue ?? [];
 	// The committed entry stays hidden while the live reveal is still catching up to it.
@@ -68,6 +73,7 @@ export function MessageList() {
 					imageModel: generatedImageInfo(result),
 					questionReply:
 						result.toolName === ASK_USER_TOOL ? questionReplyOf(result.details) : undefined,
+					nestedCalls: codemodeCalls(result),
 				});
 			}
 		}
@@ -95,6 +101,7 @@ export function MessageList() {
 						toolResults={toolResults}
 						toolCallIds={toolCallIds}
 						liveTools={liveTools}
+						nestedTools={nestedTools}
 						models={models}
 					/>
 				))}
@@ -106,6 +113,7 @@ export function MessageList() {
 						onReveal={handleReveal}
 						toolResults={toolResults}
 						liveTools={liveTools}
+						nestedTools={nestedTools}
 					/>
 				)}
 				{queue.map((message) => (
@@ -130,12 +138,14 @@ function EntryView({
 	toolResults,
 	toolCallIds,
 	liveTools,
+	nestedTools,
 	models,
 }: {
 	entry: EntryRecord;
 	toolResults: ReadonlyMap<string, ToolResultView>;
 	toolCallIds: ReadonlySet<string>;
 	liveTools: Readonly<Record<string, LiveTool>>;
+	nestedTools: Readonly<Record<string, readonly NestedToolView[]>>;
 	models: readonly ModelInfo[];
 }) {
 	const user = userMessageOf(entry);
@@ -151,6 +161,7 @@ function EntryView({
 					usage={assistant.usage}
 					toolResults={toolResults}
 					liveTools={liveTools}
+					nestedTools={nestedTools}
 					error={assistantError(assistant)}
 				/>
 				{hasHiddenOutput(assistant, models) && <HiddenOutputNotice />}

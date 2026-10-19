@@ -1,7 +1,11 @@
+import type { SnapshotEvent } from "@harness/protocol";
 import { describe, expect, it } from "vitest";
 import {
 	applyToolOutput,
 	liveToolsFromSnapshot,
+	nestedArgsOf,
+	nestedToolsByParent,
+	nestedToolsFromSnapshot,
 	toolBlockOpen,
 	toolChoiceAfterToggle,
 } from "../src/lib/live-tools.ts";
@@ -86,5 +90,88 @@ describe("liveToolsFromSnapshot", () => {
 		expect(
 			liveToolsFromSnapshot([{ callId: "call-1", name: "bash", status: "done", output: "tail" }]),
 		).toEqual({ "call-1": { name: "bash", output: "tail", running: false } });
+	});
+});
+
+describe("nestedArgsOf", () => {
+	it("compacts an object into JSON", () => {
+		expect(nestedArgsOf({ command: "echo one" })).toBe('{"command":"echo one"}');
+	});
+
+	it("cuts long arguments for display", () => {
+		const args = nestedArgsOf({ path: "x".repeat(300) });
+		expect(args.length).toBe(200);
+		expect(args.endsWith("...")).toBe(true);
+	});
+});
+
+describe("nestedToolsFromSnapshot", () => {
+	it("carries nested slots with their parent, in creation order", () => {
+		const nestedTools = nestedToolsFromSnapshot([
+			{
+				callId: "call-1/c1",
+				parentCallId: "call-1",
+				name: "bash",
+				status: "running",
+				arguments: { command: "echo one" },
+			},
+			{
+				callId: "call-1/c2",
+				parentCallId: "call-1",
+				name: "read",
+				status: "pending",
+				arguments: { path: "a.txt" },
+			},
+		] as SnapshotEvent["nestedTools"]);
+		expect(nestedTools).toEqual([
+			{
+				callId: "call-1/c1",
+				parentCallId: "call-1",
+				name: "bash",
+				args: '{"command":"echo one"}',
+				status: "running",
+			},
+			{
+				callId: "call-1/c2",
+				parentCallId: "call-1",
+				name: "read",
+				args: '{"path":"a.txt"}',
+				status: "running",
+			},
+		]);
+	});
+
+	it("marks a settled slot ok or error by its summary", () => {
+		const nestedTools = nestedToolsFromSnapshot([
+			{
+				callId: "call-1/c1",
+				parentCallId: "call-1",
+				name: "bash",
+				status: "done",
+				arguments: {},
+				summary: { isError: false },
+			},
+			{
+				callId: "call-1/c2",
+				parentCallId: "call-1",
+				name: "bash",
+				status: "done",
+				arguments: {},
+				summary: { isError: true, error: "boom" },
+			},
+		] as SnapshotEvent["nestedTools"]);
+		expect(nestedTools.map((tool) => tool.status)).toEqual(["ok", "error"]);
+	});
+});
+
+describe("nestedToolsByParent", () => {
+	it("groups nested calls by the parent call whose block shows them", () => {
+		const groups = nestedToolsByParent([
+			{ callId: "call-1/c1", parentCallId: "call-1", name: "bash", args: "", status: "ok" },
+			{ callId: "call-2/c1", parentCallId: "call-2", name: "read", args: "", status: "running" },
+			{ callId: "call-2/c2", parentCallId: "call-2", name: "read", args: "", status: "error" },
+		]);
+		expect(Object.keys(groups)).toEqual(["call-1", "call-2"]);
+		expect(groups["call-2"]).toHaveLength(2);
 	});
 });

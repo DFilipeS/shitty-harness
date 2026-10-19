@@ -9,6 +9,33 @@ export type LiveTool = {
 };
 
 /**
+ * One nested tool call: a call a running tool made through code mode, shown as a plain line in its
+ * parent call's block. `args` is compact JSON, cut for display the way the result's details cut it.
+ */
+export type NestedToolView = {
+	callId: string;
+	parentCallId: string;
+	name: string;
+	args: string;
+	status: "running" | "ok" | "error";
+};
+
+/** Characters of a nested call's arguments shown, matching the codemode result's own cut. */
+const NESTED_ARGS_CHARS = 200;
+
+/** Compact JSON of a nested call's arguments, cut for display. */
+export function nestedArgsOf(args: unknown): string {
+	const text = (() => {
+		try {
+			return JSON.stringify(args) ?? "";
+		} catch {
+			return "";
+		}
+	})();
+	return text.length > NESTED_ARGS_CHARS ? `${text.slice(0, NESTED_ARGS_CHARS - 3)}...` : text;
+}
+
+/**
  * The output change of one `tool_execution_update`: either a replacement, or a front trim followed by
  * an append to the retained window.
  */
@@ -50,4 +77,33 @@ export function liveToolsFromSnapshot(tools: SnapshotEvent["tools"]): Record<str
 		};
 	}
 	return liveTools;
+}
+
+/**
+ * The nested tool calls a snapshot carries, in creation order. A nested slot ends `done` with a
+ * `summary` once the call settles; a call whose parent settled first is already gone from the list.
+ */
+export function nestedToolsFromSnapshot(
+	nestedTools: SnapshotEvent["nestedTools"],
+): NestedToolView[] {
+	return nestedTools.map((tool) => ({
+		callId: tool.callId,
+		parentCallId: tool.parentCallId,
+		name: tool.name,
+		args: nestedArgsOf(tool.arguments),
+		status: tool.status === "done" ? (tool.summary?.isError === true ? "error" : "ok") : "running",
+	}));
+}
+
+/** Nested tool calls grouped by the parent call whose block shows them. */
+export function nestedToolsByParent(
+	nestedTools: readonly NestedToolView[],
+): Record<string, NestedToolView[]> {
+	const byParent: Record<string, NestedToolView[]> = {};
+	for (const tool of nestedTools) {
+		const group = byParent[tool.parentCallId] ?? [];
+		group.push(tool);
+		byParent[tool.parentCallId] = group;
+	}
+	return byParent;
 }

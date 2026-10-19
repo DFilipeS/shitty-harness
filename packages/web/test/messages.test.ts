@@ -5,6 +5,7 @@ import {
 	activeBlockIndex,
 	applyMessageChanges,
 	assistantError,
+	codemodeCalls,
 	fromAssistantMessage,
 	hasHiddenOutput,
 	generatedImageInfo,
@@ -164,6 +165,39 @@ describe("tool result content", () => {
 		]);
 		expect(toolResultText(message)).toBe("here it is");
 		expect(toolResultImages(message)).toHaveLength(1);
+	});
+});
+
+describe("codemodeCalls", () => {
+	it("reads the script's calls from a codemode result's details", () => {
+		const message: ToolResultMessage = {
+			...result([]),
+			toolName: "codemode",
+			details: {
+				calls: [
+					{ id: 1, name: "bash", args: '{"command":"echo one"}', status: "ok" },
+					{ id: 2, name: "bash", args: '{"command":"oops"}', status: "error", error: "boom" },
+				],
+			},
+		};
+		expect(codemodeCalls(message)).toEqual([
+			{ name: "bash", args: '{"command":"echo one"}', status: "ok" },
+			{ name: "bash", args: '{"command":"oops"}', status: "error", error: "boom" },
+		]);
+	});
+
+	it("stays undefined for other tools and other shapes", () => {
+		expect(codemodeCalls(result([]))).toBeUndefined();
+		expect(
+			codemodeCalls({ ...result([]), toolName: "codemode", details: { calls: "nope" } }),
+		).toBeUndefined();
+		expect(
+			codemodeCalls({
+				...result([]),
+				toolName: "codemode",
+				details: { calls: [{ name: "bash", args: "{}", status: "weird" }] },
+			}),
+		).toEqual([]);
 	});
 });
 

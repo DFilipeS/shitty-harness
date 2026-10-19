@@ -1,4 +1,4 @@
-import type { AgentEvent, SnapshotEvent, UsageState } from "@harness/protocol";
+import type { AgentEvent, EntryRecord, SnapshotEvent, UsageState } from "@harness/protocol";
 import { describe, expect, it } from "vitest";
 import { initialState, reducer, type State } from "../src/lib/session-state.ts";
 
@@ -24,6 +24,17 @@ function attachedSession(id: string, overrides: Partial<SnapshotEvent> = {}): St
 		id,
 		snapshot: snapshot(overrides),
 	});
+}
+
+/** A committed tool result entry, as `message_end` and `entry_appended` carry it. */
+function toolResultEntry(toolCallId: string, toolName = "codemode"): EntryRecord {
+	return {
+		id: `entry-${toolCallId}`,
+		kind: "pi.tool-result",
+		model: [
+			{ role: "toolResult", toolCallId, toolName, content: [], isError: false, timestamp: 1 },
+		],
+	} as unknown as EntryRecord;
 }
 
 describe("session state reducer", () => {
@@ -102,7 +113,135 @@ describe("session state reducer", () => {
 			id: "7",
 			event: { type: "run_end", inputs: [] },
 		});
-		expect(state.sessionsById["7"]).toMatchObject({ runActive: false, liveTools: {} });
+		expect(state.sessionsById["7"]).toMatchObject({
+			runActive: false,
+			liveTools: {},
+			nestedTools: [],
+		});
+	});
+
+	it("routes a script's nested calls to its parent, not the running tools", () => {
+		let state = attachedSession("7");
+		state = reducer(state, {
+			type: "session/event",
+			id: "7",
+			event: {
+				type: "tool_execution_start",
+				args: {},
+				toolCallId: "call-1",
+				toolName: "codemode",
+			},
+		});
+		state = reducer(state, {
+			type: "session/event",
+			id: "7",
+			event: {
+				type: "tool_execution_start",
+				args: { command: "echo one" },
+				toolCallId: "call-1/c1",
+				toolName: "bash",
+				parentToolCallId: "call-1",
+			},
+		});
+		expect(Object.keys(state.sessionsById["7"]?.liveTools ?? {})).toEqual(["call-1"]);
+		expect(state.sessionsById["7"]?.nestedTools).toEqual([
+			{
+				callId: "call-1/c1",
+				parentCallId: "call-1",
+				name: "bash",
+				args: '{"command":"echo one"}',
+				status: "running",
+			},
+		]);
+
+		// A nested call's streaming output stays out; only its end changes its line.
+		state = reducer(state, {
+			type: "session/event",
+			id: "7",
+			event: {
+				type: "tool_execution_update",
+				toolCallId: "call-1/c1",
+				toolName: "bash",
+				parentToolCallId: "call-1",
+				output: { set: "one\n" },
+			},
+		});
+		expect(state.sessionsById["7"]?.nestedTools[0]).toMatchObject({ status: "running" });
+
+		state = reducer(state, {
+			type: "session/event",
+			id: "7",
+			event: {
+				type: "tool_execution_end",
+				toolCallId: "call-1/c1",
+				toolName: "bash",
+				parentToolCallId: "call-1",
+				result: { taskId: 5, isError: true, diagnostics: [] },
+			} as AgentEvent,
+		});
+		expect(state.sessionsById["7"]?.nestedTools[0]).toMatchObject({ status: "error" });
+	});
+
+	it("drops a script's nested calls when its result commits", () => {
+		let state = attachedSession("7");
+		state = reducer(state, {
+			type: "session/event",
+			id: "7",
+			event: {
+				type: "tool_execution_start",
+				args: {},
+				toolCallId: "call-1",
+				toolName: "codemode",
+			},
+		});
+		state = reducer(state, {
+			type: "session/event",
+			id: "7",
+			event: {
+				type: "tool_execution_start",
+				args: {},
+				toolCallId: "call-1/c1",
+				toolName: "bash",
+				parentToolCallId: "call-1",
+			},
+		});
+		state = reducer(state, {
+			type: "session/event",
+			id: "7",
+			event: {
+				type: "tool_execution_end",
+				toolCallId: "call-1",
+				toolName: "codemode",
+				entry: toolResultEntry("call-1"),
+			} as AgentEvent,
+		});
+		expect(state.sessionsById["7"]?.liveTools).toEqual({});
+		expect(state.sessionsById["7"]?.nestedTools).toEqual([]);
+	});
+
+	it("carries a script's nested calls from a snapshot", () => {
+		const state = attachedSession("7", {
+			nestedTools: [
+				{
+					callId: "call-1/c1",
+					parentCallId: "call-1",
+					parentTaskId: 9,
+					taskId: 10,
+					name: "bash",
+					status: "running",
+					arguments: { command: "echo one" },
+				},
+			],
+		});
+		expect(state.sessionsById["7"]?.nestedTools).toEqual([
+			{
+				callId: "call-1/c1",
+				parentCallId: "call-1",
+				name: "bash",
+				args: '{"command":"echo one"}',
+				status: "running",
+			},
+		]);
 	});
 
 	it("drops the active session when it disappears from the list", () => {

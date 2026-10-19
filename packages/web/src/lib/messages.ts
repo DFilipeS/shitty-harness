@@ -293,6 +293,18 @@ export type ToolResultView = {
 	imageModel?: GeneratedImageInfo;
 	/** For `ask_user`: how the user replied. */
 	questionReply?: QuestionReply;
+	/** For `codemode`: the tool calls the script made, from the result's details. */
+	nestedCalls?: readonly NestedCallView[];
+};
+
+/** One call inside a settled codemode result, as its details list it. */
+export type NestedCallView = {
+	name: string;
+	/** Compact JSON of the arguments, already cut for display. */
+	args: string;
+	status: "running" | "ok" | "error" | "cancelled";
+	/** Error text, cut for display; set when the call failed. */
+	error?: string;
 };
 
 /** The provider and model a generated image came from. */
@@ -316,6 +328,37 @@ export function generatedImageInfo(message: ToolResultMessage): GeneratedImageIn
 		modelId: record.modelId,
 		modelName: typeof record.modelName === "string" ? record.modelName : record.modelId,
 	};
+}
+
+/** Reads the tool calls a `codemode` result's details list; undefined for other results. */
+export function codemodeCalls(message: ToolResultMessage): NestedCallView[] | undefined {
+	if (message.toolName !== "codemode") return undefined;
+	const details = message.details;
+	if (typeof details !== "object" || details === null || Array.isArray(details)) return undefined;
+	const calls = (details as Record<string, unknown>).calls;
+	if (!Array.isArray(calls)) return undefined;
+	const views: NestedCallView[] = [];
+	for (const call of calls) {
+		const entry =
+			typeof call === "object" && call !== null && !Array.isArray(call)
+				? (call as Record<string, unknown>)
+				: undefined;
+		if (typeof entry?.name !== "string" || typeof entry.args !== "string") continue;
+		if (
+			entry.status !== "running" &&
+			entry.status !== "ok" &&
+			entry.status !== "error" &&
+			entry.status !== "cancelled"
+		)
+			continue;
+		views.push({
+			name: entry.name,
+			args: entry.args,
+			status: entry.status,
+			...(typeof entry.error === "string" ? { error: entry.error } : {}),
+		});
+	}
+	return views;
 }
 
 /** Parses a tool call's arguments; undefined while they stream in or when they are not an object. */

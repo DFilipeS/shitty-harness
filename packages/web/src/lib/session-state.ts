@@ -17,7 +17,14 @@ import type {
 	UsageState,
 } from "@harness/protocol";
 import type { ConnectionStatus } from "./client.ts";
-import { applyToolOutput, liveToolsFromSnapshot, type LiveTool } from "./live-tools.ts";
+import {
+	applyToolOutput,
+	liveToolsFromSnapshot,
+	nestedArgsOf,
+	nestedToolsFromSnapshot,
+	type LiveTool,
+	type NestedToolView,
+} from "./live-tools.ts";
 import { applyMessageChanges, fromAssistantMessage, type LiveMessage } from "./messages.ts";
 
 /**
@@ -43,6 +50,8 @@ export type SessionState = {
 	live?: LiveMessageState;
 	/** Output of the tool calls that are running, keyed by tool call id. */
 	liveTools: Record<string, LiveTool>;
+	/** Nested calls of running tool calls (code mode scripts), in creation order. */
+	nestedTools: NestedToolView[];
 	runActive: boolean;
 	agent: AgentState;
 	inbox: { id: string; mode: string }[];
@@ -147,6 +156,7 @@ function emptySession(id: string): SessionState {
 		attached: false,
 		entries: [],
 		liveTools: {},
+		nestedTools: [],
 		runActive: false,
 		agent: {},
 		inbox: [],
@@ -168,6 +178,7 @@ function fromSnapshot(id: string, snapshot: SnapshotEvent): SessionState {
 					},
 				}),
 		liveTools: liveToolsFromSnapshot(snapshot.tools),
+		nestedTools: nestedToolsFromSnapshot(snapshot.nestedTools),
 		runActive: snapshot.run !== undefined,
 		agent: snapshot.agent,
 		inbox: snapshot.inbox.map((item) => ({ id: String(item.id), mode: item.mode })),
@@ -185,14 +196,20 @@ function appendEntry(entries: EntryRecord[], entry: EntryRecord): EntryRecord[] 
 /** Drop a tool's live state once its result is committed; the entry takes over. */
 function withoutResultTool(
 	liveTools: Record<string, LiveTool>,
+	nestedTools: NestedToolView[],
 	entry: EntryRecord,
-): Record<string, LiveTool> {
+): { liveTools: Record<string, LiveTool>; nestedTools: NestedToolView[] } {
 	const message = entry.model?.[0];
-	if (message?.role !== "toolResult" || liveTools[message.toolCallId] === undefined)
-		return liveTools;
+	if (message?.role !== "toolResult") return { liveTools, nestedTools };
+	const hasLive = liveTools[message.toolCallId] !== undefined;
+	const hasNested = nestedTools.some((tool) => tool.parentCallId === message.toolCallId);
+	if (!hasLive && !hasNested) return { liveTools, nestedTools };
 	const next = { ...liveTools };
 	delete next[message.toolCallId];
-	return next;
+	return {
+		liveTools: next,
+		nestedTools: nestedTools.filter((tool) => tool.parentCallId !== message.toolCallId),
+	};
 }
 
 function applyEvent(session: SessionState, event: AgentEvent): SessionState {
@@ -203,7 +220,7 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 			return { ...session, runActive: true };
 		case "run_end":
 			// Live tool output belongs to the run; committed entries carry the results afterwards.
-			return { ...session, runActive: false, liveTools: {} };
+			return { ...session, runActive: false, liveTools: {}, nestedTools: [] };
 		case "message_start":
 			return event.message.role === "assistant"
 				? {
@@ -224,12 +241,19 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 			};
 		case "message_end": {
 			const entries = appendEntry(session.entries, event.entry);
-			const liveTools = withoutResultTool(session.liveTools, event.entry);
-			if (session.live === undefined) return { ...session, entries, liveTools };
+			const settled = withoutResultTool(session.liveTools, session.nestedTools, event.entry);
+			if (session.live === undefined)
+				return {
+					...session,
+					entries,
+					liveTools: settled.liveTools,
+					nestedTools: settled.nestedTools,
+				};
 			return {
 				...session,
 				entries,
-				liveTools,
+				liveTools: settled.liveTools,
+				nestedTools: settled.nestedTools,
 				live: { ...session.live, entryId: event.entry.id, finished: true },
 			};
 		}
@@ -237,9 +261,25 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 			return {
 				...session,
 				entries: appendEntry(session.entries, event.entry),
-				liveTools: withoutResultTool(session.liveTools, event.entry),
+				...withoutResultTool(session.liveTools, session.nestedTools, event.entry),
 			};
-		case "tool_execution_start":
+		case "tool_execution_start": {
+			// A nested call belongs to its parent's block, not the session's own list of running calls.
+			if (event.parentToolCallId !== undefined) {
+				return {
+					...session,
+					nestedTools: [
+						...session.nestedTools,
+						{
+							callId: event.toolCallId,
+							parentCallId: event.parentToolCallId,
+							name: event.toolName,
+							args: nestedArgsOf(event.args),
+							status: "running",
+						},
+					],
+				};
+			}
 			return {
 				...session,
 				liveTools: {
@@ -247,7 +287,10 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 					[event.toolCallId]: { name: event.toolName, output: "", running: true },
 				},
 			};
+		}
 		case "tool_execution_update": {
+			// Nested calls show as plain lines; their streaming output is not kept.
+			if (event.parentToolCallId !== undefined) return session;
 			const existing = session.liveTools[event.toolCallId] ?? {
 				name: event.toolName,
 				output: "",
@@ -263,11 +306,25 @@ function applyEvent(session: SessionState, event: AgentEvent): SessionState {
 			};
 		}
 		case "tool_execution_end": {
+			if (event.parentToolCallId !== undefined) {
+				const known = session.nestedTools.some((tool) => tool.callId === event.toolCallId);
+				if (!known) return session;
+				return {
+					...session,
+					nestedTools: session.nestedTools.map((tool) =>
+						tool.callId === event.toolCallId
+							? { ...tool, status: event.result?.isError === true ? "error" : "ok" }
+							: tool,
+					),
+				};
+			}
 			const existing = session.liveTools[event.toolCallId];
 			if (existing === undefined) return session;
 			// A committed result replaces the live window; without one, keep the output for reading.
-			if (event.entry !== undefined)
-				return { ...session, liveTools: withoutResultTool(session.liveTools, event.entry) };
+			if (event.entry !== undefined) {
+				const settled = withoutResultTool(session.liveTools, session.nestedTools, event.entry);
+				return { ...session, liveTools: settled.liveTools, nestedTools: settled.nestedTools };
+			}
 			return {
 				...session,
 				liveTools: { ...session.liveTools, [event.toolCallId]: { ...existing, running: false } },
