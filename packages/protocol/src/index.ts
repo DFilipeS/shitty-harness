@@ -374,6 +374,33 @@ export type SessionsSystemPromptResult = {
 	sections: PromptSectionInfo[];
 };
 
+/**
+ * One message waiting in a session's queue, as the queue display shows it: the user's own text,
+ * the files it carries, and the skill it starts, without the wrappers the model content adds.
+ */
+export type QueuedMessageInfo = {
+	id: string;
+	/** How it waits: `followUp` runs after the current run, `steer` cuts in at the next boundary. */
+	mode: "steer" | "followUp";
+	/** The text the user typed. */
+	text: string;
+	/** Names of the text files attached, in send order. */
+	attachments: string[];
+	/** How many images the message carries; their data is too large to list. */
+	images: number;
+	/** The skill the message activates, when it starts with `/skill:name`. */
+	skill?: string;
+};
+
+export type SessionsQueueResult = {
+	items: QueuedMessageInfo[];
+};
+
+/** What withdrawing a queued message did: only `aborted` found it still waiting. */
+export type SessionsWithdrawResult = {
+	outcome: "aborted" | "already_placed" | "settled";
+};
+
 export type WorkspacesBrowseResult = {
 	path: string;
 	/** Parent directory; absent at the filesystem root. */
@@ -423,6 +450,8 @@ export type ClientCommand =
 	| { id: string; type: "sessions.setTarget"; sessionId: string; target: TargetChoice }
 	| { id: string; type: "sessions.skills"; sessionId: string }
 	| { id: string; type: "sessions.systemPrompt"; sessionId: string }
+	| { id: string; type: "sessions.queue"; sessionId: string }
+	| { id: string; type: "sessions.withdraw"; sessionId: string; submissionId: string }
 	| { id: string; type: "workspaces.browse"; path?: string }
 	| { id: string; type: "workspaces.createFolder"; parent: string; name: string }
 	| { id: string; type: "sandboxes.list" }
@@ -480,6 +509,8 @@ export type CommandResult = {
 	"sessions.setTarget": SessionsSetTargetResult;
 	"sessions.skills": SessionsSkillsResult;
 	"sessions.systemPrompt": SessionsSystemPromptResult;
+	"sessions.queue": SessionsQueueResult;
+	"sessions.withdraw": SessionsWithdrawResult;
 	"workspaces.browse": WorkspacesBrowseResult;
 	"workspaces.createFolder": WorkspacesCreateFolderResult;
 	"sandboxes.list": SandboxesListResult;
