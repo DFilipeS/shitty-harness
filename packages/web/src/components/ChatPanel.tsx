@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { focusComposer, formatKeys, useRegisterCommands, type Command } from "../lib/commands.tsx";
 import { useModelPalette, useThinkingPalette } from "../lib/session-commands.tsx";
 import { useSkillsPalette } from "../lib/skill-commands.tsx";
@@ -26,6 +26,13 @@ import {
 	TrashIcon,
 } from "./icons.tsx";
 
+/**
+ * Recently visited sessions whose message lists stay mounted, most recent first. Switching back
+ * to one reuses its rendered transcript instead of re-rendering it; beyond this many, the least
+ * recently viewed list unmounts and frees its DOM.
+ */
+const MOUNTED_SESSIONS = 5;
+
 export function ChatPanel({
 	onToggleSidebar,
 	onToggleSessionPanel,
@@ -33,7 +40,20 @@ export function ChatPanel({
 	onToggleSidebar: () => void;
 	onToggleSessionPanel: () => void;
 }) {
-	const { activeSessionId, activeSession, sessions, sessionsLoaded, createSession } = useHarness();
+	const { activeSessionId, activeSession, sessionStates, sessions, sessionsLoaded, createSession } =
+		useHarness();
+	const [visited, setVisited] = useState<readonly string[]>([]);
+	// Track the visited list during render, so the first click shows its list in the same paint
+	// instead of an empty panel that fills in one frame later.
+	const [seenActiveId, setSeenActiveId] = useState(activeSessionId);
+	if (activeSessionId !== seenActiveId) {
+		setSeenActiveId(activeSessionId);
+		const id = activeSessionId;
+		if (id !== undefined)
+			setVisited((previous) =>
+				[id, ...previous.filter((candidate) => candidate !== id)].slice(0, MOUNTED_SESSIONS),
+			);
+	}
 	const questionCallId = sessions.find((session) => session.id === activeSessionId)?.questionCallId;
 	const questions = useMemo(
 		() =>
@@ -86,7 +106,23 @@ export function ChatPanel({
 	return (
 		<main ref={mainRef} className="relative flex min-w-0 flex-1 flex-col">
 			<ChatHeader onToggleSidebar={onToggleSidebar} onToggleSessionPanel={onToggleSessionPanel} />
-			<MessageList />
+			{/* One mounted list per recently visited session: the active one fills the panel, the rest
+			    stay mounted but hidden, so switching back shows them without re-rendering them. */}
+			{visited.map((id) => {
+				const session = sessionStates[id];
+				if (session === undefined) return null;
+				const isActive = id === activeSessionId;
+				return (
+					<div
+						key={id}
+						// `min-h-0` matters: without it the wrapper's automatic minimum height grows to the
+						// transcript's full height, and the scroller inside never overflows (no scrolling).
+						className={isActive ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : "hidden"}
+					>
+						<MessageList session={session} active={isActive} />
+					</div>
+				);
+			})}
 			{/* The composer stays mounted under an open question, so a draft survives it. */}
 			<Composer
 				hidden={questionCallId !== undefined}

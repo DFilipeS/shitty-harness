@@ -44,6 +44,8 @@ type HarnessContextValue = {
 	status: ConnectionStatus;
 	sessions: SessionSummary[];
 	sessionsLoaded: boolean;
+	/** Every session's live state, keyed by id; the web client keeps a few visited ones mounted. */
+	sessionStates: Record<string, SessionState>;
 	providers: ProviderInfo[];
 	models: ModelInfo[];
 	imageModels: ImageModelInfo[];
@@ -817,6 +819,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
 			status: state.status,
 			sessions: state.sessions,
 			sessionsLoaded: state.sessionsLoaded,
+			sessionStates: state.sessionsById,
 			providers: state.providers,
 			models: state.models,
 			imageModels: state.imageModels,
