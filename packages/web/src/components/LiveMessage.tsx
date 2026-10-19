@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LiveTool } from "../lib/live-tools.ts";
 import { activeBlockIndex, type ToolResultView } from "../lib/messages.ts";
-import { useHarness, type LiveMessageState } from "../lib/store.tsx";
+import { useHarness } from "../lib/store.tsx";
+import type { LiveMessageState } from "../lib/session-state.ts";
 import { AssistantBubble } from "./MessageBubbles.tsx";
 
 /** Reveal rate control: target this much unread text per block while streaming, flush faster once committed. */
