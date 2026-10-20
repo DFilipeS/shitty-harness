@@ -7,7 +7,9 @@ import { emptyConfig, loadConfig, type AppConfig } from "../src/config.ts";
 import { ProviderManager } from "../src/providers.ts";
 
 const LAST_MODIFIED = "Wed, 14 Oct 2026 09:03:09 GMT";
-const ARGON_ID = "google/gemini-4-argon";
+// A synthetic id no bundled catalog can ever contain: the refresh must add it, not replace a
+// bundled entry ("gemini-4-argon" became a real model in pi-ai 1.3.0 and broke that guarantee).
+const ARGON_ID = "openrouter/test-fixture-argon";
 
 const ARGON = {
 	type: "chat",
