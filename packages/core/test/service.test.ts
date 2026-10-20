@@ -434,7 +434,14 @@ describe("HarnessService", () => {
 
 	it("keeps a disabled tool out of the system prompt", async () => {
 		const { providers } = createFauxProviders();
-		const service = await HarnessService.create({ storage: new MemoryStorage(), providers });
+		// A scratch root of its own, so this repo's AGENTS.md (which quotes `bash` in a code fence)
+		// does not reach the prompt as project instructions and trip the assertion.
+		const workspacesDir = await mkdtemp(join(tmpdir(), "service-prompt-"));
+		const service = await HarnessService.create({
+			storage: new MemoryStorage(),
+			providers,
+			workspacesDir,
+		});
 		try {
 			const session = await service.createSession();
 			await service.prompt(session.id, "Hello", "request-with-tools");
